@@ -15,6 +15,7 @@ end
 
 Node() = Node(0,0,Int64[],0,0,Int64[])
 
+
 mutable struct Delay
 	offset::Int64
 	startidx::Int64
@@ -24,7 +25,7 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 100 		# number of elements
+n = 10 		# number of elements
 p = 0.1 		
 d_max = 20 		
 
@@ -78,21 +79,38 @@ end
 
 edges = sort(e_revr)
 
-function delnet_advance(input, output, edges, delays, delbuf)	
+function advance(input, output, edges, delays, delbuf)	
+	#load input
 	for i ∈ 1:length(input)
 		buf_idx = delays[i].startidx + delays[i].offset
-		# load input
 		delbuf[buf_idx] = input[i]	
-		# pull output
-		output[edges[i][2]] = delbuf[buf_idx]
 	end
-	
 	# advance buffer
 	for i ∈ 1:length(input)
 		delays[i].offset = (delays[i].offset + 1) % delays[i].length + 1
 	end
+	#pull output
+	for i ∈ 1:length(input)
+
+	end
 end
 
+orderbuf(delay, delbuf) = 
+	[delbuf[(delay.startidx + delay.offset + k) % delay.len + 1]
+	 										for k ∈ 0:delay.len] 
+
+num_steps = 5 
+
+inputs[1] = 1.0
+
+for i ∈ 1:num_steps
+	println("----------------------------------------")
+	for d ∈ delays
+		vals = orderbuf(d, delbuf)
+		println(vals)
+	end
+	advance(inputs, outputs, edges, delays, delbuf)
+end
 
 
 end
