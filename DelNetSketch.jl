@@ -25,20 +25,20 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 3 		# number of elements
+n = 4 		# number of elements
 p = 0.1 		
-d_max = 1
+d_max = 4
 
 
 # Generate connectivity matrix
-delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
-for k ∈ 1:n delmat[k,k] = 0 end
-numlines = sum(delmat)
-delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
-deltot = sum(delmat)
+# delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
+# for k ∈ 1:n delmat[k,k] = 0 end
+# numlines = sum(delmat)
+# delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
+# deltot = sum(delmat)
 
 # for testing
-delmat = [0 1 0; 0 0 1; 1 0 0 ]
+delmat = [0 1 1 0; 0 0 1 0; 0 0 0 1; 1 0 0 0 ]
 for k ∈ 1:n delmat[k,k] = 0 end
 numlines = sum(delmat)
 delmat .*= d_max
@@ -51,13 +51,12 @@ delbuf = zeros(deltot)
 nodes = [Node() for _ ∈ 1:n] 
 delays = Array{Delay, 1}(undef,numlines)
 
-e_forw = []
-e_revr = []
+# e_forw = []
+# e_revr = []
 
 
 delcount = 1
 startidx = 1
-input_idx = 1
 output_idx = 1
 total = 0
 for i ∈ 1:n
@@ -68,17 +67,15 @@ for i ∈ 1:n
 	for j ∈ 1:n
 		if delmat[i,j] != 0
 			total += delmat[i,j]
-			push!(e_forw, (i,j))				
-			push!(e_revr, (j,i))				
+			# push!(e_forw, (i,j))				
+			# push!(e_revr, (j,i))				
 			push!(nodes[i].nodes_out, j)
 			nodes[i].num_out += 1
 			push!(nodes[j].nodes_in, i)
 			nodes[j].num_in += 1
-			nodes[i].startidx_in = input_idx
 			delays[delcount] = Delay(0, startidx, delmat[i,j], i, j)
 			startidx += delmat[i,j]
 			delcount += 1
-			input_idx += 1
 		end
 	end
 end
@@ -89,11 +86,14 @@ out_base_idcs = [ sum(num_inputs[1:k]) for k ∈ 1:n-1 ]
 out_base_idcs = [1; out_base_idcs[1:end] .+ 1]
 out_counts = zeros(length(out_base_idcs))
 
+for i ∈ 1:length(nodes)
+	nodes[i].startidx_out = out_base_idcs[i]
+	nodes[i].num_out = num_inputs[i]
+end
+
 inverseidces = zeros(Int64, length(outputs))
 for i ∈ 1:length(inputs)
 	#println(i)
-	nodes[i].startidx_out = out_base_idcs[i]
-	nodes[i].num_out = num_inputs[i]
 	inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
 	out_counts[delays[i].target] += 1
 end
@@ -130,16 +130,16 @@ function buftostr(buffer)
 	buffer |> v -> map(x -> x == 0.0 ? "-" : "|", v) |> prod
 end
 
-inputs[1] = 1.0
+outputs[2] = 1.0
 #delbuf[1] = 1.0
 num_steps = 6
 op = (+)
 for j ∈ 1:num_steps
 	global inputs, outputs, inverseidces, delays, delbuf, op
 	for (k,nd) ∈ enumerate(nodes)
-		invals = inputs[nd.startidx_in:nd.startidx_in+nd.num_in-1]
-		val = op(invals...)
-		outputs[nd.startidx_out:nd.startidx_out+nd.num_out-1] .= val
+		invals = outputs[nd.startidx_in:nd.startidx_in+nd.num_in-1]
+		val = sum(invals)
+		inputs[nd.startidx_out:nd.startidx_out+nd.num_out-1] .= val
 	end
 	println("\nSTEP $j:")
 	println(inputs |> buftostr, "\n")
@@ -150,7 +150,7 @@ for j ∈ 1:num_steps
 	end
 	# println( delbuf |> buftostr )
 	println("\n", outputs |> buftostr, "\n")
-	inputs[:] = outputs[:]
+	# inputs[:] = outputs[:]
 end
 
 
