@@ -97,9 +97,9 @@ for i ∈ 1:length(inputs)
 end
 
 
-# function advance(input, output, inverseidces, delays, delbuf)	
-function advance(input, inverseidces, delays, delbuf)	
-	output = zeros(length(input))
+function advance(input, output, inverseidces, delays, delbuf)	
+# function advance(input, inverseidces, delays, delbuf)	
+# 	output = zeros(length(input))
 	#load input
 	for i ∈ 1:length(input)
 		buf_idx = delays[i].startidx + delays[i].offset
@@ -119,45 +119,25 @@ function advance(input, inverseidces, delays, delbuf)
 end
 
 orderbuf(delay, delbuf) = 
-reverse([delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
-		 for k ∈ 0:delay.len-1] ) |> v -> map(x -> x == 0.0 ? "-" : "*", v) |> prod
+[ delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
+		 for k ∈ 0:delay.len-1] |> reverse |> v -> map(x -> x == 0.0 ? "-" : "|", v) |> prod
 
 
 inputs[1] = 1.0
 #delbuf[1] = 1.0
-num_steps = 17
+num_steps = 15
 for j ∈ 1:num_steps
 	global inputs, outputs, inverseidces, delays, delbuf
-	println("----------------------------------------")
-	# println(inputs, "\n")
+	println("\nSTEP $j:")
+	println(inputs, "\n")
 	# println(delbuf)
-	# println("\n", outputs, "\n")
+	advance(inputs, outputs, inverseidces, delays, delbuf)
 	for d ∈ delays
 		vals = orderbuf(d, delbuf)
 		println(vals)
 	end
-	# advance(inputs, outputs, inverseidces, delays, delbuf)
-	# (inputs, outputs) = (outputs, inputs)
-	# outputs = advance(inputs, inverseidces, delays, delbuf)
-	# inputs = outputs
-	
-	for i ∈ 1:length(inputs)
-		delbuf[ delays[i].startidx + delays[i].offset ] = inputs[i]	
-	end
-
-	# advance buffer
-	for i ∈ 1:length(inputs)
-		#println(delays[i].startidx + delays[i].offset)
-		delays[i].offset = (delays[i].offset + 1) % delays[i].len
-		#println(delays[i].startidx + delays[i].offset)
-	end
-
-	#pull output
-	for i ∈ 1:length(inputs)
-		outputs[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
-	end
-	# inputs = zeros(length(inputs))
-	inputs = copy(outputs)
+	println("\n", outputs, "\n")
+	inputs[:] = outputs[:]
 end
 
 
