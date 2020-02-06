@@ -25,16 +25,23 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 10 		# number of elements
+n = 2 		# number of elements
 p = 0.1 		
-d_max = 20 		
+d_max = 5
 
 
 # Generate connectivity matrix
-# delmat = rand(n,n) |> m -> map(x -> x < p ? rand(0:d_max) : 0, m)
-delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
+# delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
+# for k ∈ 1:n delmat[k,k] = 0 end
+# numlines = sum(delmat)
+# delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
+# deltot = sum(delmat)
+
+# for testing
+delmat = [0 1; 1 0]
+for k ∈ 1:n delmat[k,k] = 0 end
 numlines = sum(delmat)
-delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
+delmat .*= 3
 deltot = sum(delmat)
 
 inputs = zeros(numlines)
@@ -60,7 +67,6 @@ for i ∈ 1:n
 	global input_idx
 	for j ∈ 1:n
 		if delmat[i,j] != 0
-			println("Delay count: $delcount")
 			total += delmat[i,j]
 			push!(e_forw, (i,j))				
 			push!(e_revr, (j,i))				
@@ -76,40 +82,56 @@ for i ∈ 1:n
 		end
 	end
 end
+println("Sanity check -- the same?: $deltot, $total")
 
-edges = sort(e_revr)
+num_inputs    = [ nd.num_in for nd ∈ nodes ]
+out_base_idcs = [ sum(num_inputs[1:k]) for k ∈ 1:n-1 ]
+out_base_idcs = [1; out_base_idcs[1:end] .+ 1]
+out_counts = zeros(length(out_base_idcs))
 
-function advance(input, output, edges, delays, delbuf)	
+inverseidces = zeros(Int64, length(outputs))
+for i ∈ 1:length(inputs)
+	println(i)
+	inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
+	out_counts[delays[i].target] += 1
+end
+
+
+function advance(input, output, inverseidces, delays, delbuf)	
 	#load input
 	for i ∈ 1:length(input)
 		buf_idx = delays[i].startidx + delays[i].offset
 		delbuf[buf_idx] = input[i]	
 	end
+
 	# advance buffer
 	for i ∈ 1:length(input)
-		delays[i].offset = (delays[i].offset + 1) % delays[i].length + 1
+		delays[i].offset = (delays[i].offset + 1) % delays[i].len
 	end
+
 	#pull output
 	for i ∈ 1:length(input)
-
+		outputs[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
 	end
 end
 
 orderbuf(delay, delbuf) = 
 	[delbuf[(delay.startidx + delay.offset + k) % delay.len + 1]
-	 										for k ∈ 0:delay.len] 
+	 										for k ∈ 0:delay.len-1] 
 
-num_steps = 5 
+num_steps = 10
 
-inputs[1] = 1.0
+inputs[2] = 1.0
 
 for i ∈ 1:num_steps
+	global inputs, outputs, inverseidces, delays, delbuf
 	println("----------------------------------------")
 	for d ∈ delays
 		vals = orderbuf(d, delbuf)
 		println(vals)
 	end
-	advance(inputs, outputs, edges, delays, delbuf)
+	advance(inputs, outputs, inverseidces, delays, delbuf)
+	(inputs, outputs) = (outputs, inputs)
 end
 
 
