@@ -25,7 +25,7 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 2 		# number of elements
+n = 3 		# number of elements
 p = 0.1 		
 d_max = 5
 
@@ -38,10 +38,10 @@ d_max = 5
 # deltot = sum(delmat)
 
 # for testing
-delmat = [0 1; 1 0]
+delmat = [0 1 0; 0 0 1; 1 0 0 ]
 for k ∈ 1:n delmat[k,k] = 0 end
 numlines = sum(delmat)
-delmat .*= 3
+delmat .*= d_max
 deltot = sum(delmat)
 
 inputs = zeros(numlines)
@@ -97,7 +97,9 @@ for i ∈ 1:length(inputs)
 end
 
 
-function advance(input, output, inverseidces, delays, delbuf)	
+# function advance(input, output, inverseidces, delays, delbuf)	
+function advance(input, inverseidces, delays, delbuf)	
+	output = zeros(length(input))
 	#load input
 	for i ∈ 1:length(input)
 		buf_idx = delays[i].startidx + delays[i].offset
@@ -113,25 +115,49 @@ function advance(input, output, inverseidces, delays, delbuf)
 	for i ∈ 1:length(input)
 		outputs[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
 	end
+	output
 end
 
 orderbuf(delay, delbuf) = 
-	[delbuf[(delay.startidx + delay.offset + k) % delay.len + 1]
-	 										for k ∈ 0:delay.len-1] 
+reverse([delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
+		 for k ∈ 0:delay.len-1] ) |> v -> map(x -> x == 0.0 ? "-" : "*", v) |> prod
 
-num_steps = 10
 
-inputs[2] = 1.0
-
-for i ∈ 1:num_steps
+inputs[1] = 1.0
+#delbuf[1] = 1.0
+num_steps = 17
+for j ∈ 1:num_steps
 	global inputs, outputs, inverseidces, delays, delbuf
 	println("----------------------------------------")
+	# println(inputs, "\n")
+	# println(delbuf)
+	# println("\n", outputs, "\n")
 	for d ∈ delays
 		vals = orderbuf(d, delbuf)
 		println(vals)
 	end
-	advance(inputs, outputs, inverseidces, delays, delbuf)
-	(inputs, outputs) = (outputs, inputs)
+	# advance(inputs, outputs, inverseidces, delays, delbuf)
+	# (inputs, outputs) = (outputs, inputs)
+	# outputs = advance(inputs, inverseidces, delays, delbuf)
+	# inputs = outputs
+	
+	for i ∈ 1:length(inputs)
+		delbuf[ delays[i].startidx + delays[i].offset ] = inputs[i]	
+	end
+
+	# advance buffer
+	for i ∈ 1:length(inputs)
+		#println(delays[i].startidx + delays[i].offset)
+		delays[i].offset = (delays[i].offset + 1) % delays[i].len
+		#println(delays[i].startidx + delays[i].offset)
+	end
+
+	#pull output
+	for i ∈ 1:length(inputs)
+		outputs[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
+	end
+	# inputs = zeros(length(inputs))
+	inputs = copy(outputs)
 end
 
 
