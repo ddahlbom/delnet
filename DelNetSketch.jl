@@ -25,24 +25,24 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 3 		# number of elements
+n = 10 		# number of elements
 p = 0.1 		
 d_max = 5
 
 
 # Generate connectivity matrix
-# delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
-# for k ∈ 1:n delmat[k,k] = 0 end
-# numlines = sum(delmat)
-# delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
-# deltot = sum(delmat)
-
-# for testing
-delmat = [0 1 0; 0 0 1; 1 0 0 ]
+delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
 for k ∈ 1:n delmat[k,k] = 0 end
 numlines = sum(delmat)
-delmat .*= d_max
+delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
 deltot = sum(delmat)
+
+# for testing
+# delmat = [0 1 0; 0 0 1; 1 0 0 ]
+# for k ∈ 1:n delmat[k,k] = 0 end
+# numlines = sum(delmat)
+# delmat .*= d_max
+# deltot = sum(delmat)
 
 inputs = zeros(numlines)
 outputs = zeros(numlines)
@@ -82,7 +82,7 @@ for i ∈ 1:n
 		end
 	end
 end
-println("Sanity check -- the same?: $deltot, $total")
+#println("Sanity check -- the same?: $deltot, $total")
 
 num_inputs    = [ nd.num_in for nd ∈ nodes ]
 out_base_idcs = [ sum(num_inputs[1:k]) for k ∈ 1:n-1 ]
@@ -91,7 +91,7 @@ out_counts = zeros(length(out_base_idcs))
 
 inverseidces = zeros(Int64, length(outputs))
 for i ∈ 1:length(inputs)
-	println(i)
+	#println(i)
 	inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
 	out_counts[delays[i].target] += 1
 end
@@ -100,6 +100,7 @@ end
 function advance(input, output, inverseidces, delays, delbuf)	
 # function advance(input, inverseidces, delays, delbuf)	
 # 	output = zeros(length(input))
+
 	#load input
 	for i ∈ 1:length(input)
 		buf_idx = delays[i].startidx + delays[i].offset
@@ -110,7 +111,7 @@ function advance(input, output, inverseidces, delays, delbuf)
 	for i ∈ 1:length(input)
 		delays[i].offset = (delays[i].offset + 1) % delays[i].len
 	end
-
+	
 	#pull output
 	for i ∈ 1:length(input)
 		outputs[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
@@ -118,25 +119,29 @@ function advance(input, output, inverseidces, delays, delbuf)
 	output
 end
 
-orderbuf(delay, delbuf) = 
-[ delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
-		 for k ∈ 0:delay.len-1] |> reverse |> v -> map(x -> x == 0.0 ? "-" : "|", v) |> prod
+function orderbuf(delay, delbuf) 
+	[ delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
+		 for k ∈ 0:delay.len-1] |> v -> map(x -> x == 0.0 ? "-" : "|", v) |> reverse |> prod
+end
 
+function buftostr(buffer)
+	buffer |> v -> map(x -> x == 0.0 ? "-" : "|", v) |> prod
+end
 
 inputs[1] = 1.0
 #delbuf[1] = 1.0
-num_steps = 15
+num_steps = 6
 for j ∈ 1:num_steps
 	global inputs, outputs, inverseidces, delays, delbuf
 	println("\nSTEP $j:")
-	println(inputs, "\n")
-	# println(delbuf)
+	println(inputs |> buftostr, "\n")
 	advance(inputs, outputs, inverseidces, delays, delbuf)
 	for d ∈ delays
 		vals = orderbuf(d, delbuf)
 		println(vals)
 	end
-	println("\n", outputs, "\n")
+	println( delbuf |> buftostr )
+	println("\n", outputs |> buftostr, "\n")
 	inputs[:] = outputs[:]
 end
 
