@@ -25,9 +25,9 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 10 		# number of elements
+n = 3 		# number of elements
 p = 0.1 		
-d_max = 5
+d_max = 1
 
 
 # Generate connectivity matrix
@@ -38,11 +38,11 @@ delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
 deltot = sum(delmat)
 
 # for testing
-# delmat = [0 1 0; 0 0 1; 1 0 0 ]
-# for k ∈ 1:n delmat[k,k] = 0 end
-# numlines = sum(delmat)
-# delmat .*= d_max
-# deltot = sum(delmat)
+delmat = [0 1 0; 0 0 1; 1 0 0 ]
+for k ∈ 1:n delmat[k,k] = 0 end
+numlines = sum(delmat)
+delmat .*= d_max
+deltot = sum(delmat)
 
 inputs = zeros(numlines)
 outputs = zeros(numlines)
@@ -92,6 +92,8 @@ out_counts = zeros(length(out_base_idcs))
 inverseidces = zeros(Int64, length(outputs))
 for i ∈ 1:length(inputs)
 	#println(i)
+	nodes[i].startidx_out = out_base_idcs[i]
+	nodes[i].num_out = num_inputs[i]
 	inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
 	out_counts[delays[i].target] += 1
 end
@@ -131,8 +133,14 @@ end
 inputs[1] = 1.0
 #delbuf[1] = 1.0
 num_steps = 6
+op = (+)
 for j ∈ 1:num_steps
-	global inputs, outputs, inverseidces, delays, delbuf
+	global inputs, outputs, inverseidces, delays, delbuf, op
+	for (k,nd) ∈ enumerate(nodes)
+		invals = inputs[nd.startidx_in:nd.startidx_in+nd.num_in-1]
+		val = op(invals...)
+		outputs[nd.startidx_out:nd.startidx_out+nd.num_out-1] .= val
+	end
 	println("\nSTEP $j:")
 	println(inputs |> buftostr, "\n")
 	advance(inputs, outputs, inverseidces, delays, delbuf)
@@ -140,7 +148,7 @@ for j ∈ 1:num_steps
 		vals = orderbuf(d, delbuf)
 		println(vals)
 	end
-	println( delbuf |> buftostr )
+	# println( delbuf |> buftostr )
 	println("\n", outputs |> buftostr, "\n")
 	inputs[:] = outputs[:]
 end
