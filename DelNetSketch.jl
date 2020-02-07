@@ -146,25 +146,14 @@ function buftostr(buffer)
 	buffer |> v -> map(x -> x == 0.0 ? "-" : "$(Int(round(x)))", v) |> prod
 end
 
-# outputs[1] = 1.0
-#delbuf[1] = 1.0
-num_steps = 15 
+num_steps = 20
 nodevals = zeros(length(nodes))
 nodevals[1] = 1.0
 nodevals[2] = 1.0
 op = (+)
 for j ∈ 1:num_steps
 	global inputs, outputs, inverseidces, delays, delbuf, op, nodevals
-	# for (k,nd) ∈ enumerate(nodes)
-	# 	println("From indices: $(nd.idx_out_to_in) to $(nd.idx_out_to_in + nd.num_in - 1)")
-	# 	invals = outputs[ nd.idx_out_to_in : nd.idx_out_to_in + nd.num_in - 1 ]
-	# 	println("Invals: $invals")
-	# 	val = sum(invals)
-	# 	println("To indices: $(nd.idx_in_to_out) to $(nd.idx_in_to_out + nd.num_out - 1)")
-	# 	inputs[ nd.idx_in_to_out: nd.idx_in_to_out + nd.num_out - 1 ] .= val
-	# end
-	
-	# println("Inputs before broadcast: ", inputs)
+
 	for k ∈ 1:length(nodevals)
 		# print("Node broadcast $k: ")
 		for l ∈ 1:nodes[k].num_out
@@ -186,7 +175,7 @@ for j ∈ 1:num_steps
 	end
 
 	# println( delbuf |> buftostr )
-	# println("\n", outputs |> buftostr, "\n")
+	println("\n", outputs |> buftostr, "\n")
 	# inputs[:] = outputs[:]
 	
 	nodevals = zeros(length(nodes))
@@ -196,6 +185,7 @@ for j ∈ 1:num_steps
 			nodevals[k] += outputs[nodes[k].idx_out_to_in+l-1] 
 			# print(" $(nodes[k].idx_out_to_in+l-1)")
 		end
+		nodevals[k] = nodevals[k] > 1.0 ? 1.0 : 0
 		# println()
 	end
 	println("############################################################")
