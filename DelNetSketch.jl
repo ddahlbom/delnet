@@ -25,24 +25,24 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 4 		# number of elements
+n = 25 		# number of elements
 p = 0.1 		
-d_max = 4
+d_max = 10
 
 
 # Generate connectivity matrix
-# delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
-# for k ∈ 1:n delmat[k,k] = 0 end
-# numlines = sum(delmat)
-# delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
-# deltot = sum(delmat)
-
-# for testing
-delmat = [0 1 1 0; 0 0 1 0; 0 0 0 1; 1 0 0 0 ]
+delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
 for k ∈ 1:n delmat[k,k] = 0 end
 numlines = sum(delmat)
-delmat .*= d_max
+delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
 deltot = sum(delmat)
+
+# for testing
+# delmat = [0 1 1 0; 0 0 1 0; 0 0 0 1; 1 0 0 0 ]
+# for k ∈ 1:n delmat[k,k] = 0 end
+# numlines = sum(delmat)
+# delmat .*= d_max
+# deltot = sum(delmat)
 
 inputs = zeros(numlines)
 outputs = zeros(numlines)
@@ -148,7 +148,7 @@ end
 
 # outputs[1] = 1.0
 #delbuf[1] = 1.0
-num_steps = 6
+num_steps = 15 
 nodevals = zeros(length(nodes))
 nodevals[1] = 1.0
 nodevals[2] = 1.0
@@ -182,7 +182,7 @@ for j ∈ 1:num_steps
 
 	for d ∈ delays
 		vals = orderbuf(d, delbuf)
-		println("$(d.source)|"*vals*"|$(d.target)")
+		println("($(d.source)) "*vals*" ($(d.target))")
 	end
 
 	# println( delbuf |> buftostr )
