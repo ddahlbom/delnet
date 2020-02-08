@@ -3,8 +3,6 @@ module DelNetSketch
 using Plots
 
 mutable struct Node
-	# the lists should just be "pointers" -- but try once with eliminating
-	# them to see if it enhances performance
 	idx_out_to_in::Int64
 	num_in::Int64
 	nodes_in::Array{Int64,1} 	# just for reference/construction
@@ -25,24 +23,24 @@ mutable struct Delay
 end
 
 # -------------------- Parameters --------------------
-n = 25 		# number of elements
+n = 4 		# number of elements
 p = 0.1 		
-d_max = 10
+d_max = 5
 
 
 # Generate connectivity matrix
-delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
-for k ∈ 1:n delmat[k,k] = 0 end
-numlines = sum(delmat)
-delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
-deltot = sum(delmat)
-
-# for testing
-# delmat = [0 1 1 0; 0 0 1 0; 0 0 0 1; 1 0 0 0 ]
+# delmat = rand(n,n) |> m -> map(x -> x < p ? 1 : 0,m)
 # for k ∈ 1:n delmat[k,k] = 0 end
 # numlines = sum(delmat)
-# delmat .*= d_max
+# delmat = map(x -> x == 1 ? rand(1:d_max) : 0, delmat)
 # deltot = sum(delmat)
+
+# for testing
+delmat = [0 1 1 0; 0 0 1 0; 0 0 0 1; 1 0 0 0 ]
+for k ∈ 1:n delmat[k,k] = 0 end
+numlines = sum(delmat)
+delmat .*= d_max
+deltot = sum(delmat)
 
 inputs = zeros(numlines)
 outputs = zeros(numlines)
