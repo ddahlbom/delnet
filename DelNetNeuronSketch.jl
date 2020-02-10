@@ -15,6 +15,13 @@ mutable struct Neuron
 	u::Float64
 end
 
+a_exc = 0.02
+a_inh = 0.1
+d_exc = 8.0
+d_inh = 2.0
+
+w_exc = 6.0
+w_inh = -5.0
 
 
 # -------------------- Parameters --------------------
