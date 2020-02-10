@@ -8,14 +8,11 @@ export blobgraph, delnetfromgraph, pushoutput!,
 mutable struct Node
 	idx_out_to_in::Int64
 	num_in::Int64
-	nodes_in::Array{Int64,1} 	# just for reference/construction
 	idx_in_to_out::Int64
 	num_out::Int64
-	nodes_out::Array{Int64,1} 	#just for reference/construction
 end
 
-Node() = Node(0,0,Int64[],0,0,Int64[])
-
+Node() = Node(0,0,0,0)
 
 mutable struct Delay
 	offset::Int64
@@ -55,6 +52,9 @@ end
 
 
 """
+	advance!(dn::DelayNetwork)
+
+Push in input, advance delay, pull out output. 
 """
 function advance!(dn::DelayNetwork)
 	#load input
@@ -77,6 +77,9 @@ end
 
 
 """
+	orderbuf(delay, delbuf)
+
+
 """
 function orderbuf(delay, delbuf) 
 	[ delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
@@ -85,6 +88,9 @@ end
 
 
 """
+	buftostr(buffer)
+
+
 """
 function buftostr(buffer)
 	buffer |> v -> map(x -> x == 0.0 ? "-" : "$(Int(round(x)))", v) |> prod
@@ -92,8 +98,13 @@ end
 
 
 """
+	blobgraph(n, p, delay::Array{Int,1})
+
+Generate a blob of n neurons, each of which is connected to an other with
+probability p. Delay is an array of possible delay sizes (in samples). Delay
+of 1 corresponds to no delay (i.e. data is available at next time step).
 """
-function blobgraph(n, p, delays::Array{Int, 1})
+function blobgraph(n, p, delays::Array{Int,1})
 	@assert 0 ∉ delays "1 corresponds to no delay -- can't have 0 in delays"
 	delmat = rand(n,n) |> m -> map(x -> x < p ? rand(delays) : 0, m)
 	for k ∈ 1:n delmat[k,k] = 0 end
@@ -102,8 +113,13 @@ end
 
 
 """
+	delnetfromgraph(graph)
+
+Generates a DelayNetwork structure from a graph.  The graph must be an n×n
+matrix.  Zero entries indicate no connection, non-zero entries indicate the
+delay duration in samples.
 """
-function delnetfromgraph(graph)
+function delnetfromgraph(graph::Array{Int,2})
 	n = size(graph)[1]
 	deltot = sum(graph) 	# total number of delays to allocate
 	numlines = sum( map(x -> x != 0 ? 1 : 0, graph) )
