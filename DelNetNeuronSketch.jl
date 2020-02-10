@@ -42,31 +42,48 @@ mutable struct DelayNetwork
 	delays::Array{Delay, 1}
 end
 
-# function advance(dn::DelayNetwork) end
 # function getinput(idx, dn::DelayNetwork) end
-# function pushoutput(idx, dn::DelayNetwork) end
+# function pushoutput!(idx, dn::DelayNetwork) end
 
 # -------------------- Functions --------------------
 """
 """
-function advance(input, output, inverseidces, delays, delbuf)	
+function pushoutput!(val, idx, dn)
+	i1 = dn.nodes[idx].idx_in_to_out
+	i2 = i1 + dn.nodes[idx].num_out-1 
+	dn.inputs[i1:i2] .= val
+end
+
+
+"""
+"""
+function getinputs(idx, dn::DelayNetwork)
+	i1 = dn.nodes[idx].idx_out_to_in
+	i2 = i1 + dn.nodes[idx].num_in - 1
+	dn.outputs[i1:i2]
+end
+
+
+"""
+"""
+function advance!(dn::DelayNetwork)
 	#load input
-	for i ∈ 1:length(input)
-		buf_idx = delays[i].startidx + delays[i].offset
-		delbuf[buf_idx] = input[i]	
+	for i ∈ 1:length(dn.inputs)
+		dn.delaybuf[ dn.delays[i].startidx + dn.delays[i].offset  ] = dn.inputs[i]	
 	end
 
 	# advance buffer
-	for i ∈ 1:length(input)
-		delays[i].offset = (delays[i].offset + 1) % delays[i].len
+	for i ∈ 1:length(dn.inputs)
+		dn.delays[i].offset = (dn.delays[i].offset + 1) % dn.delays[i].len
 	end
 	
 	#pull output
-	for i ∈ 1:length(input)
-		output[ inverseidces[i] ] = delbuf[ delays[i].startidx + delays[i].offset ]	
+	for i ∈ 1:length(dn.inputs)
+		dn.outputs[ dn.invidx[i] ] = dn.delaybuf[ dn.delays[i].startidx + dn.delays[i].offset ]	
 	end
-	output
+	# output
 end
+
 
 
 """
@@ -175,41 +192,36 @@ nodevals[2] = 1.0
 
 # run simulation
 for j ∈ 1:num_steps
-	#global inputs, outputs, inverseidces, delays, delbuf, op, nodevals
 	global dn, nodevals
 
+	# Push in node values
 	for k ∈ 1:length(nodevals)
-		for l ∈ 1:dn.nodes[k].num_out
-			dn.inputs[dn.nodes[k].idx_in_to_out+l-1] = nodevals[k]   
-			if rand() < noise
-				dn.inputs[dn.nodes[k].idx_in_to_out+l-1] = 1.0
-			end
-		end
+		pushoutput!(nodevals[k], k, dn)
 	end
 
+	# Advance the state
+	advance!(dn)
+
+	# Pull out delay output and use as node input, update node state
+	nodevals .*= 0
+	for k ∈ 1:length(nodevals)
+		nodevals[k] = sum( getinputs(k, dn) )
+		nodevals[k] = nodevals[k] > 1.0 ? 1.0 : 0
+	end
+	
+
+	# Print output if desired
 	if verbose
 		println("\nSTEP $j:")
 		println("nodevals: $(nodevals)")
 		println(dn.inputs |> buftostr, "\n")
-	end
-	advance(dn.inputs, dn.outputs, dn.invidx, dn.delays, dn.delaybuf)
-
-	for d ∈ dn.delays
-		vals = orderbuf(d, dn.delaybuf)
-		verbose && println("($(d.source)) "*vals*" ($(d.target))")
-	end
-
-	verbose && println("\n", dn.outputs |> buftostr, "\n")
-	
-	nodevals = zeros(length(dn.nodes))
-	for k ∈ 1:length(nodevals)
-		for l ∈ 1:dn.nodes[k].num_in
-			nodevals[k] += dn.outputs[dn.nodes[k].idx_out_to_in+l-1] 
+		for d ∈ dn.delays
+			vals = orderbuf(d, dn.delaybuf)
+			println("($(d.source)) "*vals*" ($(d.target))")
 		end
-		nodevals[k] = nodevals[k] > 1.0 ? 1.0 : 0
+		println("\n", dn.outputs |> buftostr, "\n")
+		println("############################################################")
 	end
-
-	verbose && println("############################################################")
 end
 
 
