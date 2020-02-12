@@ -59,7 +59,7 @@ Push in input, advance delay, pull out output.
 function advance!(dn::DelayNetwork)
 	#load input
 	for i ∈ 1:length(dn.inputs)
-		dn.delaybuf[ dn.delays[i].startidx + dn.delays[i].offset  ] = dn.inputs[i]	
+		dn.delaybuf[dn.delays[i].startidx + dn.delays[i].offset] = dn.inputs[i]	
 	end
 
 	# advance buffer
@@ -69,21 +69,24 @@ function advance!(dn::DelayNetwork)
 	
 	#pull output
 	for i ∈ 1:length(dn.inputs)
-		dn.outputs[ dn.invidx[i] ] = dn.delaybuf[ dn.delays[i].startidx + dn.delays[i].offset ]	
+		dn.outputs[dn.invidx[i]] =
+					dn.delaybuf[dn.delays[i].startidx + dn.delays[i].offset]
 	end
 	# output
 end
 
 
-
 """
 	orderbuf(delay, delbuf)
 
-
+Sort out the circular buffer for display.
 """
 function orderbuf(delay, delbuf) 
 	[ delbuf[delay.startidx + ((delay.offset + k) % delay.len) ]
-	 for k ∈ 0:delay.len-1] |> v -> map(x -> x == 0.0 ? "-" : "$(Int(round(x)))", v) |> reverse |> prod
+	 for k ∈ 0:delay.len-1] |>
+	v -> map(x -> x == 0.0 ? "-" : "$(Int(round(x)))", v) |>
+	reverse |>
+	prod
 end
 
 
@@ -167,7 +170,8 @@ function delnetfromgraph(graph::Array{Int,2})
 
 	inverseidces = zeros(Int64, length(outputs))
 	for i ∈ 1:length(inputs)
-		inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
+		inverseidces[i] = out_base_idcs[delays[i].target] +
+						  out_counts[delays[i].target]
 		out_counts[delays[i].target] += 1
 	end
 		

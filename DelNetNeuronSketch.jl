@@ -31,6 +31,7 @@ d_max = 20
 graph = blobgraph(n, p, collect(1:d_max))
 
 
+
 # ---------- Generate Network, Nodes and Delay Lines --------------------
 verbose = true
 noise = 0.0 	# probability of random firing
