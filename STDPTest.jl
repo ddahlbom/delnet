@@ -32,7 +32,7 @@ fs = 50e3
 dt = 1.0/fs
 dur = 10.0
 ts = collect(0:dt:dur-dt)
-λ = 10.0 	# 10 Hz 
+λ = 20.0 	# 10 Hz 
 
 w = zeros(length(ts))
 
@@ -42,12 +42,17 @@ x_post = zeros(length(ts))
 spikes_pre  = zeros(length(ts)) 
 spikes_post = zeros(length(ts))
 
-times = poissonproc(λ, dur)
+# times = poissonproc(λ, dur)
+#freq = 10.0
+τ = 1/λ
+times = [τ * k for k ∈ 1:(dur/τ - τ)]
 idcs = Int.(round.(times*fs))
+idcs = filter(x -> x <= length(ts), idcs)
 spikes_pre[idcs] .= 1.0
 #times = poissonproc(λ, dur)
-times = times .+ 0.005
+times .+= 0.002
 idcs = Int.(round.(times*fs))
+idcs = filter(x -> x <= length(ts), idcs)
 spikes_post[idcs] .= 1.0
 
 
@@ -56,17 +61,25 @@ p_spikes_2 = plot(ts, spikes_post)
 p_spikes   = plot(p_spikes_1, p_spikes_2, layout=(2,1))
 
 x_pre = zeros(length(ts))
-τ_pre = 0.015
-A_pre = 100.0
+τ_pre = 0.034
+A_pre = 51.0
 x_post = zeros(length(ts))
-τ_post = 0.034
-A_post = 100.0
+τ_post = 0.014
+A_post = 103.0
 
 s = zeros(length(ts)); s[1] = 6.0
 
 for k ∈ 1:length(x_pre)-1 
-	x_pre[k+1] = x_pre[k] - (dt/τ_pre) * x_pre[k] + spikes_pre[k]
+	if spikes_pre[k] == 1.0 
+		x_pre[k+1] = 1.0
+	else
+		x_pre[k+1] = x_pre[k] - (dt/τ_pre) * x_pre[k] + spikes_pre[k]
+	end
+	# if spikes_post[k] == 1.0
+	# 	x_post[k+1] = 1.0
+	# else
 	x_post[k+1] = x_post[k] - (dt/τ_post) * x_post[k] + spikes_post[k]
+	# end
 	s[k+1] = s[k] + dt * ( - (x_pre[k] * A_pre * spikes_pre[k]) + (A_post * x_post[k] * spikes_post[k]))
 end
 
