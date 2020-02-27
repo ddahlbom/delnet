@@ -25,7 +25,7 @@ a_inh = 0.1
 d_exc = 8.0
 d_inh = 2.0
 
-w_exc = 6.0
+w_exc = 6.0 * 0.5
 w_inh = -5.0
 
 τ_pre = 0.034
@@ -38,7 +38,7 @@ syn_max = 20.0
 # -------------------- Parameters --------------------
 fs = 1000.0
 dt = 1/fs
-dur = 0.5
+dur = 1.0 
 ts = collect(0:dt:dur)
 n_exc = 800
 n_inh = 200
@@ -83,33 +83,38 @@ end
 # -------------------- Run Simulation --------------------
 spikes = [0.0 0.0]
 rand_count = 0
-for t ∈ ts 
+
+synapse_w = zeros(length(ts))
+syn_trace = zeros(length(ts))
+neu_trace = zeros(length(ts))
+
+for (k, t) ∈ enumerate(ts)
 	global dn, spikes, rand_count
 
+	( (k%100) == 0 ) && ( println("Time: $(t+dt)") )
 	# update node and calculate ouput, push into delnet
 	for k ∈ 1:n
+
 		# Get input from delay lines
-		w = k <= n_exc ? w_exc : w_inh
-		#inval = sum( getinputs(k, dn) .* w )
-		input = 0.0
+		inval = 0.0
 		inputs = getinputs(k,dn)
-		for p ∈ 1:length(inputs)
-			if k <= n_exc
+		inval += sum(synapses[k] .* inputs)
+
+		# Update synapse traces
+		if k <= n_exc
+			for p ∈ 1:length(inputs)
 				spike_pre[k][p] = inputs[p]
-				trace_pre[k][p] = trace_pre[k][p]*(1.0-(dt/τ_pre))+spike_pre[k][p]
-			end
-			if inputs[p] == 1.0
-				input += synapses[k][p]				
+				trace_pre[k][p] = min(1.0, trace_pre[k][p]*(1.0-(dt/τ_pre))+spike_pre[k][p])
 			end
 		end
-		inval = sum( getinputs(k, dn) .* synapses[k] )
-		#println("weight: $w inval: $inval)")
+
+		# Random input (noise)
 		if rand() < 1.0/n
-			inval += 20.0
+			inval += 20.0 * (fs/1000.0)
 			rand_count += 1
 		end
 
-		# Update state
+		# Update neuron state
 		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v
 								+ 140.0 - neurons[k].u + inval)
 		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v
@@ -117,27 +122,29 @@ for t ∈ ts
 		neurons[k].u += 1000.0 * dt * neurons[k].a *
 							(0.2 * neurons[k].v - neurons[k].u)
 
-		# Check if spikes and calculate output
+		# Check if spiked and calculate output
 		outval = 0.0
 		if neurons[k].v >= 30.0
 			spikes = [spikes ; t k] 	# time node
 			outval = 1.0				
 			neurons[k].v = -65.0
 			neurons[k].u += neurons[k].d
-			if k <= n_exc
-				spike_post[k] = 1.0
-				trace_post[k] = trace_post[k]*(1.0 - (dt/τ_post))+spike_post[k]
-			end
+		end
+
+		# Update neuron trace
+		if k <= n_exc
+			spike_post[k] = outval 
+			trace_post[k] = min(1.0, trace_post[k]*(1.0 - (dt/τ_post))+spike_post[k])
 		end
 
 		# Update synapses
-		for p ∈ 1:length(inputs)
-			if k <= n_exc
+		if k <= n_exc
+			for p ∈ 1:length(inputs)
 				synapses[k][p] = synapses[k][p] +
 								dt * (A_pre * trace_pre[k][p] * spike_post[k] -
 									  A_post * trace_post[k] * spike_pre[k][p])
 			end
-			(k <= n_exc) && (synapses[k] = clamp.(synapses[k], 0, syn_max))
+			synapses[k] = clamp.(synapses[k], 0, syn_max)
 		end
 		spike_post .= 0.0
 
@@ -147,6 +154,9 @@ for t ∈ ts
 
 	# Advance the state
 	advance!(dn)
+	synapse_w[k] = synapses[1][1]
+	syn_trace[k] = trace_pre[1][1]
+	neu_trace[k] = trace_post[1]
 end
 
 spikes = spikes[2:end,:]

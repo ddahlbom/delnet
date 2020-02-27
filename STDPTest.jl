@@ -49,7 +49,7 @@ idcs = Int.(round.(times*fs))
 idcs = filter(x -> x <= length(ts), idcs)
 spikes_pre[idcs] .= 1.0
 #times = poissonproc(λ, dur)
-times .-= 0.0025
+times .+= 0.0025
 idcs = Int.(round.(times*fs))
 idcs = filter(x -> x <= length(ts), idcs)
 spikes_post[idcs] .= 1.0
