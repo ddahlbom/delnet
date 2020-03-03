@@ -8,13 +8,18 @@
 /*
  * -------------------- Structs --------------------
  */
+
+typedef struct vec_s {
+	FLOAT_T *data;
+	IDX_T n;
+} vec;
+
 typedef struct node_s {
 	IDX_T idx_oi;
 	IDX_T num_in;
 	IDX_T idx_io;
 	IDX_T num_out;
 } node;
-
 
 typedef struct delay_s {
 	IDX_T offset;
@@ -23,7 +28,6 @@ typedef struct delay_s {
 	IDX_T source;
 	IDX_T target;
 } delay;
-
 
 typedef struct delaynet_s {
 	IDX_T num_delays;
@@ -82,11 +86,39 @@ void advance(delaynet *dn)
 	}
 }
 
+vec orderbuf(delay *d, FLOAT_T *delbuf) {
+	IDX_T k, n, idx;
+	vec output;
+	
+	n = d->len;
+	output.n = n;
+	output.data = malloc(sizeof(FLOAT_T) * n);
+
+	for (k=0; k<n; k++) {
+		idx = d->startidx + ((d->offset+k) % d->len);
+		output.data[n-k-1] = delbuf[idx];
+	}
+	return output;
+}
+
+char *vectostr(vec input) {
+	int k;
+	char *output;
+	output = malloc(sizeof(char)*(input.n+1));
+	output[input.n] = "\0";
+	for(k=0; k < input.n; k++) {
+		output[k] = 
+	}
+
+}
+
 
 /*
  * -------------------- Main Test --------------------
  */
 int main()
 {
+			
+
 	return 0;
 }
