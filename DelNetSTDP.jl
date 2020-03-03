@@ -25,7 +25,7 @@ a_inh = 0.1
 d_exc = 8.0
 d_inh = 2.0
 
-w_exc = 5.5
+w_exc = 5.0
 w_inh = -5.0
 
 # τ_pre = 0.034
@@ -34,15 +34,17 @@ w_inh = -5.0
 # A_post = 103.0
 τ_pre = 0.020
 A_pre = 0.12
+# A_pre = 1.2
 τ_post = 0.020
 A_post = 0.1
+# A_post = 1.0 
 
 syn_max = 10.0
 
 # -------------------- Parameters --------------------
 fs = 1000.0
 dt = 1/fs
-dur = 0.5
+dur = 60.0
 ts = collect(0:dt:dur)
 n_exc = 800
 n_inh = 200
@@ -121,10 +123,10 @@ for (k, t) ∈ enumerate(ts)
 		end
 
 		# Update neuron state
-		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v
-								+ 140.0 - neurons[k].u + inval)
-		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v
-								+ 140.0 - neurons[k].u + inval)
+		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v +
+								140.0 - neurons[k].u + inval)
+		neurons[k].v += 500.0 * dt .* ((0.04 * neurons[k].v + 5.0) * neurons[k].v +
+								140.0 - neurons[k].u + inval)
 		neurons[k].u += 1000.0 * dt * neurons[k].a *
 							(0.2 * neurons[k].v - neurons[k].u)
 
@@ -147,7 +149,7 @@ for (k, t) ∈ enumerate(ts)
 		# Update synapses
 		if k <= n_exc
 			for p ∈ 1:length(inputs)
-				synapses[k][p] = synapses[k][p] +
+				synapses[k][p] = synapses[k][p] + 0.00001 +
 								dt * (A_post * trace_pre[k][p] * spike_post[k] -
 									  A_pre * trace_post[k] * spike_pre[k][p])
 			end
@@ -161,6 +163,8 @@ for (k, t) ∈ enumerate(ts)
 
 	# Advance the state
 	advance!(dn)
+
+	# record for plot/debug
 	synapse_w[k] = synapses[1][1]
 	syn_trace[k] = trace_pre[1][1]
 	neu_trace[k] = trace_post[1]
