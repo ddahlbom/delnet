@@ -42,8 +42,8 @@ SimParams() = SimParams(0.02, 	#a_exc
 					    0.1, 	#a_inh
 					    8.0, 	#d_exc
 					    2.0, 	#d_inh
-					    6.0*0.8, 	#w_exc
-					    -6.5*0.7, 	#w_inh
+					    6.0, 	#w_exc
+					    -5, 	#w_inh
 					    0.02, 	#τ_post
 					    0.12, 	#A_pre
 					    0.02, 	#τ_pre
@@ -51,7 +51,7 @@ SimParams() = SimParams(0.02, 	#a_exc
 					    10.0, 	#syn_max
 						800, 	#n_exc
 						200, 	#n_inh
-						0.0945, 	#p_contact
+						0.1, 	#p_contact
 						20) 	#d_max
 
 # ---------- Generate Network, Nodes and Delay Lines --------------------
@@ -59,9 +59,16 @@ trialparams = SimParams()
 
 
 # -------------------- Run Simulation --------------------
-function runsim(params, fs, dur)
+function runsim(params, fs, dur; blocksize=:none, outfile="trialdata")
 	n = params.n_exc + params.n_inh 		# number of elements
-	spikes = [0.0 0.0]
+	#spikes = [0.0 0.0]
+	f = open(outfile, "w")
+	if blocksize == :none
+		blocksize = 10*n
+	end
+	spikes = zeros(blocksize, 2)
+	spike_count = 0
+	spike_count_offset = 0
 	rand_count = 0
 
 	# Generate graph
@@ -77,6 +84,7 @@ function runsim(params, fs, dur)
 	for k ∈ (params.n_exc+1):n
 		g[k, randperm(params.n_exc)[1:Int(round(params.p_contact*n))]] .= 2
 	end
+	# g[1:params.n_exc, params.n_exc+1:end] = map( x -> x != 0 ? 2 : 0, g[1:params.n_exc, params.n_exc+1:end])
 
 	dn = delnetfromgraph(g)
 
@@ -139,7 +147,9 @@ function runsim(params, fs, dur)
 			# Check if spiked and calculate output
 			outval = 0.0
 			if neurons[k].v >= 30.0
-				spikes = [spikes ; t k] 	# time node
+				#spikes = [spikes ; t k] 	# time node
+				spike_count += 1
+				spikes[spike_count,:] = [t k]
 				outval = 1.0				
 				neurons[k].v = -65.0
 				neurons[k].u += neurons[k].d
@@ -169,11 +179,25 @@ function runsim(params, fs, dur)
 
 		# Advance the state
 		advance!(dn)
+
+		# Save spikes if necessary
+		if spike_count > blocksize - n
+			for l ∈ 1:spike_count
+				write(f, "$(spikes[l,1])  $(Int(round(spikes[l,2]))) \n")
+			end
+			spikes .= 0
+			spike_count = 0
+		end
+
 	end
 
-	spikes = spikes[2:end,:]
+	for l ∈ 1:spike_count
+		write(f, "$(spikes[l,1])  $(Int(round(spikes[l,2]))) \n")
+	end
+	close(f)
+
 	println("Number of random firings: $(rand_count) (expected: $(length(ts)*n/1000))")
-	return spikes, synapses
+	return g, synapses
 end
 
 
