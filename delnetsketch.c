@@ -5,6 +5,10 @@
 #define IDX_T unsigned int
 #define FLOAT_T float
 
+#define getrandom(max1) ((rand()%(int)((max1)))) // random integer between 0 and max-1
+
+#define unirand() (((FLOAT_T) rand()) / ((FLOAT_T) RAND_MAX + 1.0))
+
 /*
  * -------------------- Structs --------------------
  */
@@ -105,13 +109,56 @@ char *vectostr(vec input) {
 	int k;
 	char *output;
 	output = malloc(sizeof(char)*(input.n+1));
-	output[input.n] = "\0";
+	output[input.n] = '\0';
 	for(k=0; k < input.n; k++) {
-		output[k] = 
+		output[k] = input.data[k] == 0.0 ? '-' : '*';
 	}
+	return output;
+}
+
+unsigned int *blobgraph(unsigned int n, float p, unsigned int maxdel) {
+	unsigned int count = 0;
+	unsigned int *delmat;
+	unsigned int i, j;
+	delmat = malloc(sizeof(int)*n*n);
+
+	for (i=0; i<n; i++) 
+	for (j=0; j<n; j++) {
+		if (unirand() < p && i != j) {
+			delmat[i*n + j] = getrandom(maxdel) + 1;
+			count += 1;
+		}
+		else 
+			delmat[i*n + j] = 0;
+	}
+
+	printf("Percent non-zero: %f\n", ((float) count) / ((float)n*(float)n));
+	return delmat;
+}
+
+
+delaynet *delnetfromgraph(unsigned int *g, unsigned int n) {
+	unsigned int i;
+	unsigned int deltot, numlines;
+	delaynet *dn;
+
+	dn = malloc(sizeof(delaynet));
+
+	deltot = 0;
+	numlines = 0;
+	for (i=0; i<n*n; i++) {
+		deltot += g[i];
+		numlines += g[i] != 0 ? 1 : 0;
+	}
+
+	dn->inputs = malloc(sizeof(FLOAT_T)*numlines);
+	dn->outputs = malloc(sizeof(FLOAT_T)*numlines);
+	dn->delays = malloc(sizeof(delay)*numlines);
 
 }
 
+void dn_freedelnet(delaynet *dn) {
+}
 
 /*
  * -------------------- Main Test --------------------
@@ -119,6 +166,25 @@ char *vectostr(vec input) {
 int main()
 {
 			
+	vec myvector;
+	char *mystr;
+	unsigned int *delmat;
+
+	myvector.data = malloc(sizeof(FLOAT_T)*10);
+	myvector.n = 10;
+	
+	for (int k = 0; k < 10; k++) {
+		myvector.data[k] = k;
+	}
+
+	mystr = vectostr(myvector);
+	printf("%s\n", mystr);
+
+	delmat = blobgraph(1000,0.1,20);
+
+	free(mystr);
+	free(myvector.data);
+	free(delmat);
 
 	return 0;
 }
