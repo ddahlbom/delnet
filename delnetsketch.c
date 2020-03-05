@@ -126,7 +126,7 @@ char *dn_vectostr(dn_vec_float input) {
 	output = malloc(sizeof(char)*(input.n+1));
 	output[input.n] = '\0';
 	for(k=0; k < input.n; k++) {
-		output[k] = input.data[k] == 0.0 ? '-' : '*';
+		output[k] = input.data[k] == 0.0 ? '-' : '1';
 	}
 	return output;
 }
@@ -149,7 +149,7 @@ void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn)
 
 
 /* No getinputs()... would need to return vector */
-dn_vec_float dn_getinputs(IDX_T idx, dn_delaynet *dn) {
+dn_vec_float dn_getinputvec(dn_delaynet *dn) {
 	dn_vec_float inputs;	
 	inputs.data = malloc(sizeof(FLOAT_T)*dn->num_delays);
 	inputs.n = dn->num_delays;
@@ -243,7 +243,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 		dn->nodes[i].num_out = 0;
 	}
 
-	/* work through graph */
+	/* work through graph, allocate delay lines */
 	delcount = 0;
 	startidx = 0;
 	for (i = 0; i<n; i++)
@@ -271,6 +271,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 		num_outputs[i] = dn->nodes[i].num_out;
 		for (j=0; j<i; j++)
 			in_base_idcs[i] += num_outputs[j]; 	// check logic here
+		//in_base_idcs[i] = i == 0 ? 0 : in_base_idcs[i-1] + num_outputs[i];
 	}
 
 	unsigned int idx = 0;
@@ -287,12 +288,13 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	out_counts = calloc(n, sizeof(unsigned int));
 	for (i=0; i<n; i++) {
 		num_inputs[i] = dn->nodes[i].num_in;
-		for (j=0; j<n; j++)
+		for (j=0; j<i; j++)
 			out_base_idcs[i] += num_inputs[j]; // check logic here
+		//out_base_idcs[i] = i == 0 ? 0 : in_base_idcs[i-1] + num_inputs[i];
 	}
 
 	inverseidces = calloc(numlines, sizeof(unsigned int));
-	for (i=0; i<n; i++) {
+	for (i=0; i<numlines; i++) {
 		inverseidces[i] = out_base_idcs[dn->delays[i].target] + 
 						  out_counts[dn->delays[i].target];
 		out_counts[dn->delays[i].target] += 1;
@@ -331,7 +333,6 @@ int main()
 	// unsigned int *delmat;
 	// unsigned int n = 1000;
 	// delmat = dn_blobgraph(n,0.1,20);
-	char *displaystr;
 	
 	/* Test handcrafted graph */
 	unsigned int n = 4;
@@ -352,6 +353,8 @@ int main()
 
 	/* Test delaynet for memory leaks */
 	dn_delaynet *dn = dn_delnetfromgraph(delmat, n);
+	dn_vec_float invals, linevals;
+	char *dispstr;
 
 	unsigned int i, j, k;
 	for (j=0; j<numsteps; j++) {
@@ -368,17 +371,59 @@ int main()
 			printf("%1.1f, ", nodevals[k]);	
 		}
 		printf("%1.1f]\n", nodevals[n-1]);
+		invals = dn_getinputvec(dn);
+		dispstr = dn_vectostr(invals); 
+		printf("%s\n\n", dispstr);
 
+		free(dispstr);
+		free(invals.data);
 
 		// advance
+		dn_advance(dn);
 
+		// show states
+		for (k=0; k<numlines; k++) {
+			linevals = dn_orderbuf(&dn->delays[k], dn->delaybuf);	
+			dispstr = dn_vectostr(linevals);
+			printf("(%u) %s (%u)\n", dn->delays[k].source,
+									 dispstr,
+									 dn->delays[k].target);
+			free(dispstr);
+			free(linevals.data);
+		}
+
+		// print delaybuffer output (neuron input)
+		FLOAT_T *inputaddr = dn->outputs;
+		dn_vec_float bufoutput;
+		bufoutput.data = dn->outputs;
+		bufoutput.n = dn->num_delays;
+		dispstr = dn_vectostr(bufoutput);
+		printf("\n%s\n\n", dispstr);
+		free(dispstr);
 		
 		// pull outputs
+		for (k=0; k<n; k++) {
+			inputaddr = dn_getinputaddress(k, dn);	
+			nodevals[k] = 0.0;
+			for (i=0; i < dn->nodes[k].num_in; i++) {
+				nodevals[k] += *(inputaddr+i);
+			}
+			nodevals[k] = nodevals[k] > 1 ? 1 : 0;
+		}
+
+		printf("############################################################\n");
+
 	}
 
+	printf("[%u, ", dn->inverseidx[0] + 1);
+	for (i=1; i<dn->num_delays-1; i++) {
+		printf("%u, ", dn->inverseidx[i] + 1);
+	}
+	printf("%u]\n", dn->inverseidx[n-1] + 1);
 
 	/* Clean up */
 	dn_freedelnet(dn);
+	free(invals.data);
 
 	return 0;
 }

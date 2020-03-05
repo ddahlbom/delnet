@@ -123,6 +123,7 @@ num_outputs    = [ nd.num_out for nd ∈ nodes ]
 in_base_idcs = [ sum(num_outputs[1:k]) for k ∈ 1:n-1 ]
 in_base_idcs = [1; in_base_idcs[1:end] .+ 1]
 
+
 idx = 1
 for i ∈ 1:length(nodes)
 	global idx
