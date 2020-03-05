@@ -149,8 +149,17 @@ void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn)
 
 
 /* No getinputs()... would need to return vector */
-FLOAT_T *dn_getinputaddress(IDX_T idx, dn_delaynet *dn)
-{
+dn_vec_float dn_getinputs(IDX_T idx, dn_delaynet *dn) {
+	dn_vec_float inputs;	
+	inputs.data = malloc(sizeof(FLOAT_T)*dn->num_delays);
+	inputs.n = dn->num_delays;
+	for (int i=0; i<dn->num_delays; i++) {
+		inputs.data[i] = dn->inputs[i];
+	}
+	return inputs;
+}
+
+FLOAT_T *dn_getinputaddress(IDX_T idx, dn_delaynet *dn) {
 	return &dn->outputs[dn->nodes[idx].idx_oi];
 }
 
@@ -318,46 +327,56 @@ void dn_freedelnet(dn_delaynet *dn) {
  */
 int main()
 {
-			
-	dn_vec_float myvector;
-	char *mystr;
-	unsigned int *delmat;
-
-	/* Test vector */
-	myvector.data = malloc(sizeof(FLOAT_T)*10);
-	myvector.n = 10;
+	/* Test blob graph */
+	// unsigned int *delmat;
+	// unsigned int n = 1000;
+	// delmat = dn_blobgraph(n,0.1,20);
+	char *displaystr;
 	
-	for (int k = 0; k < 10; k++) {
-		myvector.data[k] = k;
+	/* Test handcrafted graph */
+	unsigned int n = 4;
+	unsigned int delmat[] = { 0, 3, 3, 0,
+							  0, 0, 3, 0,
+							  0, 0, 0, 3,
+							  3, 0, 0, 0 };
+	unsigned int numlines = 0;
+	unsigned int deltot = 0;
+	unsigned int numsteps = 6;
+	FLOAT_T nodevals[] = { 1.0, 1.0, 0.0, 0.0 };
+
+	for (int i=0; i<n; i++)
+	for (int j=0; j<n; j++) {
+		numlines += delmat[i*n+j] == 0 ? 0 : 1;
+		deltot += delmat[i*n+j];
 	}
 
-	/* Test string buffer stuff */
-	mystr = dn_vectostr(myvector);
-	printf("%s\n", mystr);
-
-	/* Test blob graph */
-	unsigned int dim = 1000;
-	delmat = dn_blobgraph(dim,0.1,20);
-
 	/* Test delaynet for memory leaks */
-	dn_delaynet *dn = dn_delnetfromgraph(delmat, dim);
+	dn_delaynet *dn = dn_delnetfromgraph(delmat, n);
 
-	/* Test list */
-	dn_list_uint *l = dn_list_uint_init();
-	dn_list_uint_push(l, 9);
-	dn_list_uint_push(l, 8);
-	dn_list_uint_push(l, 7);
+	unsigned int i, j, k;
+	for (j=0; j<numsteps; j++) {
 
-	while (l->count > 0) 
-		printf("%u\n", dn_list_uint_pop(l));
+		// push in neuron outputs into dl inputs
+		for (k=0; k<n; k++) {
+			dn_pushoutput(nodevals[k], k, dn);
+		}
+		
+		// print out state
+		printf("\nSTEP %u:\n", j+1);
+		printf("nodevals: [");
+		for (k=0; k<n-1; k++) {
+			printf("%1.1f, ", nodevals[k]);	
+		}
+		printf("%1.1f]\n", nodevals[n-1]);
 
 
-	/* Clean up */
-	dn_list_uint_free(l);
-	dn_freedelnet(dn);
-	free(mystr);
-	free(myvector.data);
-	free(delmat);
+		// advance
+
+		
+		// pull outputs
+	}
+
+
 
 	return 0;
 }
