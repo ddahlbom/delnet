@@ -141,7 +141,7 @@ function delnetfromgraph(graph::Array{Int,2})
 	for i ∈ 1:n
 		for j ∈ 1:n
 			if graph[i,j] != 0
-				total += graph[i,j]
+				# total += graph[i,j] 	# doesn't do anything...
 				nodes[i].num_out += 1
 				push!(nodes_in[j], i)
 				delays[delcount] = Delay(0, startidx, graph[i,j], i, j)
