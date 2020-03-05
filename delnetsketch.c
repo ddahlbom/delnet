@@ -339,9 +339,8 @@ int main()
 	unsigned int dim = 1000;
 	delmat = dn_blobgraph(dim,0.1,20);
 
-	/* Test delaynet */
+	/* Test delaynet for memory leaks */
 	dn_delaynet *dn = dn_delnetfromgraph(delmat, dim);
-	dn_freedelnet(dn);
 
 	/* Test list */
 	dn_list_uint *l = dn_list_uint_init();
@@ -355,6 +354,7 @@ int main()
 
 	/* Clean up */
 	dn_list_uint_free(l);
+	dn_freedelnet(dn);
 	free(mystr);
 	free(myvector.data);
 	free(delmat);
