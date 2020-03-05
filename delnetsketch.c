@@ -377,6 +377,8 @@ int main()
 	}
 
 
+	/* Clean up */
+	dn_freedelnet(dn);
 
 	return 0;
 }
