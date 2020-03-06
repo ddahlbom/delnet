@@ -140,7 +140,8 @@ out_counts = zeros(length(out_base_idcs))
 
 inverseidces = zeros(Int64, length(outputs))
 for i ∈ 1:length(inputs)
-	inverseidces[i] = out_base_idcs[delays[i].target] + out_counts[delays[i].target]
+	inverseidces[i] = out_base_idcs[delays[i].target] +
+					  out_counts[delays[i].target]
 	out_counts[delays[i].target] += 1
 end
 
