@@ -43,7 +43,7 @@ SimParams() = SimParams(0.02, 	#a_exc
 					    8.0, 	#d_exc
 					    2.0, 	#d_inh
 					    6.0, 	#w_exc
-					    -5, 	#w_inh
+					    -5.0, 	#w_inh
 					    0.02, 	#τ_post
 					    0.12, 	#A_pre
 					    0.02, 	#τ_pre

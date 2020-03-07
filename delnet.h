@@ -70,8 +70,8 @@ void  			dn_list_uint_push(dn_list_uint *l, unsigned int val);
 unsigned int  	dn_list_uint_pop(dn_list_uint *l);
 
 /* vector (for floats) */
-void dn_list_uint_free(dn_list_uint *l);
-char *dn_vectostr(dn_vec_float input);
+void 			dn_list_uint_free(dn_list_uint *l);
+char* 			dn_vectostr(dn_vec_float input);
 
 /* make and manage a delaynet */
 unsigned int* 	dn_blobgraph(unsigned int n, float p, unsigned int maxdel);

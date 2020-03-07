@@ -154,7 +154,7 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 100.0;
+	dur = 1.0;
 	p_contact = 0.1;
 	n = 1000;
 	tau_pre = 0.02;
@@ -219,7 +219,6 @@ int main()
 			printf("Time: %f\n", t);
 		}
 		for (k=0; k<n; k++) {
-
 			/* get inputs to neuron */		
 			neuroninputs = dn_getinputaddress(k, dn);
 			inval = 0.0;
@@ -236,8 +235,10 @@ int main()
 			}
 
 			/* random input -- consider placing earlier */
-			if (unirand() < 1.0/n)
-				inval += 20.0 * (fs/1000.0);
+			//if (unirand() < 1.0/n)
+			//	inval += 20.0 * (fs/1000.0);
+			if (k == 0) 
+				inval += 20.0;
 
 			/* update neuron state */
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
@@ -270,7 +271,6 @@ int main()
 					synapses[k][j] = synapses[k][j] + synbump +
 							dt * (a_post * trace_pre[k][j] * spike_post[k] -
 								  a_pre * trace_post[k] * spike_pre[k][j]);
-										   
 					synapses[k][j] = synapses[k][j] < 0.0 ? 0.0 : synapses[k][j];
 					synapses[k][j] = synapses[k][j] > synmax ? synmax : synapses[k][j];
 				}
@@ -281,11 +281,16 @@ int main()
 		}
 
 		/* advance the buffer */
+		dn_vec_float valspostpush = dn_getinputvec(dn);
+		//char* valsstr = dn_vectostr(valspostpush);	
+		//printf("%s\n", valsstr);
+		free(valspostpush.data);
+		//free(valsstr);
 		dn_advance(dn);
 	}
 
 	FILE *spike_file;
-	spike_file = fopen("delnetstdp.dat", "w");
+	spike_file = fopen( "delnetstdp.dat", "w" );
 	spike *firings = sr_spike_summary(sr);
 	for (i=0; i<numspikes; i++)
 		fprintf(spike_file, "%f  %d\n", firings[i].time, firings[i].neuron);
