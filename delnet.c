@@ -142,11 +142,11 @@ unsigned int *dn_blobgraph(unsigned int n, float p, unsigned int maxdel) {
 	for (i=0; i<n; i++) 
 	for (j=0; j<n; j++) {
 		if (unirand() < p && i != j) {
-			delmat[i*n + j] = getrandom(maxdel) + 1;
+			delmat[i*n+j] = getrandom(maxdel) + 1;
 			count += 1;
 		}
 		else 
-			delmat[i*n + j] = 0;
+			delmat[i*n+j] = 0;
 	}
 
 	return delmat;
