@@ -147,7 +147,7 @@ int main()
 	unsigned int i, j, k, numsteps;
 	unsigned int n, n_exc, n_inh;
 	unsigned int *g;
-	unsigned long int numspikes;
+	unsigned long int numspikes = 0;
 	float p_contact;
 	dn_delaynet *dn;
 	spikerecord *sr = sr_init();
@@ -215,6 +215,9 @@ int main()
 	FLOAT_T *neuroninputs, inval, outval;
 	for (i=0; i<numsteps; i++) {
 		t = dt*i;
+		if (i%100 == 0) {
+			printf("Time: %f\n", t);
+		}
 		for (k=0; k<n; k++) {
 
 			/* get inputs to neuron */		
