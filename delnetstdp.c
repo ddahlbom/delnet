@@ -28,7 +28,6 @@ FLOAT_T g_w_inh = -5.0;
 /*************************************************************
  *  Structs
  *************************************************************/
-
 typedef struct neuron_s {
 	FLOAT_T v;
 	FLOAT_T u;
@@ -51,6 +50,7 @@ typedef struct spikeblock_s {
 typedef struct spikerecord_s {
 	spikeblock *head;	
 } spikerecord;
+
 
 /*************************************************************
  *  Functions
@@ -154,7 +154,7 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 1.0;
+	dur = 100.0;
 	p_contact = 0.1;
 	n = 1000;
 	tau_pre = 0.02;
@@ -215,7 +215,7 @@ int main()
 	FLOAT_T *neuroninputs, inval, outval;
 	for (i=0; i<numsteps; i++) {
 		t = dt*i;
-		if (i%100 == 0) {
+		if (i%1000 == 0) {
 			printf("Time: %f\n", t);
 		}
 		for (k=0; k<n; k++) {
