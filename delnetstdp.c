@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "delnet.h"
 
@@ -56,6 +57,18 @@ typedef struct spikerecord_s {
 /*************************************************************
  *  Functions
  *************************************************************/
+double dd_sum_double(double *vals, size_t n) {
+	double sum = 0.0;
+	for (int k=0; k<n; k++) 
+		sum += vals[k];
+	return sum;
+}
+
+double dd_avg_double(double *vals, size_t n) {
+	double sum = dd_sum_double(vals, n);
+	return sum / ((double) n);
+}
+
 spikerecord *sr_init()
 {
 	spikerecord *rec;
@@ -152,10 +165,13 @@ int main()
 	float p_contact;
 	dn_delaynet *dn;
 	spikerecord *sr = sr_init();
+	clock_t t_start, t_finish;
+	double *gettinginputs, *updatingsyntraces, *updatingneurons, *spikechecking,
+			*updatingneutraces, *updatingsynstrengths, *pushingoutput, *advancingbuffer;
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 10.0;
+	dur = 1.0;
 	p_contact = 0.1;
 	n = 1000;
 	tau_pre = 0.02;
@@ -212,6 +228,15 @@ int main()
 			synapses[i][j] = g_w_inh;
 	}
 	
+	gettinginputs = malloc(sizeof(double)*numsteps*n);
+	updatingsyntraces = malloc(sizeof(double)*numsteps*n);
+	updatingneurons = malloc(sizeof(double)*numsteps*n);
+	spikechecking = malloc(sizeof(double)*numsteps*n);
+	updatingneutraces = malloc(sizeof(double)*numsteps*n);
+	updatingsynstrengths = malloc(sizeof(double)*numsteps*n);
+	pushingoutput = malloc(sizeof(double)*numsteps*n);
+	advancingbuffer = malloc(sizeof(double)*numsteps);
+
 	/* start simulation */
 	FLOAT_T *neuroninputs, inval, outval;
 	for (i=0; i<numsteps; i++) {
@@ -221,13 +246,14 @@ int main()
 		}
 		for (k=0; k<n; k++) {
 			/* get inputs to neuron */		
+			t_start = clock();
 			neuroninputs = dn_getinputaddress(k, dn);
 			inval = 0.0;
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				inval += *(neuroninputs+j) * synapses[k][j];
-				//if (*(neuroninputs+j) != 0.0)
-				//	printf("Neuron input  %u %u: %f\n", i, j, *(neuroninputs+j));
 			}
+			t_finish = clock();
+			gettinginputs[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* update synapse traces */
 			if (k < n_exc) {
@@ -287,6 +313,9 @@ int main()
 		dn_advance(dn);
 	}
 
+	/* performance analysis */
+	printf("Getting inputs:\t\t %f (ms)\n", 1000.0*dd_sum_double(gettinginputs, n*numsteps)/numsteps);
+
 	FILE *spike_file;
 	spike_file = fopen( "delnetstdp.dat", "w" );
 	spike *firings = sr_spike_summary(sr);
@@ -311,6 +340,15 @@ int main()
 
 	for (i=n_exc; i<n; i++)
 		free(synapses[i]);
+
+	free(gettinginputs);
+	free(updatingsyntraces);
+	free(updatingneurons);
+	free(spikechecking);
+	free(updatingneutraces);
+	free(updatingsynstrengths);
+	free(pushingoutput);
+	free(advancingbuffer);
 
 	return 0;
 }
