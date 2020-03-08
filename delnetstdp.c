@@ -7,7 +7,8 @@
 /*************************************************************
  *  Macros
  *************************************************************/
-#define SPIKE_BLOCK_SIZE 32768
+//#define SPIKE_BLOCK_SIZE 32768
+#define SPIKE_BLOCK_SIZE 8192
 
 
 /*************************************************************
@@ -154,14 +155,14 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 1.0;
+	dur = 10.0;
 	p_contact = 0.1;
 	n = 1000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
 	a_pre = 0.12;
 	a_post = 0.1;
-	synbump = 0.000001;
+	synbump = 0.00000;
 	synmax = 10.0;
 
 	/* derived parameters */
@@ -222,8 +223,11 @@ int main()
 			/* get inputs to neuron */		
 			neuroninputs = dn_getinputaddress(k, dn);
 			inval = 0.0;
-			for (j=0; j < dn->nodes[k].num_in; j++)
-				inval += *(neuroninputs+j);
+			for (j=0; j < dn->nodes[k].num_in; j++) {
+				inval += *(neuroninputs+j) * synapses[k][j];
+				//if (*(neuroninputs+j) != 0.0)
+				//	printf("Neuron input  %u %u: %f\n", i, j, *(neuroninputs+j));
+			}
 
 			/* update synapse traces */
 			if (k < n_exc) {
@@ -235,10 +239,8 @@ int main()
 			}
 
 			/* random input -- consider placing earlier */
-			//if (unirand() < 1.0/n)
-			//	inval += 20.0 * (fs/1000.0);
-			if (k == 0) 
-				inval += 20.0;
+			if (unirand() < 1.0/n)
+				inval += 20.0 * (fs/1000.0);
 
 			/* update neuron state */
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
@@ -273,6 +275,7 @@ int main()
 								  a_pre * trace_post[k] * spike_pre[k][j]);
 					synapses[k][j] = synapses[k][j] < 0.0 ? 0.0 : synapses[k][j];
 					synapses[k][j] = synapses[k][j] > synmax ? synmax : synapses[k][j];
+					//spike_post[k] = 0.0;
 				}
 			}
 
@@ -281,11 +284,6 @@ int main()
 		}
 
 		/* advance the buffer */
-		dn_vec_float valspostpush = dn_getinputvec(dn);
-		//char* valsstr = dn_vectostr(valspostpush);	
-		//printf("%s\n", valsstr);
-		free(valspostpush.data);
-		//free(valsstr);
 		dn_advance(dn);
 	}
 

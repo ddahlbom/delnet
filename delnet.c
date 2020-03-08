@@ -106,6 +106,7 @@ dn_vec_float dn_getinputvec(dn_delaynet *dn) {
 	return inputs;
 }
 
+/* get inputs to neurons (outputs of delaynet)... */
 FLOAT_T *dn_getinputaddress(IDX_T idx, dn_delaynet *dn) {
 	return &dn->outputs[dn->nodes[idx].idx_oi];
 }
