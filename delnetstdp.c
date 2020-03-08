@@ -173,7 +173,7 @@ int main()
 	fs = 1000.0;
 	dur = 1.0;
 	p_contact = 0.1;
-	n = 1000;
+	n = 2500;
 	tau_pre = 0.02;
 	tau_post = 0.02;
 	a_pre = 0.12;
@@ -256,6 +256,7 @@ int main()
 			gettinginputs[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* update synapse traces */
+			t_start = clock();
 			if (k < n_exc) {
 				for (j=0; j < dn->nodes[k].num_in; j++) {
 					spike_pre[k][j] = neuroninputs[j];
@@ -263,20 +264,26 @@ int main()
 									  spike_pre[k][j];
 				}
 			}
+			t_finish = clock();
+			updatingsyntraces[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* random input -- consider placing earlier */
 			if (unirand() < 1.0/n)
 				inval += 20.0 * (fs/1000.0);
 
 			/* update neuron state */
+			t_start = clock();
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
 							neurons[k].v + 140.0 - neurons[k].u + inval);
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
 							neurons[k].v + 140.0 - neurons[k].u + inval);
 			neurons[k].u += 1000.0 * dt * neurons[k].a *
 								(0.2 * neurons[k].v - neurons[k].u);
+			t_finish = clock();
+			updatingneurons[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* check if spiked and calculate output */
+			t_start = clock();
 			outval = 0.0;
 			if (neurons[k].v >= 30.0) {
 				sr_save_spike(sr, k, t);
@@ -285,15 +292,21 @@ int main()
 				neurons[k].u += neurons[k].d;
 				numspikes += 1;
 			}
+			t_finish = clock();
+			spikechecking[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* update neuron trace */		
+			t_start = clock();
 			if (k < n_exc) {
 				spike_post[k] = outval;
 				trace_post[k] = trace_post[k]*(1.0 - (dt/tau_post)) +
 								spike_post[k];
 			}
+			t_finish = clock();
+			updatingneutraces[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* update synapse strengths */
+			t_start = clock();
 			if (k < n_exc) {
 				for (j=0; j < dn->nodes[k].num_in; j++) {
 					synapses[k][j] = synapses[k][j] + synbump +
@@ -304,17 +317,40 @@ int main()
 					//spike_post[k] = 0.0;
 				}
 			}
+			t_finish = clock();
+			updatingsynstrengths[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 			/* push the output into the buffer */
+			t_start = clock();
 			dn_pushoutput(outval, k, dn);
+			t_finish = clock();
+			pushingoutput[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 		}
 
 		/* advance the buffer */
+		t_start = clock();
 		dn_advance(dn);
+		t_finish = clock();
+		pushingoutput[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 	}
 
 	/* performance analysis */
-	printf("Getting inputs:\t\t %f (ms)\n", 1000.0*dd_sum_double(gettinginputs, n*numsteps)/numsteps);
+	printf("Getting inputs:\t\t %f (ms)\n",
+			1000.0*dd_sum_double(gettinginputs, n*numsteps)/numsteps);
+	printf("Update syntraces:\t %f (ms)\n",
+			1000.0*dd_sum_double(updatingsyntraces, n*numsteps)/numsteps);
+	printf("Update neurons:\t\t %f (ms)\n",
+			1000.0*dd_sum_double(updatingneurons, n*numsteps)/numsteps);
+	printf("Check spiked:\t\t %f (ms)\n",
+			1000.0*dd_sum_double(spikechecking, n*numsteps)/numsteps);
+	printf("Update neurtrace:\t %f (ms)\n",
+			1000.0*dd_sum_double(updatingneutraces, n*numsteps)/numsteps);
+	printf("Update syn strength:\t %f (ms)\n",
+			1000.0*dd_sum_double(updatingsynstrengths, n*numsteps)/numsteps);
+	printf("Pushing buffer:\t\t %f (ms)\n",
+			1000.0*dd_sum_double(pushingoutput, n*numsteps)/numsteps);
+	printf("Advancing buffer:\t %f (ms)\n",
+			1000.0*dd_sum_double(advancingbuffer, numsteps)/numsteps);
 
 	FILE *spike_file;
 	spike_file = fopen( "delnetstdp.dat", "w" );
