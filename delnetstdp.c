@@ -20,11 +20,11 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 9.0;
+FLOAT_T g_w_exc  = 6.0;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -2.0;
+FLOAT_T g_w_inh = -5.0;
 
 
 /*************************************************************
