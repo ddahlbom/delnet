@@ -20,11 +20,11 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 6.0;
+FLOAT_T g_w_exc  = 9.0;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -5.0;
+FLOAT_T g_w_inh = -2.0;
 
 
 /*************************************************************
@@ -173,7 +173,7 @@ int main()
 	/* trial parameters */
 	fs = 1000.0;
 	dur = 2.0;
-	p_contact = 0.2;
+	p_contact = 0.1;
 	n = 1000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
@@ -269,18 +269,19 @@ int main()
 
 		/* print updates */
 		t = dt*i;
-		if (i%1000 == 0) {
+		if (i%1000 == 0)
 			printf("Time: %f\n", t);
-		}
 
 
 		/* get inputs to neuron */		
 		t_start = clock();
 		for (k=0; k<n; k++) {
 			neuroninputs = dn_getinputaddress(k, dn);
-			for (j=0; j < dn->nodes[k].num_in; j++) {
+
+			/* weighted sum */
+			for (j=0; j < dn->nodes[k].num_in; j++)
 				invals[k] += *(neuroninputs+j) * synapses[offsets[k]+j];
-			}
+
 			/* added noise */
 			if (unirand() < 1.0/n)
 				invals[k] += 20.0 * (fs/1000.0);
