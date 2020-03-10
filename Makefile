@@ -1,5 +1,5 @@
 CC= gcc
-CFLAGS= -g -O3 -Wall -I./ -L./
+CFLAGS= -g -Wall -I./ -L./
 LDLIBS = -lm
 
 default: delnetstdp

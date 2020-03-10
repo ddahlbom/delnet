@@ -20,11 +20,11 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 6.0;
+FLOAT_T g_w_exc  = 6.0*0.9;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -5.0;
+FLOAT_T g_w_inh = -5.0*0.8;
 
 
 /*************************************************************
@@ -171,9 +171,9 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 1.0;
-	p_contact = 0.1;
-	n = 2500;
+	dur = 5.0;
+	p_contact = 0.09;
+	n = 1000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
 	a_pre = 0.12;
