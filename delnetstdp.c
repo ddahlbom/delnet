@@ -172,8 +172,8 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 10.0;
-	p_contact = 0.10;
+	dur = 2.0;
+	p_contact = 0.2;
 	n = 1000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
@@ -266,6 +266,8 @@ int main()
 	outvals = calloc(n, sizeof(FLOAT_T));
 
 	for (i=0; i<numsteps; i++) {
+
+		/* print updates */
 		t = dt*i;
 		if (i%1000 == 0) {
 			printf("Time: %f\n", t);

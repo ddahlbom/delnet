@@ -62,7 +62,6 @@ int main()
 
 		// show states
 		for (k=0; k<numlines; k++) {
-			//linevals = dn_orderbuf(&dn->delays[k], dn->delaybuf);	
 			linevals = dn_orderbuf(k, dn);	
 			dispstr = dn_vectostr(linevals);
 			printf("(%u) %s (%u)\n", dn->del_sources[k],

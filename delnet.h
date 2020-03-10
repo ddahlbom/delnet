@@ -46,7 +46,6 @@ typedef struct dn_delaynet_s {
 	IDX_T *del_sources;
 	IDX_T *del_targets;
 	IDX_T num_delays;
-	//dn_delay *delays;
 	FLOAT_T *inputs;
 	FLOAT_T *outputs;
 	IDX_T *inverseidx;
