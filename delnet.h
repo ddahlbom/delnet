@@ -39,6 +39,7 @@ typedef struct dn_node_s {
 	IDX_T num_out;
 } dn_node;
 
+/*
 typedef struct dn_delay_s {
 	IDX_T offset;
 	IDX_T startidx;
@@ -46,10 +47,16 @@ typedef struct dn_delay_s {
 	IDX_T source;
 	IDX_T target;
 } dn_delay;
+*/
 
 typedef struct dn_delaynet_s {
+	IDX_T *del_offsets;
+	IDX_T *del_startidces;
+	IDX_T *del_lens;
+	IDX_T *del_sources;
+	IDX_T *del_targets;
 	IDX_T num_delays;
-	dn_delay *delays;
+	//dn_delay *delays;
 	FLOAT_T *inputs;
 	FLOAT_T *outputs;
 	IDX_T *inverseidx;
@@ -77,7 +84,8 @@ char* 			dn_vectostr(dn_vec_float input);
 unsigned int* 	dn_blobgraph(unsigned int n, float p, unsigned int maxdel);
 dn_delaynet* 	dn_delnetfromgraph(unsigned int *g, unsigned int n);
 void 			dn_freedelnet(dn_delaynet *dn);
-dn_vec_float  	dn_orderbuf(dn_delay *d, FLOAT_T *delbuf);
+//dn_vec_float  	dn_orderbuf(dn_delay *d, FLOAT_T *delbuf);
+dn_vec_float dn_orderbuf(IDX_T which, dn_delaynet *dn);
 
 /* control and interact with a delaynet */
 void 			dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn);

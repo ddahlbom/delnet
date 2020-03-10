@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <stdio.h> 	//for profiling/debugging
+#include <time.h> 	//for profiling/debugging
 #include "delnet.h"
 
 
@@ -51,6 +53,7 @@ void dn_list_uint_free(dn_list_uint *l) {
 }
 
 
+/*
 dn_vec_float dn_orderbuf(dn_delay *d, FLOAT_T *delbuf) {
 	IDX_T k, n, idx;
 	dn_vec_float output;
@@ -62,6 +65,22 @@ dn_vec_float dn_orderbuf(dn_delay *d, FLOAT_T *delbuf) {
 	for (k=0; k<n; k++) {
 		idx = d->startidx + ((d->offset+k) % d->len);
 		output.data[n-k-1] = delbuf[idx];
+	}
+	return output;
+}
+*/
+dn_vec_float dn_orderbuf(IDX_T which, dn_delaynet *dn) {
+	IDX_T k, n, idx;
+	dn_vec_float output;
+	
+	n = dn->del_lens[which];
+	output.n = n;
+	output.data = malloc(sizeof(FLOAT_T) * n);
+
+	for (k=0; k<n; k++) {
+		idx = dn->del_startidces[which] +
+			((dn->del_offsets[which]+k) % dn->del_lens[which]);
+		output.data[n-k-1] = dn->delaybuf[idx];
 	}
 	return output;
 }
@@ -116,23 +135,35 @@ void dn_advance(dn_delaynet *dn)
 {
 	IDX_T k;
 
-	/* load input */	
+	/* load input (scatter) */	
+	//for(k=0; k < dn->num_delays; k++) {
+	//	dn->delaybuf[dn->delays[k].startidx + dn->delays[k].offset] =
+	//														dn->inputs[k];
+	//}
 	for(k=0; k < dn->num_delays; k++) {
-		dn->delaybuf[dn->delays[k].startidx + dn->delays[k].offset] =
+		dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] =
 															dn->inputs[k];
 	}
 
-	/* advance buffer */
+	/* advance buffer (circular) */
+	//for(k=0; k < dn->num_delays; k++) {
+	//	dn->delays[k].offset = (dn->delays[k].offset + 1) % dn->delays[k].len;
+	//}
 	for(k=0; k < dn->num_delays; k++) {
-		dn->delays[k].offset = (dn->delays[k].offset + 1) % dn->delays[k].len;
+		dn->del_offsets[k] = (dn->del_offsets[k] + 1) % dn->del_lens[k];
 	}
 
-	/* pull output */
+	/* pull output (gather) */
+	//for (k=0; k < dn->num_delays; k++) {
+	//	dn->outputs[dn->inverseidx[k]] =
+	//			dn->delaybuf[dn->delays[k].startidx+dn->delays[k].offset];
+	//}
 	for (k=0; k < dn->num_delays; k++) {
 		dn->outputs[dn->inverseidx[k]] =
-				dn->delaybuf[dn->delays[k].startidx+dn->delays[k].offset];
+				dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]];
 	}
 }
+
 
 unsigned int *dn_blobgraph(unsigned int n, float p, unsigned int maxdel) {
 	unsigned int count = 0;
@@ -179,7 +210,14 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	dn->inputs = calloc(numlines, sizeof(FLOAT_T));
 	dn->outputs = calloc(numlines, sizeof(FLOAT_T));
 
-	dn->delays = malloc(sizeof(dn_delay)*numlines);
+	////////////////////////////////
+	//dn->delays = malloc(sizeof(dn_delay)*numlines);
+	dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
+	dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
+	dn->del_lens = malloc(sizeof(IDX_T)*numlines);
+	dn->del_sources = malloc(sizeof(IDX_T)*numlines);
+	dn->del_targets = malloc(sizeof(IDX_T)*numlines);
+	////////////////////////////////
 	dn->nodes = malloc(sizeof(dn_node)*n);
 
 	/* init nodes */
@@ -198,11 +236,19 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 		if (g[i*n + j] != 0) {
 			dn_list_uint_push(nodes_in[j], i);
 
-			dn->delays[delcount].offset = 0;
-			dn->delays[delcount].startidx = startidx;
-			dn->delays[delcount].len = g[i*n + j];
-			dn->delays[delcount].source = i;
-			dn->delays[delcount].target = j;
+			////////////////////////////////
+			//dn->delays[delcount].offset = 0;
+			dn->del_offsets[delcount] = 0;
+			//dn->delays[delcount].startidx = startidx;
+			dn->del_startidces[delcount] = startidx;
+			//dn->delays[delcount].len = g[i*n+j];
+			dn->del_lens[delcount] = g[i*n+j];
+			//dn->delays[delcount].source = i;
+			dn->del_sources[delcount] = i;
+			//dn->delays[delcount].target = j;
+			dn->del_targets[delcount] = j;
+			////////////////////////////////
+
 			dn->nodes[i].num_out += 1;
 
 			startidx += g[i*n +j];
@@ -241,10 +287,15 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	}
 
 	inverseidces = calloc(numlines, sizeof(unsigned int));
+	//for (i=0; i < numlines; i++) {
+	//	inverseidces[i] = out_base_idcs[dn->delays[i].target] + 
+	//					  out_counts[dn->delays[i].target];
+	//	out_counts[dn->delays[i].target] += 1;
+	//}
 	for (i=0; i < numlines; i++) {
-		inverseidces[i] = out_base_idcs[dn->delays[i].target] + 
-						  out_counts[dn->delays[i].target];
-		out_counts[dn->delays[i].target] += 1;
+		inverseidces[i] = out_base_idcs[dn->del_targets[i]] + 
+						  out_counts[dn->del_targets[i]];
+		out_counts[dn->del_targets[i]] += 1;
 	}
 	dn->inverseidx = inverseidces;
 
@@ -262,7 +313,12 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 }
 
 void dn_freedelnet(dn_delaynet *dn) {
-	free(dn->delays);
+	//free(dn->delays);
+	free(dn->del_offsets);
+	free(dn->del_startidces);
+	free(dn->del_lens);
+	free(dn->del_sources);
+	free(dn->del_targets);
 	free(dn->inputs);
 	free(dn->outputs);
 	free(dn->inverseidx);

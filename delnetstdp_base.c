@@ -20,11 +20,11 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 6.0;
+FLOAT_T g_w_exc  = 6.0*0.9;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -5.0;
+FLOAT_T g_w_inh = -5.0*0.8;
 
 
 /*************************************************************
@@ -172,8 +172,8 @@ int main()
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 10.0;
-	p_contact = 0.10;
+	dur = 1.0;
+	p_contact = 0.09;
 	n = 1000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
@@ -216,168 +216,136 @@ int main()
 	neuron *neurons = malloc(sizeof(neuron)*n);
 	FLOAT_T *trace_post = calloc(n_exc, sizeof(FLOAT_T));
 	FLOAT_T *spike_post = calloc(n_exc, sizeof(FLOAT_T));
-	size_t *offsets = malloc(sizeof(size_t)*n);
-	FLOAT_T *trace_pre; 	// pack this
-	FLOAT_T *spike_pre; 	// and following
-	FLOAT_T *synapses; 		// for speed?
+	FLOAT_T *trace_pre[n_exc]; 	// pack this
+	FLOAT_T *spike_pre[n_exc]; 	// and following
+	FLOAT_T *synapses[n]; 		// for speed?
 
-	unsigned long cum_in = 0, exc_offset;
 	for (i=0; i<n_exc; i++) {
 		neurons[i].v = g_v_default;
 		neurons[i].u = g_u_default;
 		neurons[i].a = g_a_exc;
 		neurons[i].d = g_d_exc;
-		offsets[i] = cum_in;
-		cum_in += dn->nodes[i].num_in;
+		trace_pre[i] = calloc(dn->nodes[i].num_in, sizeof(FLOAT_T));
+		spike_pre[i] = calloc(dn->nodes[i].num_in, sizeof(FLOAT_T));
+		synapses[i]  = malloc(sizeof(FLOAT_T)*dn->nodes[i].num_in);
+		for(j=0; j<dn->nodes[i].num_in; j++)
+			synapses[i][j] = g_w_exc;
 	}
-	exc_offset = cum_in;
 
 	for (i=n_exc; i<n; i++) {
 		neurons[i].v = g_v_default;
 		neurons[i].u = g_u_default;
 		neurons[i].a = g_a_inh;
 		neurons[i].d = g_d_inh;
-		offsets[i] = cum_in;
-		cum_in += dn->nodes[i].num_in;
+		synapses[i]  = malloc(sizeof(FLOAT_T)*dn->nodes[i].num_in);
+		for(j=0; j<dn->nodes[i].num_in; j++)
+			synapses[i][j] = g_w_inh;
 	}
-
-	trace_pre = calloc(exc_offset, sizeof(FLOAT_T));
-	spike_pre = calloc(exc_offset, sizeof(FLOAT_T));
-	synapses = calloc(cum_in, sizeof(FLOAT_T));
-	for (i=0; i<n_exc; i++)
-		synapses[i] = g_w_exc;
-	for (; i<n; i++)
-		synapses[i] = g_w_inh;
-
-
-	/* for profiling */	
-	gettinginputs = malloc(sizeof(double)*numsteps);
-	updatingsyntraces = malloc(sizeof(double)*numsteps);
-	updatingneurons = malloc(sizeof(double)*numsteps);
-	spikechecking = malloc(sizeof(double)*numsteps);
-	updatingneutraces = malloc(sizeof(double)*numsteps);
-	updatingsynstrengths = malloc(sizeof(double)*numsteps);
-	pushingoutput = malloc(sizeof(double)*numsteps);
+	
+	gettinginputs = malloc(sizeof(double)*numsteps*n);
+	updatingsyntraces = malloc(sizeof(double)*numsteps*n);
+	updatingneurons = malloc(sizeof(double)*numsteps*n);
+	spikechecking = malloc(sizeof(double)*numsteps*n);
+	updatingneutraces = malloc(sizeof(double)*numsteps*n);
+	updatingsynstrengths = malloc(sizeof(double)*numsteps*n);
+	pushingoutput = malloc(sizeof(double)*numsteps*n);
 	advancingbuffer = malloc(sizeof(double)*numsteps);
 
 	/* start simulation */
-	FLOAT_T *neuroninputs, *invals, *outvals;
-	invals = calloc(n, sizeof(FLOAT_T));
-	outvals = calloc(n, sizeof(FLOAT_T));
-
+	FLOAT_T *neuroninputs, inval, outval;
 	for (i=0; i<numsteps; i++) {
 		t = dt*i;
 		if (i%1000 == 0) {
 			printf("Time: %f\n", t);
 		}
-
-
-		/* get inputs to neuron */		
-		t_start = clock();
 		for (k=0; k<n; k++) {
+			/* get inputs to neuron */		
+			t_start = clock();
 			neuroninputs = dn_getinputaddress(k, dn);
+			inval = 0.0;
 			for (j=0; j < dn->nodes[k].num_in; j++) {
-				invals[k] += *(neuroninputs+j) * synapses[offsets[k]+j];
+				inval += *(neuroninputs+j) * synapses[k][j];
 			}
-			/* added noise */
-			if (unirand() < 1.0/n)
-				invals[k] += 20.0 * (fs/1000.0);
-		}
-		t_finish = clock();
-		gettinginputs[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = clock();
+			gettinginputs[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
-
-		/* update synapse traces */
-		t_start = clock();
-		for (k=0; k<n; k++) {
+			/* update synapse traces */
+			t_start = clock();
 			if (k < n_exc) {
 				for (j=0; j < dn->nodes[k].num_in; j++) {
-					spike_pre[offsets[k]+j] = neuroninputs[j];
-					trace_pre[offsets[k]+j] =
-						trace_pre[offsets[k]+j]*(1.0 - (dt/tau_pre)) +
-									  spike_pre[offsets[k]+j];
+					spike_pre[k][j] = neuroninputs[j];
+					trace_pre[k][j] = trace_pre[k][j]*(1.0 - (dt/tau_pre)) +
+									  spike_pre[k][j];
 				}
 			}
-		}
-		t_finish = clock();
-		updatingsyntraces[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = clock();
+			updatingsyntraces[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
+			/* random input -- consider placing earlier */
+			if (unirand() < 1.0/n)
+				inval += 20.0 * (fs/1000.0);
 
-		/* update neuron state */
-		t_start = clock();
-		for (k=0; k<n; k++) {
+			/* update neuron state */
+			t_start = clock();
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
-							neurons[k].v + 140.0 - neurons[k].u + invals[k]);
+							neurons[k].v + 140.0 - neurons[k].u + inval);
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
-							neurons[k].v + 140.0 - neurons[k].u + invals[k]);
+							neurons[k].v + 140.0 - neurons[k].u + inval);
 			neurons[k].u += 1000.0 * dt * neurons[k].a *
 								(0.2 * neurons[k].v - neurons[k].u);
-			invals[k] = 0.0;
-		}
-		t_finish = clock();
-		updatingneurons[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = clock();
+			updatingneurons[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
-		/* check if spiked and calculate output */
-		t_start = clock();
-		for (k=0; k<n; k++) {
-			outvals[k] = 0.0;
+			/* check if spiked and calculate output */
+			t_start = clock();
+			outval = 0.0;
 			if (neurons[k].v >= 30.0) {
 				sr_save_spike(sr, k, t);
-				outvals[k] = 1.0;
+				outval = 1.0;
 				neurons[k].v = -65.0;
 				neurons[k].u += neurons[k].d;
 				numspikes += 1;
 			}
-		}
-		t_finish = clock();
-		spikechecking[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = clock();
+			spikechecking[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
-		/* update neuron trace */		
-		t_start = clock();
-		for (k=0; k<n; k++) {
+			/* update neuron trace */		
+			t_start = clock();
 			if (k < n_exc) {
-				spike_post[k] = outvals[k];
+				spike_post[k] = outval;
 				trace_post[k] = trace_post[k]*(1.0 - (dt/tau_post)) +
 								spike_post[k];
 			}
-		}
-		t_finish = clock();
-		updatingneutraces[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = clock();
+			updatingneutraces[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
-
-		/* update synapse strengths */
-		t_start = clock();
-		for (k=0; k<n; k++) {
+			/* update synapse strengths */
+			t_start = clock();
 			if (k < n_exc) {
 				for (j=0; j < dn->nodes[k].num_in; j++) {
-					synapses[offsets[k]+j] = synapses[offsets[k]+j] + synbump +
-							dt * (a_post * trace_pre[offsets[k]+j] * spike_post[k] -
-								  a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
-					synapses[offsets[k]+j] =
-						synapses[offsets[k]+j] < 0.0 ? 0.0 : synapses[offsets[k]+j];
-					synapses[offsets[k]+j] =
-						synapses[offsets[k]+j] > synmax ? synmax : synapses[offsets[k]+j];
+					synapses[k][j] = synapses[k][j] + synbump +
+							dt * (a_post * trace_pre[k][j] * spike_post[k] -
+								  a_pre * trace_post[k] * spike_pre[k][j]);
+					synapses[k][j] = synapses[k][j] < 0.0 ? 0.0 : synapses[k][j];
+					synapses[k][j] = synapses[k][j] > synmax ? synmax : synapses[k][j];
 					//spike_post[k] = 0.0;
 				}
 			}
+			t_finish = clock();
+			updatingsynstrengths[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+
+			/* push the output into the buffer */
+			t_start = clock();
+			dn_pushoutput(outval, k, dn);
+			t_finish = clock();
+			pushingoutput[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 		}
-		t_finish = clock();
-		updatingsynstrengths[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-
-
-		/* push the output into the buffer */
-		t_start = clock();
-		for (k=0; k<n; k++)
-			dn_pushoutput(outvals[k], k, dn);
-		t_finish = clock();
-		pushingoutput[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-
 
 		/* advance the buffer */
 		t_start = clock();
 		dn_advance(dn);
 		t_finish = clock();
-		advancingbuffer[i] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		pushingoutput[i*n+k] = ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 	}
 
 	/* performance analysis */
@@ -385,31 +353,31 @@ int main()
 
 	printf("----------------------------------------\n");
 
-	cycletime = 1000.0*dd_sum_double(gettinginputs, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(gettinginputs, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Getting inputs:\t\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(updatingsyntraces, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(updatingsyntraces, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Update syntraces:\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(updatingneurons, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(updatingneurons, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Update neurons:\t\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(spikechecking, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(spikechecking, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Check spiked:\t\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(updatingneutraces, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(updatingneutraces, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Update neurtrace:\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(updatingsynstrengths, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(updatingsynstrengths, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Update syn strength:\t %f (ms)\n", cycletime);
 
-	cycletime = 1000.0*dd_sum_double(pushingoutput, numsteps)/numsteps;
+	cycletime = 1000.0*dd_sum_double(pushingoutput, n*numsteps)/numsteps;
 	cumtime += cycletime;
 	printf("Pushing buffer:\t\t %f (ms)\n", cycletime);
 
@@ -437,9 +405,15 @@ int main()
 	free(trace_post);
 	free(spike_post);
 	free(neurons);
-	free(trace_pre);
-	free(spike_pre);
-	free(synapses);
+	for (i=0; i<n_exc; i++) {
+		free(trace_pre[i]);
+		free(spike_pre[i]);
+		free(synapses[i]);
+	}
+
+	for (i=n_exc; i<n; i++)
+		free(synapses[i]);
+
 	free(gettinginputs);
 	free(updatingsyntraces);
 	free(updatingneurons);
