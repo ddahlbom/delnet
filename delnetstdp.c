@@ -198,7 +198,7 @@ int main()
 	fs = 1000.0;
 	dur = 2.0;
 	p_contact = 0.1;
-	n = 1000;
+	n = 2000;
 	tau_pre = 0.02;
 	tau_post = 0.02;
 	a_pre = 0.12;
@@ -378,18 +378,16 @@ int main()
 
 		/* update synapse strengths */
 		t_start = clock();
-		for (k=0; k<n; k++) {
-			if (k < n_exc) {
-				for (j=0; j < nums_in[k]; j++) {
-					synapses[offsets[k]+j] = synapses[offsets[k]+j] + synbump +
-							dt * (a_post * trace_pre[offsets[k]+j] * spike_post[k] -
-								  a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
-					synapses[offsets[k]+j] =
-						synapses[offsets[k]+j] < 0.0 ? 0.0 : synapses[offsets[k]+j];
-					synapses[offsets[k]+j] =
-						synapses[offsets[k]+j] > synmax ? synmax : synapses[offsets[k]+j];
-					//spike_post[k] = 0.0;
-				}
+		for (k=0; k<n_exc; k++) {
+			for (j=0; j < nums_in[k]; j++) {
+				synapses[offsets[k]+j] = synapses[offsets[k]+j] + synbump +
+						dt * (a_post * trace_pre[offsets[k]+j] * spike_post[k] -
+							  a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
+				synapses[offsets[k]+j] =
+					synapses[offsets[k]+j] < 0.0 ? 0.0 : synapses[offsets[k]+j];
+				synapses[offsets[k]+j] =
+					synapses[offsets[k]+j] > synmax ? synmax : synapses[offsets[k]+j];
+				//spike_post[k] = 0.0;
 			}
 		}
 		t_finish = clock();

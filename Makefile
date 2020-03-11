@@ -11,11 +11,8 @@ delnetsketch: delnetsketch.o delnet.o
 delnetstdp: delnetstdp.o delnet.o
 	$(CC) -o stdp-exec delnet.o delnetstdp.o $(LDLIBS)
 
-delnetcuda: delnetstdpcuda.o delnet.o
-	$(CC) -o delnetcuda-exec delnet.o delnetstdpcuda.o -lcudart
-
-delnetcuda.o: delnetstdpcuda.cu delnet.o
-	nvcc -g -G -Xcompiler -Wall -c delnetstdpcuda.cu
+cuda: delnetstdpcuda.cu
+	nvcc -g -G -O3 -o stdpcuda-exe delnetstdpcuda.cu
 
 delnetstdp.o: delnetstdp.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdp.c
