@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
+
 #include "delnet.h"
 
 
@@ -119,29 +120,15 @@ void dn_advance(dn_delaynet *dn)
 {
 	IDX_T k;
 
-	/* load input (scatter) */	
-	//for(k=0; k < dn->num_delays; k++) {
-	//	dn->delaybuf[dn->delays[k].startidx + dn->delays[k].offset] =
-	//														dn->inputs[k];
-	//}
 	for(k=0; k < dn->num_delays; k++) {
 		dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] =
 															dn->inputs[k];
 	}
 
-	/* advance buffer (circular) */
-	//for(k=0; k < dn->num_delays; k++) {
-	//	dn->delays[k].offset = (dn->delays[k].offset + 1) % dn->delays[k].len;
-	//}
 	for(k=0; k < dn->num_delays; k++) {
 		dn->del_offsets[k] = (dn->del_offsets[k] + 1) % dn->del_lens[k];
 	}
 
-	/* pull output (gather) */
-	//for (k=0; k < dn->num_delays; k++) {
-	//	dn->outputs[dn->inverseidx[k]] =
-	//			dn->delaybuf[dn->delays[k].startidx+dn->delays[k].offset];
-	//}
 	for (k=0; k < dn->num_delays; k++) {
 		dn->outputs[dn->inverseidx[k]] =
 				dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]];

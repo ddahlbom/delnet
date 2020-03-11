@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <cuda.h>
 
 #include "delnet.h"
 
@@ -10,6 +11,7 @@
  *************************************************************/
 //#define SPIKE_BLOCK_SIZE 32768
 #define SPIKE_BLOCK_SIZE 8192
+#define TPB 256
 
 
 /*************************************************************
@@ -57,6 +59,64 @@ typedef struct spikerecord_s {
 /*************************************************************
  *  Functions
  *************************************************************/
+__global__ void synapse_trace_kernel_cuda(IDX_T n,
+										  IDX_T *offsets,
+										  IDX_T *nums_in,
+										  FLOAT_T *spike_pre,
+										  FLOAT_T *trace_pre, 
+										  FLOAT_T *neuroninputs,
+										  FLOAT_T dt,
+										  FLOAT_T tau_pre) 
+{
+	unsigned int i, j;
+	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
+	unsigned int stride = blockDim.x * gridDim.x; 
+
+	for (i=index; i < n; i += stride) {
+		for (j=0; j < nums_in[i]; j++) {
+			spike_pre[offsets[i]+j] = neuroninputs[offsets[i]+j];
+			trace_pre[offsets[i]+j] =
+				trace_pre[offsets[i]+j]*(1.0 - (dt/tau_pre)) +
+							  spike_pre[offsets[i]+j];
+		}
+	}
+}
+
+void synapse_trace_update_cuda(IDX_T n_nodes,
+							   IDX_T n_inputs,
+							   IDX_T *offsets,
+							   IDX_T *nums_in,
+							   FLOAT_T *spike_pre,
+							   FLOAT_T *trace_pre, 
+							   FLOAT_T *neuroninputs,
+							   FLOAT_T dt,
+							   FLOAT_T tau_pre) 
+{
+	unsigned int numblocks = (n_nodes + TPB - 1) / TPB;		
+	IDX_T *d_offsets=0, *d_nums_in=0;
+	FLOAT_T *d_spike_pre=0, *d_trace_pre=0, *d_neuroninputs=0;
+
+	cudaMemcpy(d_offsets, offsets, n_nodes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_nums_in, nums_in, n_nodes, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_spike_pre, spike_pre, n_inputs, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_trace_pre, trace_pre, n_inputs, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_neuroninputs, neuroninputs, n_inputs, cudaMemcpyHostToDevice);
+
+	synapse_trace_kernel_cuda<<<numblocks, TPB>>>(n_nodes,
+												  d_offsets,
+												  nums_in,
+												  spike_pre,
+												  trace_pre,
+												  neuroninputs,
+												  dt,
+												  tau_pre);
+	cudaMemcpy(offsets, d_offsets, n_nodes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(nums_in, d_nums_in, n_nodes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(spike_pre, d_spike_pre, n_inputs, cudaMemcpyDeviceToHost);
+	cudaMemcpy(trace_pre, d_trace_pre, n_inputs, cudaMemcpyDeviceToHost);
+	cudaMemcpy(neuroninputs, d_neuroninputs, n_inputs, cudaMemcpyDeviceToHost);
+}
+
 static inline void synapse_trace_update(IDX_T n,
 										IDX_T *offsets,
 										IDX_T *nums_in,
@@ -70,7 +130,7 @@ static inline void synapse_trace_update(IDX_T n,
 
 	for (k=0; k<n; k++) {
 		for (j=0; j < nums_in[k]; j++) {
-			spike_pre[offsets[k]+j] = neuroninputs[j];
+			spike_pre[offsets[k]+j] = neuroninputs[offsets[k]+j];
 			trace_pre[offsets[k]+j] =
 				trace_pre[offsets[k]+j]*(1.0 - (dt/tau_pre)) +
 							  spike_pre[offsets[k]+j];
@@ -83,7 +143,7 @@ static inline void synapse_trace_update(IDX_T n,
 
 double dd_sum_double(double *vals, size_t n) {
 	double sum = 0.0;
-	for (int k=0; k<n; k++) 
+	for (size_t k=0; k<n; k++) 
 		sum += vals[k];
 	return sum;
 }
@@ -96,11 +156,11 @@ double dd_avg_double(double *vals, size_t n) {
 spikerecord *sr_init()
 {
 	spikerecord *rec;
-	rec = malloc(sizeof(spikerecord));
-	rec->head = malloc(sizeof(spikeblock));
+	rec = (spikerecord *) malloc(sizeof(spikerecord));
+	rec->head = (spikeblock *) malloc(sizeof(spikeblock));
 	rec->head->max_spikes = SPIKE_BLOCK_SIZE;
 	rec->head->num_spikes = 0;
-	rec->head->spikes = malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
+	rec->head->spikes = (spike *) malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
 	rec->head->next = 0;
 
 	return rec;
@@ -115,12 +175,12 @@ void sr_save_spike(spikerecord *sr, int neuron, FLOAT_T time)
 	}
 	else {
 		/* allocate new spike block and saves spike */
-		spikeblock *new = malloc(sizeof(spikeblock));
-		new->max_spikes = SPIKE_BLOCK_SIZE;
-		new->num_spikes = 0;
-		new->spikes = malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
-		new->next = sr->head;
-		sr->head = new;
+		spikeblock *newest = (spikeblock *) malloc(sizeof(spikeblock));
+		newest->max_spikes = SPIKE_BLOCK_SIZE;
+		newest->num_spikes = 0;
+		newest->spikes = (spike *) malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
+		newest->next = sr->head;
+		sr->head = newest;
 		sr->head->spikes[sr->head->num_spikes].neuron = neuron;
 		sr->head->spikes[sr->head->num_spikes].time = time;
 		sr->head->num_spikes += 1;
@@ -143,7 +203,7 @@ spike *sr_spike_summary(spikerecord *sr)
 		curblock = curblock->next;
 	}
 
-	spikes_all = malloc(sizeof(spike)*num_spikes);
+	spikes_all = (spike *) malloc(sizeof(spike)*num_spikes);
 
 	curblock = sr->head;
 	long idx = 0;
@@ -160,12 +220,12 @@ spike *sr_spike_summary(spikerecord *sr)
 void sr_free(spikerecord *sr)
 {
 	spikeblock *curblock = sr->head;
-	spikeblock *new;
+	spikeblock *newest;
 	while (curblock != 0) {
 		free(curblock->spikes);
-		new = curblock->next;
+		newest = curblock->next;
 		free(curblock);
-		curblock = new;
+		curblock = newest;
 	}
 	free(sr);
 }
@@ -237,10 +297,10 @@ int main()
 	dn = dn_delnetfromgraph(g, n);
 
 	/* initialize neuron and synapse state  */
-	neuron *neurons = malloc(sizeof(neuron)*n);
-	FLOAT_T *trace_post = calloc(n_exc, sizeof(FLOAT_T));
-	FLOAT_T *spike_post = calloc(n_exc, sizeof(FLOAT_T));
-	IDX_T *offsets = malloc(sizeof(IDX_T)*n);
+	neuron *neurons 	= (neuron *) malloc(sizeof(neuron)*n);
+	FLOAT_T *trace_post = (FLOAT_T *) calloc(n_exc, sizeof(FLOAT_T));
+	FLOAT_T *spike_post = (FLOAT_T *) calloc(n_exc, sizeof(FLOAT_T));
+	IDX_T *offsets 		= (IDX_T *) malloc(sizeof(IDX_T)*n);
 	FLOAT_T *trace_pre; 	// pack this
 	FLOAT_T *spike_pre; 	// and following
 	FLOAT_T *synapses; 		// for speed?
@@ -265,9 +325,9 @@ int main()
 		cum_in += dn->nodes[i].num_in;
 	}
 
-	trace_pre = calloc(exc_offset, sizeof(FLOAT_T));
-	spike_pre = calloc(exc_offset, sizeof(FLOAT_T));
-	synapses = calloc(cum_in, sizeof(FLOAT_T));
+	trace_pre = (FLOAT_T *) calloc(exc_offset, sizeof(FLOAT_T));
+	spike_pre = (FLOAT_T *) calloc(exc_offset, sizeof(FLOAT_T));
+	synapses  = (FLOAT_T *) calloc(cum_in, sizeof(FLOAT_T));
 	for (i=0; i<n_exc; i++)
 		synapses[i] = g_w_exc;
 	for (; i<n; i++)
@@ -275,21 +335,21 @@ int main()
 
 
 	/* for profiling */	
-	gettinginputs = malloc(sizeof(double)*numsteps);
-	updatingsyntraces = malloc(sizeof(double)*numsteps);
-	updatingneurons = malloc(sizeof(double)*numsteps);
-	spikechecking = malloc(sizeof(double)*numsteps);
-	updatingneutraces = malloc(sizeof(double)*numsteps);
-	updatingsynstrengths = malloc(sizeof(double)*numsteps);
-	pushingoutput = malloc(sizeof(double)*numsteps);
-	advancingbuffer = malloc(sizeof(double)*numsteps);
+	gettinginputs 		 = (double *) malloc(sizeof(double)*numsteps);
+	updatingsyntraces 	 = (double *) malloc(sizeof(double)*numsteps);
+	updatingneurons 	 = (double *) malloc(sizeof(double)*numsteps);
+	spikechecking 		 = (double *) malloc(sizeof(double)*numsteps);
+	updatingneutraces 	 = (double *) malloc(sizeof(double)*numsteps);
+	updatingsynstrengths = (double *) malloc(sizeof(double)*numsteps);
+	pushingoutput 		 = (double *) malloc(sizeof(double)*numsteps);
+	advancingbuffer 	 = (double *) malloc(sizeof(double)*numsteps);
 
 	/* intermediate variables for simulation -- clean these up later*/
 	FLOAT_T *neuroninputs, *invals, *outvals;
 	IDX_T *nums_in;
-	invals = calloc(n, sizeof(FLOAT_T));
-	outvals = calloc(n, sizeof(FLOAT_T));
-	nums_in = calloc(n, sizeof(IDX_T));
+	invals  = (FLOAT_T *) calloc(n, sizeof(FLOAT_T));
+	outvals = (FLOAT_T *) calloc(n, sizeof(FLOAT_T));
+	nums_in = (IDX_T *) calloc(n, sizeof(IDX_T));
 	for (i=0; i<n; i++) 
 		nums_in[i] = dn->nodes[i].num_in; 	// see if helps speed
 
@@ -327,7 +387,7 @@ int main()
 						     nums_in,
 							 spike_pre,
 							 trace_pre, 
-							 neuroninputs,
+							 dn_getinputaddress(0,dn),
 							 dt,
 							 tau_pre);
 		t_finish = clock();
