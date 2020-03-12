@@ -281,6 +281,3 @@ void dn_freedelnet(dn_delaynet *dn) {
 	free(dn->nodes);
 	free(dn);
 }
-
-
-

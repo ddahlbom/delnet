@@ -1,5 +1,5 @@
 CC= gcc
-CFLAGS= -g -O3 -Wall -I./ -L./
+CFLAGS= -g -Wall -I./ -L./
 LDLIBS = -lm
 
 default: delnetstdp
@@ -11,8 +11,14 @@ delnetsketch: delnetsketch.o delnet.o
 delnetstdp: delnetstdp.o delnet.o
 	$(CC) -o stdp-exec delnet.o delnetstdp.o $(LDLIBS)
 
-cuda: delnetstdpcuda.cu
-	nvcc -g -G -O3 -o stdpcuda-exe delnetstdpcuda.cu
+cuda: delnetstdpcuda.o delnetcuda.o
+	nvcc -o stdpcuda-exec delnetstdpcuda.o delnetcuda.o
+
+delnetstdpcuda.o: delnetstdpcuda.cu delnetcuda.o
+	nvcc -g -G -O3 -I./ -L./ -c delnetstdpcuda.cu
+
+delnetcuda.o: delnetcuda.cu delnetcuda.h
+	nvcc -g -G -O3 -c delnetcuda.cu
 
 delnetstdp.o: delnetstdp.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdp.c
