@@ -80,6 +80,7 @@ void 			dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn);
 dn_vec_float 	dn_getinputvec(dn_delaynet *dn);
 FLOAT_T* 		dn_getinputaddress(IDX_T idx, dn_delaynet *dn);
 void 			dn_advance(dn_delaynet *dn);
+void 			dn_advance_cuda(dn_delaynet *dn);
 
 
 #endif

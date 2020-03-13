@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <omp.h>
 
 #include "delnet.h"
+#include "spkrcd.h"
 
 
 /*************************************************************
  *  Macros
  *************************************************************/
-//#define SPIKE_BLOCK_SIZE 32768
-#define SPIKE_BLOCK_SIZE 8192
 
 
 /*************************************************************
@@ -20,11 +20,11 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 6.0*0.9;
+FLOAT_T g_w_exc  = 6.0;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -5.0*0.8;
+FLOAT_T g_w_inh = -5.0;
 
 
 /*************************************************************
@@ -36,23 +36,6 @@ typedef struct neuron_s {
 	FLOAT_T a;
 	FLOAT_T d;
 } neuron;
-
-typedef struct spike_s {
-	int neuron;
-	FLOAT_T time;
-} spike;
-
-typedef struct spikeblock_s {
-	long max_spikes;
-	long num_spikes;
-	spike *spikes;
-	struct spikeblock_s *next;
-} spikeblock;
-
-typedef struct spikerecord_s {
-	spikeblock *head;	
-} spikerecord;
-
 
 /*************************************************************
  *  Functions
@@ -69,82 +52,6 @@ double dd_avg_double(double *vals, size_t n) {
 	return sum / ((double) n);
 }
 
-spikerecord *sr_init()
-{
-	spikerecord *rec;
-	rec = malloc(sizeof(spikerecord));
-	rec->head = malloc(sizeof(spikeblock));
-	rec->head->max_spikes = SPIKE_BLOCK_SIZE;
-	rec->head->num_spikes = 0;
-	rec->head->spikes = malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
-	rec->head->next = 0;
-
-	return rec;
-}
-
-void sr_save_spike(spikerecord *sr, int neuron, FLOAT_T time)
-{
-	if (sr->head->num_spikes < sr->head->max_spikes) {
-		sr->head->spikes[sr->head->num_spikes].neuron = neuron;
-		sr->head->spikes[sr->head->num_spikes].time = time;
-		sr->head->num_spikes += 1;
-	}
-	else {
-		/* allocate new spike block and saves spike */
-		spikeblock *new = malloc(sizeof(spikeblock));
-		new->max_spikes = SPIKE_BLOCK_SIZE;
-		new->num_spikes = 0;
-		new->spikes = malloc(sizeof(spike)*SPIKE_BLOCK_SIZE);
-		new->next = sr->head;
-		sr->head = new;
-		sr->head->spikes[sr->head->num_spikes].neuron = neuron;
-		sr->head->spikes[sr->head->num_spikes].time = time;
-		sr->head->num_spikes += 1;
-	}
-}
-
-
-/*
- * Revise this later so that spikes are in order (they are in order
- * by block, but blocks are reversed)
- */
-spike *sr_spike_summary(spikerecord *sr)
-{
-	/* Calculate total number of spikes and allocate */
-	long num_spikes = 0;
-	spike *spikes_all;
-	spikeblock *curblock = sr->head;
-	while (curblock != 0) {
-		num_spikes += curblock->num_spikes;
-		curblock = curblock->next;
-	}
-
-	spikes_all = malloc(sizeof(spike)*num_spikes);
-
-	curblock = sr->head;
-	long idx = 0;
-	while (curblock != 0) {
-		for (int i=0; i < curblock->num_spikes; i++) {
-			spikes_all[idx] = curblock->spikes[i];
-			idx += 1;
-		}
-		curblock = curblock->next;
-	}
-	return spikes_all;
-}
-
-void sr_free(spikerecord *sr)
-{
-	spikeblock *curblock = sr->head;
-	spikeblock *new;
-	while (curblock != 0) {
-		free(curblock->spikes);
-		new = curblock->next;
-		free(curblock);
-		curblock = new;
-	}
-	free(sr);
-}
 
 /*************************************************************
  *  Main
@@ -164,7 +71,7 @@ int main(int argc, char *argv[])
 	unsigned long int numspikes = 0;
 	float p_contact;
 	dn_delaynet *dn;
-	spikerecord *sr = sr_init();
+	spikerecord *sr = sr_init("delnetstdp.dat", SPIKE_BLOCK_SIZE);
 	clock_t t_start, t_finish;
 	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
@@ -184,6 +91,10 @@ int main(int argc, char *argv[])
 
 	/* process CLI inputs */
 	switch (argc) {
+		case 4:
+			n = atoi(argv[1]);
+			p_contact = atof(argv[2]);
+			dur = atof(argv[3]);
 		case 3:
 			n = atoi(argv[1]);
 			p_contact = atof(argv[2]);
@@ -307,6 +218,7 @@ int main(int argc, char *argv[])
 
 		/* update synapse traces (local variable for STDP) */
 		t_start = clock();
+
 		for (k=0; k<n_exc; k++) {
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				spike_pre[offsets[k]+j] = neuroninputs[offsets[k]+j];
@@ -314,12 +226,12 @@ int main(int argc, char *argv[])
 								  spike_pre[offsets[k]+j];
 			}
 		}
+
 		t_finish = clock();
 		updatingsyntraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 
 		/* update neuron state */
-		t_start = clock();
 		for (k=0; k<n; k++) {
 			neurons[k].v += 500.0 * dt * (( 0.04 * neurons[k].v + 5.0) *
 							neurons[k].v + 140.0 - neurons[k].u + invals[k]);
@@ -433,19 +345,18 @@ int main(int argc, char *argv[])
 	printf("\nTime per second: \t %f (ms)\n", cumtime*fs);
 
 	/* Save spikes */
-	FILE *spike_file;
-	spike_file = fopen( "delnetstdp.dat", "w" );
-	spike *firings = sr_spike_summary(sr);
-	for (i=0; i<numspikes; i++)
-		fprintf(spike_file, "%f  %d\n", firings[i].time, firings[i].neuron);
-	fclose(spike_file);
+	//FILE *spike_file;
+	//spike_file = fopen( "delnetstdp.dat", "w" );
+	//spike *firings = sr_spike_summary(sr);
+	//for (i=0; i<numspikes; i++)
+	//	fprintf(spike_file, "%f  %d\n", firings[i].time, firings[i].neuron);
+	//fclose(spike_file);
+	sr_close(sr);
 
 
 	/* Clean up */
 	dn_freedelnet(dn);
-	sr_free(sr);
 	free(g);
-	free(firings);
 	free(trace_post);
 	free(spike_post);
 	free(neurons);

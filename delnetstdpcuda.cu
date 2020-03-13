@@ -98,14 +98,23 @@ void synapse_trace_update_cuda(IDX_T n_nodes,
 	FLOAT_T *d_spike_pre=0, *d_trace_pre=0, *d_neuroninputs=0;
 
 	/* move data to GPU */
+	cudaMalloc(&d_offsets, sizeof(IDX_T)*n_nodes);
 	cudaMemcpy(d_offsets, offsets, sizeof(IDX_T)*n_nodes,
 			cudaMemcpyHostToDevice);
+
+	cudaMalloc(&d_nums_in, sizeof(IDX_T)*n_nodes);
 	cudaMemcpy(d_nums_in, nums_in, sizeof(IDX_T)*n_nodes,
 			cudaMemcpyHostToDevice);
+
+	cudaMalloc(&d_spike_pre, sizeof(FLOAT_T)*n_inputs);
 	cudaMemcpy(d_spike_pre, spike_pre, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyHostToDevice);
+
+	cudaMalloc(&d_trace_pre, sizeof(FLOAT_T)*n_inputs);
 	cudaMemcpy(d_trace_pre, trace_pre, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyHostToDevice);
+
+	cudaMalloc(&d_neuroninputs, sizeof(FLOAT_T)*n_inputs);
 	cudaMemcpy(d_neuroninputs, neuroninputs, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyHostToDevice);
 
@@ -121,17 +130,25 @@ void synapse_trace_update_cuda(IDX_T n_nodes,
 	/* move data back from GPU to main memory */
 	cudaMemcpy(offsets, d_offsets, sizeof(IDX_T)*n_nodes,
 			cudaMemcpyDeviceToHost);
+	cudaFree(d_offsets);
+
 	cudaMemcpy(nums_in, d_nums_in, sizeof(IDX_T)*n_nodes,
 			cudaMemcpyDeviceToHost);
+	cudaFree(d_nums_in);
+
 	cudaMemcpy(spike_pre, d_spike_pre, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyDeviceToHost);
+	cudaFree(d_spike_pre);
+
 	cudaMemcpy(trace_pre, d_trace_pre, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyDeviceToHost);
+	cudaFree(d_trace_pre);
+
 	cudaMemcpy(neuroninputs, d_neuroninputs, sizeof(FLOAT_T)*n_inputs,
 			cudaMemcpyDeviceToHost);
+	cudaFree(d_neuroninputs);
 }
 
-/*
 static inline void synapse_trace_update(IDX_T n,
 										IDX_T *offsets,
 										IDX_T *nums_in,
@@ -152,7 +169,6 @@ static inline void synapse_trace_update(IDX_T n,
 		}
 	}
 }
-*/
 
 
 __global__ void synapse_strength_kernel_cuda(IDX_T n,
@@ -250,7 +266,6 @@ static inline void synapse_strength_update_cuda(IDX_T n,
 			cudaMemcpyDeviceToHost);
 }
 
-/*
 static inline void synapse_strength_update(IDX_T n_exc,
 										   IDX_T exc_offset,
 										   IDX_T *offsets,
@@ -278,7 +293,6 @@ static inline void synapse_strength_update(IDX_T n_exc,
 		}
 	}
 }
-*/
 
 double dd_sum_double(double *vals, size_t n) {
 	double sum = 0.0;
@@ -414,7 +428,7 @@ int main(int argc, char *argv[])
 
 	/* trial parameters */
 	fs = 1000.0;
-	dur = 2.0;
+	dur = 1.0;
 	//p_contact = 0.25;
 	//n = 2000;
 	tau_pre = 0.02;
@@ -598,7 +612,7 @@ int main(int argc, char *argv[])
 
 		/* update synapse strengths */
 		t_start = clock();
-		synapse_strength_update_cuda(n_exc,
+		synapse_strength_update(n_exc,
 							    	 exc_offset,
 									 offsets,
 									 nums_in,

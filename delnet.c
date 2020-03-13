@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
+#include <omp.h>
 
 #include "delnet.h"
 
