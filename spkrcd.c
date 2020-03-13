@@ -59,4 +59,5 @@ void sr_close(spikerecord *sr)
 
 	/* free memory */
 	free(sr->spikes);
+	free(sr);
 }

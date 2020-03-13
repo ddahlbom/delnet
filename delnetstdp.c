@@ -345,17 +345,12 @@ int main(int argc, char *argv[])
 	printf("\nTime per second: \t %f (ms)\n", cumtime*fs);
 
 	/* Save spikes */
-	//FILE *spike_file;
-	//spike_file = fopen( "delnetstdp.dat", "w" );
-	//spike *firings = sr_spike_summary(sr);
-	//for (i=0; i<numspikes; i++)
-	//	fprintf(spike_file, "%f  %d\n", firings[i].time, firings[i].neuron);
-	//fclose(spike_file);
 	sr_close(sr);
 
+	/* Clean up delay network */
+	dn_freedelnet(dn);
 
 	/* Clean up */
-	dn_freedelnet(dn);
 	free(g);
 	free(trace_post);
 	free(spike_post);
@@ -365,8 +360,7 @@ int main(int argc, char *argv[])
 	free(synapses);
 	free(invals);
 	free(outvals);
-
-
+	free(offsets);
 
 	return 0;
 }
