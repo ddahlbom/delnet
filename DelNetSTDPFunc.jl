@@ -88,6 +88,11 @@ function runsim(params, fs, dur; blocksize=:none, outfile="trialdata")
 
 	dn = delnetfromgraph(g)
 
+	invinvidx = Array{Int64,1}(undef, length(dn.invidx))
+	for k ∈ 1:length(invinvidx)
+		invinvidx[dn.invidx[k]] = k
+	end
+
 	# Initialize neurons
 	neurons    = [Neuron() for _ ∈ 1:n]
 	synapses   = [Float64[] for _ ∈ 1:n]

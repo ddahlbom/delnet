@@ -6,7 +6,7 @@
  */
 
 #define IDX_T unsigned int
-#define FLOAT_T float
+#define FLOAT_T double
 
 #define getrandom(max1) ((rand()%(int)((max1)))) // random integer between 0 and max-1
 #define unirand() (((FLOAT_T) rand()) / ((FLOAT_T) RAND_MAX + 1.0))

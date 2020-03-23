@@ -88,6 +88,7 @@ char *dn_vectostr(dn_vec_float input) {
  * -------------------- delnet Functions --------------------
  */
 
+/* push output of nodes into delay network (input of dn) */
 void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn) 
 {
 	IDX_T i1, i2, k;
@@ -124,15 +125,18 @@ void dn_advance(dn_delaynet *dn)
 	for(k=0; k < dn->num_delays; k++) {
 		dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] =
 															dn->inputs[k];
+		//dn->inputs[k] = 0.0;
 	}
 
 	for(k=0; k < dn->num_delays; k++) {
 		dn->del_offsets[k] = (dn->del_offsets[k] + 1) % dn->del_lens[k];
+
 	}
 
 	for (k=0; k < dn->num_delays; k++) {
 		dn->outputs[dn->inverseidx[k]] =
 				dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]];
+		//dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] = 0.0;
 	}
 }
 

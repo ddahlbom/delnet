@@ -64,9 +64,9 @@ int main()
 		for (k=0; k<numlines; k++) {
 			linevals = dn_orderbuf(k, dn);	
 			dispstr = dn_vectostr(linevals);
-			printf("(%u) %s (%u)\n", dn->del_sources[k],
+			printf("(%u) %s (%u)\n", dn->del_sources[k]+1,
 									 dispstr,
-									 dn->del_targets[k]);
+									 dn->del_targets[k]+1);
 			free(dispstr);
 			free(linevals.data);
 		}
