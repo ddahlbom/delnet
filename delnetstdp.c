@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include <omp.h>
 
 #include "delnet.h"
 #include "spkrcd.h"
+#include "paramutils.h"
 
 
 /*************************************************************
@@ -21,11 +21,10 @@ FLOAT_T g_u_default = -13.0;
 
 FLOAT_T g_a_exc  = 0.02;
 FLOAT_T g_d_exc  = 8.0;
-FLOAT_T g_w_exc  = 6.0;
 
 FLOAT_T g_a_inh  = 0.1;
 FLOAT_T g_d_inh  = 2.0;
-FLOAT_T g_w_inh = -5.0;
+
 
 
 /*************************************************************
@@ -38,21 +37,72 @@ typedef struct neuron_s {
 	FLOAT_T d;
 } neuron;
 
+typedef struct trialparams_s {
+	double fs;
+	double dur;
+	double num_neurons;
+	double p_contact;
+	double p_exc;
+	double tau_pre;
+	double tau_post;
+	double a_pre;
+	double a_post;
+	double synmax;
+	double w_exc;
+	double w_inh;
+	double lambda;
+
+} trialparams;
+
 /*************************************************************
  *  Functions
  *************************************************************/
-double dd_sum_double(double *vals, size_t n) {
-	double sum = 0.0;
-	for (int k=0; k<n; k++) 
-		sum += vals[k];
-	return sum;
+
+/* -------------------- Parameter Setting -------------------- */
+void setdefaultparams(trialparams *p)
+{
+	p->fs = 1000.0;
+	p->dur = 1.0;
+	p->p_contact = 0.1;
+	p->p_exc = 0.8;
+	p->lambda = 3.00;
+	p->num_neurons = 1000;
+	p->tau_pre = 0.02;
+	p->tau_post = 0.02;
+	p->a_pre = 0.12;
+	p->a_post = 0.1;
+	p->synmax = 10.0;
+	p->w_exc  = 6.0;
+	p->w_inh = -5.0;
 }
 
-double dd_avg_double(double *vals, size_t n) {
-	double sum = dd_sum_double(vals, n);
-	return sum / ((double) n);
+void readparameters(trialparams *p, char *filename)
+{
+	paramlist *pl = pl_readparams(filename);	
+
+	p->fs = pl_getvalue(pl, "fs");
+	p->dur = pl_getvalue(pl, "dur");
+	p->p_contact = pl_getvalue(pl, "p_contact");
+	p->p_exc = pl_getvalue(pl, "p_exc");
+	p->lambda = pl_getvalue(pl, "lambda");
+	p->num_neurons = pl_getvalue(pl, "num_neurons");
+	p->tau_pre = pl_getvalue(pl, "tau_pre");
+	p->tau_post = pl_getvalue(pl, "tau_post");
+	p->a_pre = pl_getvalue(pl, "a_pre");
+	p->a_post = pl_getvalue(pl, "a_post");
+	p->synmax = pl_getvalue(pl, "synmax");
+	p->w_exc  = pl_getvalue(pl, "w_exc");
+	p->w_inh = pl_getvalue(pl, "w_inh");
 }
 
+
+/* -------------------- Random Sampling -------------------- */
+double expsampl(double lambda) {
+	return -log( (((double) rand()) / ((double) RAND_MAX + 1.0)))/lambda;
+}
+
+
+/* -------------------- Neuron Equations -------------------- */
 static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
 	return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
@@ -61,88 +111,75 @@ static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T input, FLOAT_T a) {
 	return a*(0.2*v - u);
 }
 
-void update_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T h) {
+void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T h) {
 	FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
+
 	half_h = h*0.5;
 	sixth_h = h/6.0;
+	
 	K1 = f1(*v, *u, input);
 	L1 = f2(*v, *u, input, a);
 
-	K2 = f1(*v+half_h*K1, *u+half_h*L1, input); 
-	L2 = f2(*v+half_h*K1, *u+half_h*L1, input, a);
+	K2 = f1(*v + half_h*K1, *u + half_h*L1, input); 
+	L2 = f2(*v + half_h*K1, *u + half_h*L1, input, a);
 
-	K3 = f1(*v+half_h*K2, *u+half_h*L2, input); 
-	L3 = f2(*v+half_h*K2, *u+half_h*L2, input, a);
+	K3 = f1(*v + half_h*K2, *u + half_h*L2, input); 
+	L3 = f2(*v + half_h*K2, *u + half_h*L2, input, a);
 
-	K4 = f1(*v+h*K3, *u+h*L3, input);
-	L4 = f2(*v+h*K3, *u+h*L3, input, a);
+	K4 = f1(*v + h*K3, *u + h*L3, input);
+	L4 = f2(*v + h*K3, *u + h*L3, input, a);
 
 	*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4);
 	*u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
 }
 
-double expsampl(double lambda) {
-	return -log( (((double) rand()) / ((double) RAND_MAX + 1.0)))/lambda;
-}
 
 /*************************************************************
  *  Main
  *************************************************************/
 
-/**
- * @brief Simulation with delnet library
- *
- */
 int main(int argc, char *argv[])
 {
 	FLOAT_T fs, dur, dt, t;
-	FLOAT_T tau_pre, tau_post, a_pre, a_post, synbump, synmax;
+	FLOAT_T tau_pre, tau_post, a_pre, a_post, synmax;
 	unsigned int i, j, k, numsteps;
 	unsigned int n, n_exc, n_inh;
 	unsigned int *g;
 	unsigned long int numspikes = 0, numrandspikes = 0;
-	double p_contact, lambda;
+	double p_contact, p_exc, p_inh, lambda;
+	FLOAT_T w_exc, w_inh;
+	trialparams p;
 	dn_delaynet *dn;
 	spikerecord *sr = sr_init("delnetstdp.dat", SPIKE_BLOCK_SIZE);
 	clock_t t_start, t_finish;
-	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
-			updatingneutraces, updatingsynstrengths, pushingoutput,
-			advancingbuffer;
 
 	srand(1);
 
-	/* trial parameters */
-	fs = 1000.0;
-	dur = 1.0;
-	p_contact = 0.1;
-	lambda = 2.0; 	// subject neurons to poissonian noise at lambda Hz
-	n = 1000;
-	tau_pre = 0.02;
-	tau_post = 0.02;
-	a_pre = 0.12;
-	a_post = 0.1;
-	synbump = 0.00000;
-	synmax = 10.0;
-
-	/* process CLI inputs */
-	switch (argc) {
-		case 4:
-			n = atoi(argv[1]);
-			p_contact = atof(argv[2]);
-			dur = atof(argv[3]);
-		case 3:
-			n = atoi(argv[1]);
-			p_contact = atof(argv[2]);
-			break;
-		case 2:
-			n = atoi(argv[1]);
-			break;
+	if (argc < 2) {
+		printf("No parameter file given.  Using defaults. \n");
+		setdefaultparams(&p);
+	} else {
+		readparameters(&p, argv[1]);
 	}
 
+	/* trial parameters */
+	fs = p.fs; 
+	dur = p.dur;
+	p_contact = p.p_contact;
+	p_exc = p.p_exc;
+	lambda = p.lambda; 	// subject neurons to poissonian noise at lambda Hz
+	n = p.num_neurons;
+	tau_pre = p.tau_pre;
+	tau_post = p.tau_post;
+	a_pre = p.a_pre;
+	a_post = p.a_post;
+	synmax = p.synmax;
+	w_exc  = p.w_exc;
+	w_inh = p.w_inh;
+
 	/* derived parameters */
-	n_exc = n*0.8;
-	n_inh = n*0.2;
-	n = n_exc + n_inh;  // in case of rounding issue
+	n_exc = (unsigned int) ( (double) n * p_exc);
+	n_inh = n - n_exc;
 	dt = 1.0/fs;
 	numsteps = dur/dt;
 
@@ -179,16 +216,18 @@ int main(int argc, char *argv[])
 		count += g[i*n+j] != 0 ? 1 : 0.0;
 	printf("Average connections per neuron: %f\n", count/((double) n));
 
+
 	/* generate delay network */
 	dn = dn_delnetfromgraph(g, n);
+
 
 	/* initialize neuron and synapse state  */
 	neuron *neurons = malloc(sizeof(neuron)*n);
 	double *nextrand = malloc(sizeof(double)*n);
-	//FLOAT_T *trace_post = calloc(n_exc, sizeof(FLOAT_T));
-	//FLOAT_T *spike_post = calloc(n_exc, sizeof(FLOAT_T));
-	//FLOAT_T *trace_pre; 	// pack this
-	//FLOAT_T *spike_pre; 	// and following
+	FLOAT_T *trace_post = calloc(n, sizeof(FLOAT_T));
+	FLOAT_T *spike_post = calloc(n, sizeof(FLOAT_T));
+	FLOAT_T *trace_pre; 	// pack this
+	FLOAT_T *spike_pre; 	// and following
 	FLOAT_T *synapses; 		// for speed?
 
 	IDX_T *offsets = malloc(sizeof(IDX_T)*n);
@@ -213,44 +252,51 @@ int main(int argc, char *argv[])
 		numsyn_tot += dn->nodes[i].num_in;
 	}
 
-	//trace_pre = calloc(numsyn_exc, sizeof(FLOAT_T));		
-	//spike_pre = calloc(numsyn_exc, sizeof(FLOAT_T));
+	trace_pre = calloc(numsyn_tot, sizeof(FLOAT_T));		
+	spike_pre = calloc(numsyn_tot, sizeof(FLOAT_T));
 	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 
 	
 	/* profiling variables */
+	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
+			updatingneutraces, updatingsynstrengths, pushingoutput,
+			advancingbuffer;
+
 	gettinginputs 		= 0;
-	//updatingsyntraces 	= 0;
+	updatingsyntraces 	= 0;
 	updatingneurons 	= 0;
 	spikechecking 		= 0;
-	//updatingneutraces 	= 0;
-	//updatingsynstrengths = 0;
+	updatingneutraces 	= 0;
+	updatingsynstrengths = 0;
 	pushingoutput 		= 0;
 	advancingbuffer 	= 0;
 
 	/* simulation local vars */
 	FLOAT_T *neuroninputs, *invals, *outvals; 
-	IDX_T *invinvidx;
+	IDX_T *sourceidx, *destidx;
+
 	invals = calloc(n, sizeof(FLOAT_T));
 	outvals = calloc(n, sizeof(FLOAT_T));
-	invinvidx = calloc(numsyn_tot, sizeof(IDX_T));
-	//size_t randnode;
-	for (i=0; i<numsyn_tot; i++)
-		invinvidx[dn->inverseidx[i]] = i;
 
-	//for (i=0; i<numsyn_exc; i++)
-	//	synapses[invinvidx[i]] = g_w_exc;
-	//for (; i<numsyn_tot; i++)
-	//	synapses[invinvidx[i]] = g_w_inh;
+	/* index arithmetic */
+	sourceidx = calloc(numsyn_tot, sizeof(IDX_T));
+	destidx = calloc(numsyn_tot, sizeof(IDX_T));
+	for (i=0; i<numsyn_tot; i++) {
+		destidx[i] = dn->inverseidx[i];
+		sourceidx[dn->inverseidx[i]] = i; 
+	}
+	/* initialize synapse weights */
 	for (i=0; i<numsyn_exc; i++)
-		synapses[dn->inverseidx[i]] = g_w_exc;
+		synapses[dn->inverseidx[i]] = w_exc;
 	for (; i<numsyn_tot; i++)
-		synapses[dn->inverseidx[i]] = g_w_inh;
+		synapses[dn->inverseidx[i]] = w_inh;
 
+	/* initialize random input times */
 	for(i=0; i<n; i++)
 		nextrand[i] = expsampl(lambda);
 
-	/* start simulation */
+
+	/* -------------------- start simulation -------------------- */
 	for (i=0; i<numsteps; i++) {
 
 		/* calculate time update */
@@ -262,27 +308,44 @@ int main(int argc, char *argv[])
 
 		/* get neuron inputs from buffer */
 		t_start = clock();
-		//neuroninputs = dn_getinputaddress(0,dn); //dn->outputs
-		//randnode = getrandom(n);
 		for (k=0; k<n; k++) {
-			/* get inputs to neuron */		
+			// get inputs to neuron
 			invals[k] = 0.0;
 			neuroninputs = dn_getinputaddress(k,dn); //dn->outputs
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				invals[k] += neuroninputs[j] * synapses[ offsets[k]+j ];
 			}
-
-			/* random input */ 
-			//if (unirand() < 1.0/n)
-			//	invals[k] += 20.0 * (fs/1000.0);
+			//  random input
 			if (nextrand[k] < t) {
-				invals[k] += 20.0;
+				invals[k] += 20.0 * (fs/1000); 
 				nextrand[k] += expsampl(lambda);
 				numrandspikes += 1;
 			}
 		}
 		t_finish = clock();
 		gettinginputs += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+
+
+		/* update synapse traces */
+		t_start = clock();
+		for (k=0; k<n; k++) {
+			for (j=0; j < dn->nodes[k].num_in; j++) {
+				neuroninputs = dn_getinputaddress(k,dn);
+				spike_pre[offsets[k]+j] = neuroninputs[j];
+				trace_pre[offsets[k]+j] = trace_pre[offsets[k]+j]*(1.0 - (dt/tau_pre)) +
+					spike_pre[offsets[k]+j];
+			}
+		}
+		t_finish = clock();
+		updatingsyntraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+
+
+		/* update neuron state */
+		t_start = clock();
+		for (k=0; k<n; k++)
+			neuronupdate_rk4(&neurons[k].v, &neurons[k].u, invals[k], neurons[k].a, 1000.0/fs);
+		t_finish = clock();
+		updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 
 		/* check if fired and calculate output */
@@ -301,30 +364,42 @@ int main(int argc, char *argv[])
 		spikechecking += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 
-		/* update neuron state */
-		//FLOAT_T v_coef = 500.0/fs;
-		//FLOAT_T u_coef = 1000.0/fs;
-		for (k=0; k<n; k++) {
-			//neurons[k].v += v_coef*((0.04*neurons[k].v+5.0)*neurons[k].v + 
-			//							140.0 - neurons[k].u + invals[k]);
-			//neurons[k].v += v_coef*((0.04*neurons[k].v+5.0)*neurons[k].v +
-			//							140.0 - neurons[k].u + invals[k]);
-			//neurons[k].u += u_coef*neurons[k].a*(0.2*neurons[k].v-neurons[k].u);
-			// try out different numerical scheme, e.g. Runge-Kutta
-			update_rk4(&neurons[k].v, &neurons[k].u, invals[k], neurons[k].a, 1000.0/fs);
-		}
-		t_finish = clock();
-		updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-
-
 		/* push the output into the buffer */
 		t_start = clock();
-		for (k=0; k<n; k++) {
+		for (k=0; k<n; k++)
 			dn_pushoutput(outvals[k], k, dn);
-		}
 		t_finish = clock();
 		pushingoutput += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
+
+		/* update neuron traces */
+		t_start = clock();
+		for (k=0; k<n; k++) { 		
+			spike_post[k] = outvals[k];
+			trace_post[k] = trace_post[k]*(1.0 - (dt/tau_post)) + spike_post[k];
+		}
+		t_finish = clock();
+		updatingneutraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+
+
+		/* update synapses */
+		t_start = clock();
+		for (k=0; k<n; k++) {
+			for (j=0; j < dn->nodes[k].num_in; j++) {
+				if (sourceidx[offsets[k]+j] < numsyn_exc) {
+					synapses[offsets[k]+j] = synapses[offsets[k]+j] +
+							dt * (a_post * trace_pre[offsets[k]+j] * spike_post[k] -
+								  a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
+					// clamp value	
+					synapses[offsets[k]+j] = synapses[offsets[k]+j] < 0.0 ? 
+												0.0 : synapses[offsets[k]+j];
+					synapses[offsets[k]+j] = synapses[offsets[k]+j] > synmax ?
+												synmax : synapses[offsets[k]+j];
+				}
+			}
+		}
+		t_finish = clock();
+		updatingsynstrengths += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
 		/* advance the buffer */
 		t_start = clock();
@@ -345,6 +420,10 @@ int main(int argc, char *argv[])
 	cumtime += cycletime;
 	printf("Getting inputs:\t\t %f (ms)\n", cycletime);
 
+	cycletime = 1000.0*updatingsyntraces/numsteps;
+	cumtime += cycletime;
+	printf("Update syntraces:\t %f (ms)\n", cycletime);
+
 	cycletime = 1000.0*updatingneurons/numsteps;
 	cumtime += cycletime;
 	printf("Update neurons:\t\t %f (ms)\n", cycletime);
@@ -357,12 +436,26 @@ int main(int argc, char *argv[])
 	cumtime += cycletime;
 	printf("Pushing buffer:\t\t %f (ms)\n", cycletime);
 
+	cycletime = 1000.0*updatingsynstrengths/numsteps;
+	cumtime += cycletime;
+	printf("Updating synapses:\t %f (ms)\n", cycletime);
+
 	cycletime = 1000.0*advancingbuffer/numsteps;
 	cumtime += cycletime;
 	printf("Advancing buffer:\t %f (ms)\n", cycletime);
 
 	printf("Total cycle time:\t %f (ms)\n", cumtime);
 	printf("\nTime per second: \t %f (ms)\n", cumtime*fs);
+	
+	printf("Don't optimize out, please! (%d)\n", destidx[0]);
+
+	/* save synapse weights */
+	FILE *f;
+	f = fopen("synapses.dat", "w");
+	for (k=0; k<numsyn_tot; k++) {
+		fprintf(f, "%g\n", synapses[destidx[k]]);
+	}
+	fclose(f);
 
 	/* Save spikes */
 	sr_close(sr);
@@ -372,16 +465,18 @@ int main(int argc, char *argv[])
 
 	/* Clean up */
 	free(g);
-	// free(trace_post);
-	// free(spike_post);
+	free(trace_post);
+	free(spike_post);
 	free(neurons);
-	// free(trace_pre);
-	// free(spike_pre);
+	free(trace_pre);
+	free(spike_pre);
 	free(synapses);
 	free(invals);
 	free(outvals);
 	free(offsets);
 	free(nextrand);
+	free(sourceidx);
+	free(destidx);
 
 	return 0;
 }

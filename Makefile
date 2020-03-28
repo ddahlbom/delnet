@@ -1,15 +1,18 @@
 CC= gcc
-CFLAGS= -g -Wall -fopenmp -I./ -L./
-LDLIBS = -lm -fopenmp
+CFLAGS= -g -Wall -I./ -L./
+LDLIBS = -lm 
 
-default: delnetstdp
+default: stdpoptim
 
 
-delnetsketch: delnetsketch.o delnet.o
+sketch: delnetsketch.o delnet.o
 	$(CC) -o sketch-exec delnet.o delnetsketch.o $(LDLIBS)
 
-delnetstdp: delnetstdp.o delnet.o spkrcd.o
-	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o $(LDLIBS)
+debug: delnetstdp.o delnet.o spkrcd.o paramutils.o
+	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o paramutils.o $(LDLIBS)
+
+stdpoptim: delnetstdp-opt.o delnet-opt.o spkrcd.o paramutils.o
+	$(CC) -o stdp-exec delnet-opt.o delnetstdp-opt.o spkrcd.o paramutils.o $(LDLIBS)
 
 cuda: delnetstdpcuda.o delnetcuda.o
 	nvcc -o stdpcuda-exec delnetstdpcuda.o delnetcuda.o
@@ -23,11 +26,20 @@ delnetcuda.o: delnetcuda.cu delnetcuda.h
 delnetstdp.o: delnetstdp.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdp.c
 
+delnetstdp-opt.o: delnetstdp.c delnet.o
+	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o delnetstdp-opt.o -c delnetstdp.c
+
 delnetsketch.o: delnetsketch.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetsketch.c 
 
+paramutils.o: paramutils.c paramutils.h
+	$(CC) $(CFLAGS) $(LDLIBS) -c paramutils.c
+
 spkrcd.o: spkrcd.c spkrcd.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c spkrcd.c
+
+delnet-opt.o: delnet.c delnet.h
+	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o delnet-opt.o -c delnet.c
 
 delnet.o: delnet.c delnet.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnet.c
