@@ -51,7 +51,7 @@ typedef struct trialparams_s {
 	double w_exc;
 	double w_inh;
 	double lambda;
-
+	double maxdelay;
 } trialparams;
 
 /*************************************************************
@@ -74,6 +74,7 @@ void setdefaultparams(trialparams *p)
 	p->synmax = 10.0;
 	p->w_exc  = 6.0;
 	p->w_inh = -5.0;
+	p->maxdelay = 20.0;
 }
 
 void readparameters(trialparams *p, char *filename)
@@ -93,12 +94,108 @@ void readparameters(trialparams *p, char *filename)
 	p->synmax = pl_getvalue(pl, "synmax");
 	p->w_exc  = pl_getvalue(pl, "w_exc");
 	p->w_inh = pl_getvalue(pl, "w_inh");
+	p->maxdelay = pl_getvalue(pl, "maxdelay");
+}
+
+void printparameters(trialparams p) {
+	/* print trial parameters */
+	printf("----------------------------------------\n");
+	printf("Sampling Frequency: \t%f\n", p.fs);
+	printf("Duration: \t\t%f\n", p.dur);
+	printf("Number of nodes: \t%d\n", (int) p.num_neurons);
+	printf(" 	Excitatory: \t%d\n", (int) (p.num_neurons*p.p_exc));
+	printf(" 	Inhibitory: \t%d\n", (int) (p.num_neurons-p.num_neurons*p.p_exc) );
+	printf("Probability of contact:\t%f\n", p.p_contact);
+	printf("tau_pre:\t\t%f\n", p.tau_pre);
+	printf("A_pre:\t\t\t%f\n", p.a_pre);
+	printf("tau_post:\t\t%f\n", p.tau_post);
+	printf("A_post:\t\t\t%f\n", p.a_post);
+	printf("Max synapse strength:\t%lf\n", p.synmax);
+	printf("Exc syn strength:\t%lf\n", p.w_exc);
+	printf("Inh syn strength:\t%lf\n", p.w_inh);
+	printf("Noise density:\t\t%lf\n", p.lambda);
+	printf("Max delay (ms):\t\t%lf\n", p.maxdelay);
+	printf("----------------------------------------\n");
+}
+
+void analyzeconnectivity(unsigned int *g, unsigned int n,
+							unsigned int n_exc, trialparams p) 
+{
+	size_t i, j;
+	double count = 0;
+	double cumdur = 0;
+	for (i=0; i<n_exc; i++)
+	for (j=0; j<n; j++) {
+		cumdur += g[i*n+j];
+		count += g[i*n+j] != 0 ? 1 : 0.0;
+	}
+	printf("Average delay line duration (exc): %f (ms)\n", (cumdur/count)*(1000.0/p.fs) );
+	for (i=n_exc; i<n; i++)
+	for (j=0; j<n; j++) {
+		count += g[i*n+j] != 0 ? 1 : 0.0;
+	}
+	printf("Average connections per neuron: %f\n", count/((double) n));
+}
+
+/* -------------------- Initialization Functions -------------------- */
+void neuron_set(neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T d)
+{
+	n->v = v;
+	n->u = u;
+	n->a = a;
+	n->d = d;
+}
+
+/* -------------------- Graph Generation -------------------- */
+
+unsigned int *iblobgraph(trialparams *p)
+{
+
+	unsigned int *g, n, n_exc, maxdelay_n;
+	size_t i, j;
+	double thresh;
+
+	n = p->num_neurons;
+	n_exc = (p->num_neurons*p->p_exc);
+	thresh = p->p_contact * ((float) n)/((float) n_exc);
+	maxdelay_n = (p->maxdelay/1000.0) * p->fs; // since delay in ms
+
+
+	g = dn_blobgraph(n, p->p_contact, maxdelay_n);
+	for (i=n_exc; i<n; i++) { 			// only last 200 rows
+		for (j=0; j<n_exc; j++) { 				
+			if (unirand() < thresh) 
+				g[i*n+j] = 1;
+			else
+				g[i*n+j] = 0;
+		}
+		for (j=n_exc; j<n; j++) 
+			g[i*n+j] = 0;
+	}
+	return g;
 }
 
 
 /* -------------------- Random Sampling -------------------- */
 double expsampl(double lambda) {
 	return -log( (((double) rand()) / ((double) RAND_MAX + 1.0)))/lambda;
+}
+
+
+/*-------------------- Kernels -------------------- */
+void sim_getinputs(FLOAT_T *invals, dn_delaynet *dn, FLOAT_T *synapses)
+{
+	size_t k,j;
+	FLOAT_T *neuroninputs;
+	for (int k=0; k<dn->num_nodes; k++) {
+		// get inputs to neuron (outputs of delaylines)
+		invals[k] = 0.0;
+		neuroninputs = dn_getinputaddress(k,dn); //dn->outputs
+		for (j=0; j < dn->nodes[k].num_in; j++) {
+			//invals[k] += neuroninputs[j] * synapses[ offsets[k]+j ];
+			invals[k] += neuroninputs[j] * synapses[ dn->nodes[k].idx_oi+j ];
+		}
+	}
 }
 
 
@@ -119,13 +216,10 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 	
 	K1 = f1(*v, *u, input);
 	L1 = f2(*v, *u, input, a);
-
 	K2 = f1(*v + half_h*K1, *u + half_h*L1, input); 
 	L2 = f2(*v + half_h*K1, *u + half_h*L1, input, a);
-
 	K3 = f1(*v + half_h*K2, *u + half_h*L2, input); 
 	L3 = f2(*v + half_h*K2, *u + half_h*L2, input, a);
-
 	K4 = f1(*v + h*K3, *u + h*L3, input);
 	L4 = f2(*v + h*K3, *u + h*L3, input, a);
 
@@ -140,86 +234,42 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 
 int main(int argc, char *argv[])
 {
-	FLOAT_T fs, dur, dt, t;
-	FLOAT_T tau_pre, tau_post, a_pre, a_post, synmax;
+	trialparams p;
+	FLOAT_T dt, t;
 	unsigned int i, j, k, numsteps;
-	unsigned int n, n_exc, n_inh;
+	unsigned int n, n_exc;
 	unsigned int *g;
 	unsigned long int numspikes = 0, numrandspikes = 0;
-	double p_contact, p_exc, p_inh, lambda;
-	FLOAT_T w_exc, w_inh;
-	trialparams p;
 	dn_delaynet *dn;
 	spikerecord *sr = sr_init("delnetstdp.dat", SPIKE_BLOCK_SIZE);
 	clock_t t_start, t_finish;
 
 	srand(1);
 
+	/* set parameters */
 	if (argc < 2) {
 		printf("No parameter file given.  Using defaults. \n");
 		setdefaultparams(&p);
-	} else {
+	} else
 		readparameters(&p, argv[1]);
-	}
-
-	/* trial parameters */
-	fs = p.fs; 
-	dur = p.dur;
-	p_contact = p.p_contact;
-	p_exc = p.p_exc;
-	lambda = p.lambda; 	// subject neurons to poissonian noise at lambda Hz
-	n = p.num_neurons;
-	tau_pre = p.tau_pre;
-	tau_post = p.tau_post;
-	a_pre = p.a_pre;
-	a_post = p.a_post;
-	synmax = p.synmax;
-	w_exc  = p.w_exc;
-	w_inh = p.w_inh;
 
 	/* derived parameters */
-	n_exc = (unsigned int) ( (double) n * p_exc);
-	n_inh = n - n_exc;
-	dt = 1.0/fs;
-	numsteps = dur/dt;
+	n = p.num_neurons;
+	n_exc = (unsigned int) ( (double) n * p.p_exc);
+	dt = 1.0/p.fs;
+	numsteps = p.dur/dt;
 
-	/* print trial parameters */
-	printf("Sampling Frequency: \t%f\n", fs);
-	printf("Duration: \t\t%f\n", dur);
-	printf("Number of nodes: \t%d\n", n);
-	printf(" 	Excitatory: \t%d\n", n_exc);
-	printf(" 	Inhibitory: \t%d\n", n_inh);
-	printf("Probability of contact:\t%f\n", p_contact);
-	printf("tau_pre:\t\t%f\n", tau_pre);
-	printf("A_pre:\t\t\t%f\n", a_pre);
-	printf("tau_post:\t\t%f\n", tau_post);
-	printf("A_post:\t\t\t%f\n", a_post);
-	printf("----------------------------------------\n");
+	/* print parameters */
+	printparameters(p);
 
 	/* set up graph */
-	g = dn_blobgraph(n, p_contact, 20);
-	for (i=n_exc; i<n; i++) { 			// only last 200 rows
-		for (j=0; j<n_exc; j++) { 				
-			if (unirand() < p_contact * ((float) n)/((float) n_exc)) 
-				g[i*n+j] = 1;
-			else
-				g[i*n+j] = 0;
-		}
-		for (j=n_exc; j<n; j++) 
-			g[i*n+j] = 0;
-	}
+	g = iblobgraph(&p);
 
-	/* analyze connectivity */
-	double count = 0;
-	for (i=0; i<n; i++)
-	for (j=0; j<n; j++)
-		count += g[i*n+j] != 0 ? 1 : 0.0;
-	printf("Average connections per neuron: %f\n", count/((double) n));
-
+	/* analyze connectivity -- sanity check*/
+	analyzeconnectivity(g, n, n_exc, p);
 
 	/* generate delay network */
 	dn = dn_delnetfromgraph(g, n);
-
 
 	/* initialize neuron and synapse state  */
 	neuron *neurons = malloc(sizeof(neuron)*n);
@@ -234,20 +284,13 @@ int main(int argc, char *argv[])
 	IDX_T numsyn_tot=0, numsyn_exc;
 
 	for (i=0; i<n_exc; i++) {
-		neurons[i].v = g_v_default;
-		neurons[i].u = g_u_default;
-		neurons[i].a = g_a_exc;
-		neurons[i].d = g_d_exc;
+		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
 		offsets[i] = numsyn_tot;
 		numsyn_tot += dn->nodes[i].num_in;
 	}
 	numsyn_exc = numsyn_tot;
-
 	for (i=n_exc; i<n; i++) {
-		neurons[i].v = g_v_default;
-		neurons[i].u = g_u_default;
-		neurons[i].a = g_a_inh;
-		neurons[i].d = g_d_inh;
+		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
 		offsets[i] = numsyn_tot;
 		numsyn_tot += dn->nodes[i].num_in;
 	}
@@ -255,8 +298,8 @@ int main(int argc, char *argv[])
 	trace_pre = calloc(numsyn_tot, sizeof(FLOAT_T));		
 	spike_pre = calloc(numsyn_tot, sizeof(FLOAT_T));
 	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
-
 	
+
 	/* profiling variables */
 	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
@@ -274,7 +317,6 @@ int main(int argc, char *argv[])
 	/* simulation local vars */
 	FLOAT_T *neuroninputs, *invals, *outvals; 
 	IDX_T *sourceidx, *destidx;
-
 	invals = calloc(n, sizeof(FLOAT_T));
 	outvals = calloc(n, sizeof(FLOAT_T));
 
@@ -285,29 +327,32 @@ int main(int argc, char *argv[])
 		destidx[i] = dn->inverseidx[i];
 		sourceidx[dn->inverseidx[i]] = i; 
 	}
+
 	/* initialize synapse weights */
 	for (i=0; i<numsyn_exc; i++)
-		synapses[dn->inverseidx[i]] = w_exc;
+		synapses[destidx[i]] = p.w_exc;
 	for (; i<numsyn_tot; i++)
-		synapses[dn->inverseidx[i]] = w_inh;
+		synapses[destidx[i]] = p.w_inh;
 
 	/* initialize random input times */
 	for(i=0; i<n; i++)
-		nextrand[i] = expsampl(lambda);
+		nextrand[i] = expsampl(p.lambda);
 
 
 	/* -------------------- start simulation -------------------- */
+	printf("----------------------------------------\n");
 	for (i=0; i<numsteps; i++) {
 
 		/* calculate time update */
 		t = dt*i;
-		if (i%1000 == 0) {
+		if (i%1000 == 0)
 			printf("Time: %f\n", t);
-		}
 
 
 		/* get neuron inputs from buffer */
 		t_start = clock();
+
+		/*
 		for (k=0; k<n; k++) {
 			// get inputs to neuron
 			invals[k] = 0.0;
@@ -315,10 +360,15 @@ int main(int argc, char *argv[])
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				invals[k] += neuroninputs[j] * synapses[ offsets[k]+j ];
 			}
-			//  random input
+		}
+		*/
+		sim_getinputs(invals, dn, synapses);
+
+		//  random input
+		for (k=0; k<n; k++) {
 			if (nextrand[k] < t) {
-				invals[k] += 20.0 * (fs/1000); 
-				nextrand[k] += expsampl(lambda);
+				invals[k] += 20.0 * (p.fs/1000); 
+				nextrand[k] += expsampl(p.lambda);
 				numrandspikes += 1;
 			}
 		}
@@ -332,7 +382,7 @@ int main(int argc, char *argv[])
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				neuroninputs = dn_getinputaddress(k,dn);
 				spike_pre[offsets[k]+j] = neuroninputs[j];
-				trace_pre[offsets[k]+j] = trace_pre[offsets[k]+j]*(1.0 - (dt/tau_pre)) +
+				trace_pre[offsets[k]+j] = trace_pre[offsets[k]+j]*(1.0 - (dt/p.tau_pre)) +
 					spike_pre[offsets[k]+j];
 			}
 		}
@@ -343,7 +393,7 @@ int main(int argc, char *argv[])
 		/* update neuron state */
 		t_start = clock();
 		for (k=0; k<n; k++)
-			neuronupdate_rk4(&neurons[k].v, &neurons[k].u, invals[k], neurons[k].a, 1000.0/fs);
+			neuronupdate_rk4(&neurons[k].v, &neurons[k].u, invals[k], neurons[k].a, 1000.0/p.fs);
 		t_finish = clock();
 		updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 
@@ -376,7 +426,7 @@ int main(int argc, char *argv[])
 		t_start = clock();
 		for (k=0; k<n; k++) { 		
 			spike_post[k] = outvals[k];
-			trace_post[k] = trace_post[k]*(1.0 - (dt/tau_post)) + spike_post[k];
+			trace_post[k] = trace_post[k]*(1.0 - (dt/p.tau_post)) + spike_post[k];
 		}
 		t_finish = clock();
 		updatingneutraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
@@ -388,13 +438,13 @@ int main(int argc, char *argv[])
 			for (j=0; j < dn->nodes[k].num_in; j++) {
 				if (sourceidx[offsets[k]+j] < numsyn_exc) {
 					synapses[offsets[k]+j] = synapses[offsets[k]+j] +
-							dt * (a_post * trace_pre[offsets[k]+j] * spike_post[k] -
-								  a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
+							dt * (p.a_post * trace_pre[offsets[k]+j] * spike_post[k] -
+								  p.a_pre * trace_post[k] * spike_pre[offsets[k]+j]);
 					// clamp value	
 					synapses[offsets[k]+j] = synapses[offsets[k]+j] < 0.0 ? 
 												0.0 : synapses[offsets[k]+j];
-					synapses[offsets[k]+j] = synapses[offsets[k]+j] > synmax ?
-												synmax : synapses[offsets[k]+j];
+					synapses[offsets[k]+j] = synapses[offsets[k]+j] > p.synmax ?
+												p.synmax : synapses[offsets[k]+j];
 				}
 			}
 		}
@@ -408,10 +458,11 @@ int main(int argc, char *argv[])
 		advancingbuffer += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
 	}
 
-	/* performance analysis */
+
+	/* -------------------- Performance Analysis -------------------- */
 	printf("----------------------------------------\n");
-	printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n)*dur) );
-	printf("Firing rate: %g\n", ((double) numspikes) / (((double) n)*dur) );
+	printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n)*p.dur) );
+	printf("Firing rate: %g\n", ((double) numspikes) / (((double) n)*p.dur) );
 	double cycletime, cumtime = 0.0;
 
 	printf("----------------------------------------\n");
@@ -445,7 +496,7 @@ int main(int argc, char *argv[])
 	printf("Advancing buffer:\t %f (ms)\n", cycletime);
 
 	printf("Total cycle time:\t %f (ms)\n", cumtime);
-	printf("\nTime per second: \t %f (ms)\n", cumtime*fs);
+	printf("\nTime per second: \t %f (ms)\n", cumtime*p.fs);
 	
 	printf("Don't optimize out, please! (%d)\n", destidx[0]);
 
