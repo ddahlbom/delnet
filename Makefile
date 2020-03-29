@@ -8,11 +8,11 @@ default: stdpoptim
 sketch: delnetsketch.o delnet.o
 	$(CC) -o sketch-exec delnet.o delnetsketch.o $(LDLIBS)
 
-debug: delnetstdp.o delnet.o spkrcd.o paramutils.o
-	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o paramutils.o $(LDLIBS)
+debug: delnetstdp.o delnet.o spkrcd.o paramutils.o simutils.o
+	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o paramutils.o simutils.o $(LDLIBS)
 
-stdpoptim: delnetstdp-opt.o delnet-opt.o spkrcd.o paramutils.o
-	$(CC) -o stdp-exec delnet-opt.o delnetstdp-opt.o spkrcd.o paramutils.o $(LDLIBS)
+stdpoptim: delnetstdp-opt.o delnet-opt.o spkrcd.o paramutils.o simutils-opt.o
+	$(CC) -o stdp-exec delnet-opt.o delnetstdp-opt.o spkrcd.o paramutils.o simutils-opt.o $(LDLIBS)
 
 cuda: delnetstdpcuda.o delnetcuda.o
 	nvcc -o stdpcuda-exec delnetstdpcuda.o delnetcuda.o
@@ -31,6 +31,12 @@ delnetstdp-opt.o: delnetstdp.c delnet.o
 
 delnetsketch.o: delnetsketch.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetsketch.c 
+
+simutils-opt.o: simutils.c simutils.h
+	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simutils-opt.o -c simutils.c
+
+simutils.o: simutils.c simutils.h
+	$(CC) $(CFLAGS) $(LDLIBS) -c simutils.c
 
 paramutils.o: paramutils.c paramutils.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c paramutils.c
