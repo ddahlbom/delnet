@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 {
 	trialparams p;
 	FLOAT_T dt, t;
-	unsigned int i, j, k, numsteps;
+	unsigned int i, k, numsteps;
 	unsigned int n, n_exc;
 	unsigned int *g;
 	unsigned long int numspikes = 0, numrandspikes = 0;
@@ -48,8 +48,9 @@ int main(int argc, char *argv[])
 	if (argc < 2) {
 		printf("No parameter file given.  Using defaults. \n");
 		setdefaultparams(&p);
-	} else
+	} else {
 		readparameters(&p, argv[1]);
+	}
 
 	/* derived parameters */
 	n = p.num_neurons;
@@ -90,7 +91,6 @@ int main(int argc, char *argv[])
 		offsets[i] = numsyn_tot;
 		numsyn_tot += dn->nodes[i].num_in;
 	}
-
 	traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
 	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 	
@@ -119,8 +119,8 @@ int main(int argc, char *argv[])
 	sourceidx = calloc(numsyn_tot, sizeof(IDX_T));
 	destidx = calloc(numsyn_tot, sizeof(IDX_T));
 	for (i=0; i<numsyn_tot; i++) {
-		destidx[i] = dn->inverseidx[i];
-		sourceidx[dn->inverseidx[i]] = i; 
+		destidx[i] = dn->destidx[i];
+		sourceidx[dn->destidx[i]] = i; 
 	}
 
 	/* initialize synapse weights */
@@ -278,8 +278,6 @@ int main(int argc, char *argv[])
 	printf("Total cycle time:\t %f (ms)\n", cumtime);
 	printf("\nTime per second: \t %f (ms)\n", cumtime*p.fs);
 	
-	printf("Don't optimize out, please! (%d)\n", destidx[0]);
-
 	/* save synapse weights */
 	FILE *f;
 	f = fopen("synapses.dat", "w");

@@ -33,9 +33,9 @@ typedef struct dn_list_uint_s {
 
 
 typedef struct dn_node_s {
-	IDX_T idx_oi;
+	IDX_T idx_outbuf; 	// output of delnet to input of nodes
 	IDX_T num_in;
-	IDX_T idx_io;
+	IDX_T idx_inbuf; 	// output of nodes to input of delnet
 	IDX_T num_out;
 } dn_node;
 
@@ -48,7 +48,8 @@ typedef struct dn_delaynet_s {
 	IDX_T num_delays;
 	FLOAT_T *inputs;
 	FLOAT_T *outputs;
-	IDX_T *inverseidx;
+	IDX_T *destidx;
+	IDX_T *sourceidx;
 	IDX_T buf_len;
 	FLOAT_T *delaybuf;
 	IDX_T num_nodes;

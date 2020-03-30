@@ -93,7 +93,7 @@ void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn)
 {
 	IDX_T i1, i2, k;
 
-	i1 = dn->nodes[idx].idx_io;
+	i1 = dn->nodes[idx].idx_inbuf;
 	i2 = i1 + dn->nodes[idx].num_out;
 
 	for (k = i1; k < i2; k++)
@@ -114,7 +114,7 @@ dn_vec_float dn_getinputvec(dn_delaynet *dn) {
 
 /* get inputs to neurons (outputs of delaynet)... */
 FLOAT_T *dn_getinputaddress(IDX_T idx, dn_delaynet *dn) {
-	return &dn->outputs[dn->nodes[idx].idx_oi];
+	return &dn->outputs[dn->nodes[idx].idx_outbuf];
 }
 
 
@@ -134,7 +134,7 @@ void dn_advance(dn_delaynet *dn)
 	}
 
 	for (k=0; k < dn->num_delays; k++) {
-		dn->outputs[dn->inverseidx[k]] =
+		dn->outputs[dn->destidx[k]] =
 				dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]];
 		//dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] = 0.0;
 	}
@@ -195,9 +195,9 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 
 	/* init nodes */
 	for (i=0; i<n; i++) {
-		dn->nodes[i].idx_oi = 0;
+		dn->nodes[i].idx_outbuf = 0;
 		dn->nodes[i].num_in = 0;
-		dn->nodes[i].idx_io = 0;
+		dn->nodes[i].idx_inbuf = 0;
 		dn->nodes[i].num_out = 0;
 	}
 
@@ -236,9 +236,9 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	unsigned int idx = 0;
 	for (i=0; i<n; i++) {
 		dn->nodes[i].num_in = nodes_in[i]->count;
-		dn->nodes[i].idx_oi = idx;
+		dn->nodes[i].idx_outbuf = idx;
 		idx += dn->nodes[i].num_in;
-		dn->nodes[i].idx_io = in_base_idcs[i];
+		dn->nodes[i].idx_inbuf = in_base_idcs[i];
 	}
 
 	unsigned int *num_inputs, *out_base_idcs, *out_counts, *inverseidces;
@@ -258,7 +258,10 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 						  out_counts[dn->del_targets[i]];
 		out_counts[dn->del_targets[i]] += 1;
 	}
-	dn->inverseidx = inverseidces;
+	dn->destidx = inverseidces;
+	dn->sourceidx = malloc(sizeof(unsigned int)*numlines);
+	for (i=0; i<numlines; i++)
+		dn->sourceidx[dn->destidx[i]] = i;
 
 	/* Clean up */
 	for (i=0; i<n; i++)
@@ -281,7 +284,8 @@ void dn_freedelnet(dn_delaynet *dn) {
 	free(dn->del_targets);
 	free(dn->inputs);
 	free(dn->outputs);
-	free(dn->inverseidx);
+	free(dn->destidx);
+	free(dn->sourceidx);
 	free(dn->delaybuf);
 	free(dn->nodes);
 	free(dn);

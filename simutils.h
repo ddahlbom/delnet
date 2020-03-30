@@ -28,6 +28,7 @@ typedef struct trialparams_s {
 	double w_inh;
 	double lambda;
 	double maxdelay;
+	double randspikesize;
 } trialparams;
 
 

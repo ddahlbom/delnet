@@ -27,6 +27,7 @@ void setdefaultparams(trialparams *p)
 	p->w_exc  = 6.0;
 	p->w_inh = -5.0;
 	p->maxdelay = 20.0;
+	p->randspikesize=20.0;
 }
 
 void readparameters(trialparams *p, char *filename)
@@ -47,6 +48,7 @@ void readparameters(trialparams *p, char *filename)
 	p->w_exc  = pl_getvalue(pl, "w_exc");
 	p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
+	p->randspikesize = pl_getvalue(pl, "randspikesize");
 }
 
 void printparameters(trialparams p)
@@ -143,7 +145,7 @@ static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
 	return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
 
-static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T input, FLOAT_T a) {
+static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a) {
 	return a*(0.2*v - u);
 }
 
@@ -153,16 +155,30 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 	half_h = h*0.5;
 	sixth_h = h/6.0;
 	
-	K1 = f1(*v, *u, input);
-	L1 = f2(*v, *u, input, a);
-	K2 = f1(*v + half_h*K1, *u + half_h*L1, input); 
-	L2 = f2(*v + half_h*K1, *u + half_h*L1, input, a);
-	K3 = f1(*v + half_h*K2, *u + half_h*L2, input); 
-	L3 = f2(*v + half_h*K2, *u + half_h*L2, input, a);
-	K4 = f1(*v + h*K3, *u + h*L3, input);
-	L4 = f2(*v + h*K3, *u + h*L3, input, a);
+	//K1 = f1(*v, *u, input);
+	//L1 = f2(*v, *u, input, a);
+	//K2 = f1(*v + half_h*K1, *u + half_h*L1, input); 
+	//L2 = f2(*v + half_h*K1, *u + half_h*L1, input, a);
+	//K3 = f1(*v + half_h*K2, *u + half_h*L2, input); 
+	//L3 = f2(*v + half_h*K2, *u + half_h*L2, input, a);
+	//K4 = f1(*v + h*K3, *u + h*L3, input);
+	//L4 = f2(*v + h*K3, *u + h*L3, input, a);
+	K1 = f1(*v, *u, 0.0);
+	L1 = f2(*v, *u, a);
 
-	*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4);
+	K2 = f1(*v + half_h*K1, *u + half_h*L1, 0.0); 
+	L2 = f2(*v + half_h*K1, *u + half_h*L1, a);
+
+	K3 = f1(*v + half_h*K2, *u + half_h*L2, 0.0);
+	L3 = f2(*v + half_h*K2, *u + half_h*L2, a);
+
+	K4 = f1(*v + h*K3, *u + h*L3, 0.0);
+	L4 = f2(*v + h*K3, *u + h*L3, a);
+
+	//*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4);
+	//*u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
+
+	*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + input;
 	*u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
 }
 
@@ -177,8 +193,7 @@ void sim_getinputs(FLOAT_T *neuroninputs, dn_delaynet *dn, FLOAT_T *synapses)
 		neuroninputs[k] = 0.0;
 		delayoutputs = dn_getinputaddress(k,dn); //dn->outputs
 		for (j=0; j < dn->nodes[k].num_in; j++) {
-			//neuroninputs[k] += synapseoutputs[j] * synapses[ offsets[k]+j ];
-			neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_oi+j ];
+			neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_outbuf+j ];
 		}
 	}
 }
@@ -189,7 +204,8 @@ unsigned int sim_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T t, 
 	unsigned int num = 0, k;
 	for (k=0; k<p->num_neurons; k++) {
 		if (nextrand[k] < t) {
-			neuroninputs[k] += 20.0 * (p->fs/1000); 
+			//neuroninputs[k] += p->randspikesize * (p->fs/1000); 
+			neuroninputs[k] += p->randspikesize;
 			nextrand[k] += expsampl(p->lambda);
 			num += 1;
 		}
@@ -200,8 +216,10 @@ unsigned int sim_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T t, 
 void sim_updateneurons(neuron *neurons, FLOAT_T *neuroninputs, trialparams *p)
 {
 	size_t k;
-	for (k=0; k<p->num_neurons; k++)
-		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k], neurons[k].a, 1000.0/p->fs);
+	for (k=0; k<p->num_neurons; k++) {
+		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k],
+							neurons[k].a, 1000.0/p->fs);
+	}
 }
 
 unsigned int sim_checkspiking(neuron *neurons, FLOAT_T *neuronoutputs,
@@ -255,18 +273,18 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 {
 	size_t k, j;
 	FLOAT_T *synapseoutputs = dn->outputs;
-	for (k=0; k<p->num_neurons; k++) {
-		for (j=0; j < dn->nodes[k].num_in; j++) {
-			if (sourceidx[dn->nodes[k].idx_oi+j] < numsyn_exc) {
-				synapses[dn->nodes[k].idx_oi+j] = synapses[dn->nodes[k].idx_oi+j] +
-						dt * (p->a_post * traces_syn[dn->nodes[k].idx_oi+j] * neuronoutputs[k] -
-							  p->a_pre * traces_neu[k] * synapseoutputs[dn->nodes[k].idx_oi+j]);
-				// clamp value	
-				synapses[dn->nodes[k].idx_oi+j] = synapses[dn->nodes[k].idx_oi+j] < 0.0 ? 
-											0.0 : synapses[dn->nodes[k].idx_oi+j];
-				synapses[dn->nodes[k].idx_oi+j] = synapses[dn->nodes[k].idx_oi+j] > p->synmax ?
-											p->synmax : synapses[dn->nodes[k].idx_oi+j];
-			}
+	for (k=0; k<p->num_neurons; k++) 
+	for (j=0; j < dn->nodes[k].num_in; j++) {
+		if (sourceidx[dn->nodes[k].idx_outbuf+j] < numsyn_exc) {
+			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] +
+					dt * (p->a_post * traces_syn[dn->nodes[k].idx_outbuf+j] * neuronoutputs[k] -
+						  p->a_pre * traces_neu[k] * synapseoutputs[dn->nodes[k].idx_outbuf+j]);
+			// clamp value	
+			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] < 0.0 ? 
+										0.0 : synapses[dn->nodes[k].idx_outbuf+j];
+			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] > p->synmax ?
+										p->synmax : synapses[dn->nodes[k].idx_outbuf+j];
 		}
 	}
+	
 }
