@@ -8,7 +8,13 @@ default: stdpoptim
 sketch: delnetsketch.o delnet.o
 	$(CC) -o sketch-exec delnet.o delnetsketch.o $(LDLIBS)
 
-debug: delnetstdp.o delnet.o spkrcd.o paramutils.o simutils.o
+inputdebug: delnetstdpinput.o delnet.o spkrcd.o paramutils.o simutils.o
+	$(CC) -o stdpinput-exec delnet.o delnetstdpinput.o spkrcd.o paramutils.o simutils.o $(LDLIBS)
+
+inputoptim: delnetstdpinput-opt.o delnet-opt.o spkrcd.o paramutils.o simutils-opt.o
+	$(CC) -o stdpinput-exec delnet-opt.o delnetstdpinput-opt.o spkrcd.o paramutils.o simutils-opt.o $(LDLIBS)
+
+stdpdebug: delnetstdp.o delnet.o spkrcd.o paramutils.o simutils.o
 	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o paramutils.o simutils.o $(LDLIBS)
 
 stdpoptim: delnetstdp-opt.o delnet-opt.o spkrcd.o paramutils.o simutils-opt.o
@@ -22,6 +28,12 @@ delnetstdpcuda.o: delnetstdpcuda.cu delnetcuda.o
 
 delnetcuda.o: delnetcuda.cu delnetcuda.h
 	nvcc -g -G -c delnetcuda.cu
+
+delnetstdpinput.o: delnetstdpinput.c delnet.o
+	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdpinput.c
+
+delnetstdpinput-opt.o: delnetstdpinput.c delnet.o
+	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o delnetstdpinput-opt.o -c delnetstdpinput.c
 
 delnetstdp.o: delnetstdp.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdp.c
