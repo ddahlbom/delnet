@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "delnet.h"
 #include "simutils.h"
@@ -288,3 +289,36 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 	}
 	
 }
+
+
+/* 
+typedef struct sim_model_s {
+	trialparams p;
+	dn_delaynet *dn;
+	neuron *neurons;
+	FLOAT_T *traces_neu;
+	FLOAT_T *traces_syn;
+	FLOAT_T *synapses;
+	IDX_T *inputneurons;
+
+} sim_model;
+
+
+void runstdpmodel(sim_model *model, FLOAT_T *input, FLOAT_T dur,
+					spikerecord *sr, bool profile) {
+
+	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
+			updatingneutraces, updatingsynstrengths, pushingoutput,
+			advancingbuffer;
+
+	gettinginputs 		= 0;
+	updatingsyntraces 	= 0;
+	updatingneurons 	= 0;
+	spikechecking 		= 0;
+	updatingneutraces 	= 0;
+	updatingsynstrengths = 0;
+	pushingoutput 		= 0;
+	advancingbuffer 	= 0;
+
+}
+*/

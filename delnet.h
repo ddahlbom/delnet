@@ -1,6 +1,8 @@
 #ifndef DELNET_H
 #define DELNET_H
 
+#include <stdio.h>
+
 /*
  * -------------------- Macros --------------------
  */
@@ -40,20 +42,23 @@ typedef struct dn_node_s {
 } dn_node;
 
 typedef struct dn_delaynet_s {
+	/* size info */
+	IDX_T num_nodes;
+	IDX_T num_delays;
+	IDX_T buf_len;
+
+	/* pointers */
+	FLOAT_T *delaybuf;
+	FLOAT_T *inputs;
+	FLOAT_T *outputs;
+	dn_node *nodes;
+	IDX_T *destidx;
+	IDX_T *sourceidx;
 	IDX_T *del_offsets;
 	IDX_T *del_startidces;
 	IDX_T *del_lens;
 	IDX_T *del_sources;
 	IDX_T *del_targets;
-	IDX_T num_delays;
-	FLOAT_T *inputs;
-	FLOAT_T *outputs;
-	IDX_T *destidx;
-	IDX_T *sourceidx;
-	IDX_T buf_len;
-	FLOAT_T *delaybuf;
-	IDX_T num_nodes;
-	dn_node *nodes;
 } dn_delaynet;
 
 
@@ -81,6 +86,10 @@ void 			dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn);
 dn_vec_float 	dn_getinputvec(dn_delaynet *dn);
 FLOAT_T* 		dn_getinputaddress(IDX_T idx, dn_delaynet *dn);
 void 			dn_advance(dn_delaynet *dn);
+
+/* save and load delaynet */
+void dn_savedelnet(dn_delaynet *dn, FILE *stream);
+dn_delaynet *dn_loaddelnet(FILE *stream);
 
 
 #endif

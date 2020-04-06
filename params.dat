@@ -1,5 +1,5 @@
 fs 				2000.0
-dur  			7200.0
+dur  			1.0
 p_contact 		0.1
 p_exc 			0.8
 num_neurons 	1000.0
