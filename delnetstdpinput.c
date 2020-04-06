@@ -90,18 +90,15 @@ int main(int argc, char *argv[])
 	FLOAT_T *traces_syn; 	// pack this
 	FLOAT_T *synapses; 		// for speed?
 
-	IDX_T *offsets = malloc(sizeof(IDX_T)*n);
 	IDX_T numsyn_tot=0, numsyn_exc;
 
 	for (i=0; i<n_exc; i++) {
 		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
-		offsets[i] = numsyn_tot;
 		numsyn_tot += dn->nodes[i].num_in;
 	}
 	numsyn_exc = numsyn_tot;
 	for (i=n_exc; i<n; i++) {
 		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
-		offsets[i] = numsyn_tot;
 		numsyn_tot += dn->nodes[i].num_in;
 	}
 	traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
@@ -127,14 +124,6 @@ int main(int argc, char *argv[])
 	//IDX_T *sourceidx, *destidx;
 	neuroninputs = calloc(n, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n, sizeof(FLOAT_T));
-
-	/* index arithmetic */
-	//sourceidx = calloc(numsyn_tot, sizeof(IDX_T));
-	//destidx = calloc(numsyn_tot, sizeof(IDX_T));
-	//for (i=0; i<numsyn_tot; i++) {
-	//	destidx[i] = dn->destidx[i];
-	//	sourceidx[dn->destidx[i]] = i; 
-	//}
 
 	/* initialize synapse weights */
 	for (i=0; i<numsyn_exc; i++)
@@ -233,7 +222,7 @@ int main(int argc, char *argv[])
 		if (PROFILING) t_start = clock();
 
 		//sim_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
-		sim_updatesynapsetraces(traces_syn, dn->outputs, dn, offsets, dt, &p);
+		sim_updatesynapsetraces(traces_syn, dn->outputs, dn, dt, &p);
 
 		if (PROFILING) {
 			t_finish = clock();
@@ -338,7 +327,6 @@ int main(int argc, char *argv[])
 	free(synapses);
 	free(neuroninputs);
 	free(neuronoutputs);
-	free(offsets);
 	free(nextrand);
 	//free(sourceidx);
 	//free(destidx);

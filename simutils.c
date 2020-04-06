@@ -50,6 +50,8 @@ void readparameters(trialparams *p, char *filename)
 	p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
 	p->randspikesize = pl_getvalue(pl, "randspikesize");
+
+	free(pl);
 }
 
 void printparameters(trialparams p)
@@ -242,7 +244,7 @@ unsigned int sim_checkspiking(neuron *neurons, FLOAT_T *neuronoutputs,
 }
 
 void sim_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
-								dn_delaynet *dn, IDX_T *offsets, FLOAT_T dt,
+								dn_delaynet *dn, FLOAT_T dt,
 								trialparams *p)
 {
 	size_t k, j;
@@ -251,9 +253,9 @@ void sim_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 	for (k=0; k<dn->num_nodes; k++) {
 		for (j=0; j < dn->nodes[k].num_in; j++) {
 			neuroninputs = dn_getinputaddress(k,dn);
-			spike_pre[offsets[k]+j] = neuroninputs[j];
-			traces_syn[offsets[k]+j] = traces_syn[offsets[k]+j]*(1.0 - (dt/p->tau_pre)) +
-				spike_pre[offsets[k]+j];
+			spike_pre[dn->nodes[k].idx_outbuf +j] = neuroninputs[j];
+			traces_syn[dn->nodes[k].idx_outbuf +j] = traces_syn[dn->nodes[k].idx_outbuf +j]*(1.0 - (dt/p->tau_pre)) +
+				spike_pre[dn->nodes[k].idx_outbuf +j];
 		}
 	}
 }
@@ -291,21 +293,19 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 }
 
 
-/* 
 typedef struct sim_model_s {
 	trialparams p;
 	dn_delaynet *dn;
-	neuron *neurons;
+	neuron  *neurons;
 	FLOAT_T *traces_neu;
 	FLOAT_T *traces_syn;
 	FLOAT_T *synapses;
-	IDX_T *inputneurons;
-
+	IDX_T   *inputneurons;
 } sim_model;
 
 
-void runstdpmodel(sim_model *model, FLOAT_T *input, FLOAT_T dur,
-					spikerecord *sr, bool profile) {
+void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
+					FLOAT_T dur, spikerecord *sr, bool profile) {
 
 	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
@@ -320,5 +320,9 @@ void runstdpmodel(sim_model *model, FLOAT_T *input, FLOAT_T dur,
 	pushingoutput 		= 0;
 	advancingbuffer 	= 0;
 
+	/* derived params -- trim later, maybe cruft */
+	IDX_T n = m->p.num_neurons;
+	IDX_T n_exc = (unsigned int) ( (double) n * m->p.p_exc);
+	FLOAT_T dt = 1.0/m->p.fs;
+	IDX_T numsteps = m->p.dur/dt;
 }
-*/

@@ -60,7 +60,7 @@ void sim_updateneurons(neuron *neurons, FLOAT_T *neuroninputs, trialparams *p);
 unsigned int sim_checkspiking(neuron *neurons, FLOAT_T *neuronoutputs,
 								unsigned int n, FLOAT_T t, spikerecord *sr);
 void sim_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
-								dn_delaynet *dn, IDX_T *offsets, FLOAT_T dt,
+								dn_delaynet *dn, FLOAT_T dt,
 								trialparams *p);
 void sim_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
 								FLOAT_T dt, trialparams *p); 
