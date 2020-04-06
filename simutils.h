@@ -2,6 +2,7 @@
 #define SIMUTILS_H
 
 #include "spkrcd.h"
+#include <stdbool.h>
 
 /*************************************************************
  *  Structs
@@ -31,6 +32,16 @@ typedef struct trialparams_s {
 	double randspikesize;
 } trialparams;
 
+typedef struct sim_model_s {
+	trialparams p;
+	dn_delaynet *dn;
+	neuron  *neurons;
+	FLOAT_T *traces_neu;
+	FLOAT_T *traces_syn;
+	FLOAT_T *synapses;
+	IDX_T numinputneurons;
+	IDX_T numsyn_exc;
+} sim_model;
 
 /*************************************************************
  *  Function Declarations
@@ -67,6 +78,8 @@ void sim_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n
 void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
 							FLOAT_T *neuronoutputs, dn_delaynet *dn, IDX_T *sourceidx,
 							FLOAT_T dt, unsigned int numsyn_exc, trialparams *p);
+void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
+					FLOAT_T dur, spikerecord *sr, bool profiling);
 
 
 

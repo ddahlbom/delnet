@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include "delnet.h"
 #include "simutils.h"
@@ -293,19 +294,10 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 }
 
 
-typedef struct sim_model_s {
-	trialparams p;
-	dn_delaynet *dn;
-	neuron  *neurons;
-	FLOAT_T *traces_neu;
-	FLOAT_T *traces_syn;
-	FLOAT_T *synapses;
-	IDX_T   *inputneurons;
-} sim_model;
 
 
 void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
-					FLOAT_T dur, spikerecord *sr, bool profile) {
+					FLOAT_T dur, spikerecord *sr, bool profiling) {
 
 	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
@@ -325,4 +317,167 @@ void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
 	IDX_T n_exc = (unsigned int) ( (double) n * m->p.p_exc);
 	FLOAT_T dt = 1.0/m->p.fs;
 	IDX_T numsteps = m->p.dur/dt;
+	clock_t t_start, t_finish;
+
+	/* local state for simulation */
+	FLOAT_T *neuroninputs, *neuronoutputs; 
+	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n);
+	neuroninputs = calloc(n, sizeof(FLOAT_T));
+	neuronoutputs = calloc(n, sizeof(FLOAT_T));
+	unsigned long int numspikes = 0, numrandspikes = 0;
+	FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
+
+	for(size_t i=0; i<n; i++)
+		nextrand[i] = expsampl(m->p.lambda);
+
+	for (size_t i=0; i<numsteps; i++) {
+
+		/* ---------- calculate time update ---------- */
+		FLOAT_T t = dt*i;
+		if (i%1000 == 0)
+			printf("Time: %f\n", t);
+
+
+		/* ---------- get delay outputs (neuron inputs) from buffer ---------- */
+		if (profiling) t_start = clock();
+
+		sim_getinputs(neuroninputs, m->dn, m->synapses);
+		numrandspikes += sim_poisnoise(neuroninputs, nextrand, t, &m->p);
+
+		if (profiling) {
+			t_finish = clock();
+			gettinginputs += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+		/* put in forced input */
+		if (t < m->p.dur - offdur) {
+			for (size_t k=0; k < m->numinputneurons; k++)
+				neuroninputs[k] += input[ i % inputlen ];
+		}
+
+		/* ---------- update neuron state ---------- */
+		if (profiling) t_start = clock();
+
+		sim_updateneurons(m->neurons, neuroninputs, &m->p);
+
+		if (profiling) {
+			t_finish = clock();
+			updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+		/* ---------- calculate neuron outputs ---------- */
+		if (profiling) t_start = clock();
+
+		numspikes += sim_checkspiking(m->neurons, neuronoutputs, n, t, sr);
+
+		if (profiling) {
+			t_finish = clock();
+			spikechecking += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+
+		/* ---------- push the neuron output into the buffer ---------- */
+		if (profiling) t_start = clock();
+
+		for (size_t k=0; k<n; k++)
+			dn_pushoutput(neuronoutputs[k], k, m->dn);
+
+		if (profiling) {
+			t_finish = clock();
+			pushingoutput += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+
+		/* ---------- update synapse traces ---------- */
+		if (profiling) t_start = clock();
+
+		//sim_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
+		sim_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, &m->p);
+
+		if (profiling) {
+			t_finish = clock();
+			updatingsyntraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+
+
+		/* ---------- update neuron traces ---------- */
+		if (profiling) t_start = clock();
+
+		sim_updateneurontraces(m->traces_neu, neuronoutputs, n, dt, &m->p);
+
+		if (profiling) {
+			t_finish = clock();
+			updatingneutraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+
+		/* ---------- update synapses ---------- */
+		if (profiling) t_start = clock();
+
+		sim_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
+							m->dn, m->dn->sourceidx, dt, m->numsyn_exc, &m->p);
+
+		if (profiling) {
+			t_finish = clock();
+			updatingsynstrengths += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+
+
+		/* advance the buffer */
+		if (profiling) t_start = clock();
+
+		dn_advance(m->dn);
+
+		if (profiling) {
+			t_finish = clock();
+			advancingbuffer += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+		}
+	}
+
+
+	/* -------------------- Performance Analysis -------------------- */
+	if (profiling) {
+		printf("----------------------------------------\n");
+		printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n)*m->p.dur) );
+		printf("Firing rate: %g\n", ((double) numspikes) / (((double) n)*m->p.dur) );
+		double cycletime, cumtime = 0.0;
+
+		printf("----------------------------------------\n");
+
+		cycletime = 1000.0*gettinginputs/numsteps;
+		cumtime += cycletime;
+		printf("Getting inputs:\t\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*updatingsyntraces/numsteps;
+		cumtime += cycletime;
+		printf("Update syntraces:\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*updatingneurons/numsteps;
+		cumtime += cycletime;
+		printf("Update neurons:\t\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*spikechecking/numsteps;
+		cumtime += cycletime;
+		printf("Check spiked:\t\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*pushingoutput/numsteps;
+		cumtime += cycletime;
+		printf("Pushing buffer:\t\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*updatingsynstrengths/numsteps;
+		cumtime += cycletime;
+		printf("Updating synapses:\t %f (ms)\n", cycletime);
+
+		cycletime = 1000.0*advancingbuffer/numsteps;
+		cumtime += cycletime;
+		printf("Advancing buffer:\t %f (ms)\n", cycletime);
+
+		printf("Total cycle time:\t %f (ms)\n", cumtime);
+		printf("\nTime per second: \t %f (ms)\n", cumtime*m->p.fs);
+	}
+
+	free(neuroninputs);
+	free(neuronoutputs);
+	free(nextrand);
 }
