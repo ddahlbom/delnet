@@ -33,14 +33,11 @@ FLOAT_T g_d_inh  = 2.0;
 int main(int argc, char *argv[])
 {
 	trialparams p;
-	FLOAT_T dt, t;
-	unsigned int i, k, numsteps;
+	unsigned int i, k;
 	unsigned int n, n_exc;
 	unsigned int *g;
-	unsigned long int numspikes = 0, numrandspikes = 0;
 	dn_delaynet *dn;
 	spikerecord *sr = sr_init("delnetstdpinput.dat", SPIKE_BLOCK_SIZE);
-	clock_t t_start, t_finish;
 
 	srand(1);
 
@@ -55,8 +52,6 @@ int main(int argc, char *argv[])
 	/* derived parameters */
 	n = p.num_neurons;
 	n_exc = (unsigned int) ( (double) n * p.p_exc);
-	dt = 1.0/p.fs;
-	numsteps = p.dur/dt;
 
 	/* print parameters */
 	printparameters(p);
@@ -85,11 +80,9 @@ int main(int argc, char *argv[])
 
 	/* initialize neuron and synapse state  */
 	neuron *neurons = malloc(sizeof(neuron)*n);
-	double *nextrand = malloc(sizeof(double)*n);
 	FLOAT_T *traces_neu = calloc(n, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	// pack this
 	FLOAT_T *synapses; 		// for speed?
-
 	IDX_T numsyn_tot=0, numsyn_exc;
 
 	for (i=0; i<n_exc; i++) {
@@ -104,49 +97,20 @@ int main(int argc, char *argv[])
 	traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
 	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 	
-
-	/* profiling variables */
-	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
-			updatingneutraces, updatingsynstrengths, pushingoutput,
-			advancingbuffer;
-
-	gettinginputs 		= 0;
-	updatingsyntraces 	= 0;
-	updatingneurons 	= 0;
-	spikechecking 		= 0;
-	updatingneutraces 	= 0;
-	updatingsynstrengths = 0;
-	pushingoutput 		= 0;
-	advancingbuffer 	= 0;
-
-	/* simulation local vars */
-	FLOAT_T *neuroninputs, *neuronoutputs; 
-	neuroninputs = calloc(n, sizeof(FLOAT_T));
-	neuronoutputs = calloc(n, sizeof(FLOAT_T));
-
 	/* initialize synapse weights */
-	for (i=0; i<numsyn_exc; i++)
+	for (i=0; i < numsyn_exc; i++)
 		synapses[dn->destidx[i]] = p.w_exc;
-	for (; i<numsyn_tot; i++)
+	for (; i < numsyn_tot; i++)
 		synapses[dn->destidx[i]] = p.w_inh;
 
-	/* initialize random input times */
-	//for(i=0; i<n; i++)
-	//	nextrand[i] = expsampl(p.lambda);
-
-	/* Generate an input sequence to repeat */
+	/* Generate an input sequence to repeat and save */
 	FLOAT_T dur_pat = 0.100;
 	FLOAT_T mag_pat = 20.0;
-	FLOAT_T offdur = 1.0;
 	size_t N_pat = (size_t) (dur_pat * p.fs);
 	FLOAT_T f_pat = 10.0;
-	FLOAT_T dt_pat = 1/f_pat;
 	size_t dn_pat = (size_t) p.fs/ (size_t) f_pat;
-	//FLOAT_T *input_forced = malloc(sizeof(FLOAT_T)*N_pat);
 	FLOAT_T *input_forced = calloc(N_pat, sizeof(FLOAT_T));
-	FLOAT_T reftime = 0.0;
 	size_t numinputneurons = 100;
-
 	FILE *infile;
 	infile = fopen("forcedinput.dat", "w");
 	for (i=0; i<N_pat; i++) {
@@ -156,162 +120,26 @@ int main(int argc, char *argv[])
 	fclose(infile);
 
 
+
+	/* run simulation */
+	sim_model m = { numinputneurons, numsyn_exc, p, dn, neurons, 
+					traces_neu, traces_syn, synapses };
+	sim_savemodel(&m, "model.bin");	
+	dn_freedelnet(dn);
+	free(neurons);
+	free(traces_neu);
+	free(traces_syn);
+	free(synapses);
+
 	printf("----------------------------------------\n");
+	sim_model *m2 = sim_loadmodel("model.bin");
+	runstdpmodel(m2, input_forced, N_pat, p.dur, sr, PROFILING);
 
-	sim_model m = { p, dn, neurons, traces_neu, traces_syn, synapses,
-					numinputneurons, numsyn_exc };
-	runstdpmodel(&m, input_forced, N_pat, p.dur, sr, PROFILING);
-	/* -------------------- start simulation -------------------- */
-	//for (i=0; i<numsteps; i++) {
-
-	//	/* ---------- calculate time update ---------- */
-	//	t = dt*i;
-	//	if (i%1000 == 0)
-	//		printf("Time: %f\n", t);
-
-
-	//	/* ---------- get delay outputs (neuron inputs) from buffer ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	sim_getinputs(neuroninputs, dn, synapses);
-	//	numrandspikes += sim_poisnoise(neuroninputs, nextrand, t, &p);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		gettinginputs += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-	//	/* put in forced input */
-	//	if (t < p.dur - offdur) {
-	//		for (k=0; k < numinputneurons; k++)
-	//			neuroninputs[k] += input_forced[ i % N_pat ];
-	//	}
-
-	//	/* ---------- update neuron state ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	sim_updateneurons(neurons, neuroninputs, &p);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-	//	/* ---------- calculate neuron outputs ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	numspikes += sim_checkspiking(neurons, neuronoutputs, n, t, sr);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		spikechecking += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-
-	//	/* ---------- push the neuron output into the buffer ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	for (k=0; k<n; k++)
-	//		dn_pushoutput(neuronoutputs[k], k, dn);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		pushingoutput += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-
-	//	/* ---------- update synapse traces ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	//sim_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
-	//	sim_updatesynapsetraces(traces_syn, dn->outputs, dn, dt, &p);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		updatingsyntraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-
-
-	//	/* ---------- update neuron traces ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	sim_updateneurontraces(traces_neu, neuronoutputs, n, dt, &p);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		updatingneutraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-
-	//	/* ---------- update synapses ---------- */
-	//	if (PROFILING) t_start = clock();
-
-	//	sim_updatesynapses(synapses, traces_syn, traces_neu, neuronoutputs,
-	//						dn, dn->sourceidx, dt, numsyn_exc, &p);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		updatingsynstrengths += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-
-
-	//	/* advance the buffer */
-	//	if (PROFILING) t_start = clock();
-
-	//	dn_advance(dn);
-
-	//	if (PROFILING) {
-	//		t_finish = clock();
-	//		advancingbuffer += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
-	//	}
-	//}
-
-
-	///* -------------------- Performance Analysis -------------------- */
-	//printf("----------------------------------------\n");
-	//printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n)*p.dur) );
-	//printf("Firing rate: %g\n", ((double) numspikes) / (((double) n)*p.dur) );
-	//double cycletime, cumtime = 0.0;
-
-	//printf("----------------------------------------\n");
-
-	//cycletime = 1000.0*gettinginputs/numsteps;
-	//cumtime += cycletime;
-	//printf("Getting inputs:\t\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*updatingsyntraces/numsteps;
-	//cumtime += cycletime;
-	//printf("Update syntraces:\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*updatingneurons/numsteps;
-	//cumtime += cycletime;
-	//printf("Update neurons:\t\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*spikechecking/numsteps;
-	//cumtime += cycletime;
-	//printf("Check spiked:\t\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*pushingoutput/numsteps;
-	//cumtime += cycletime;
-	//printf("Pushing buffer:\t\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*updatingsynstrengths/numsteps;
-	//cumtime += cycletime;
-	//printf("Updating synapses:\t %f (ms)\n", cycletime);
-
-	//cycletime = 1000.0*advancingbuffer/numsteps;
-	//cumtime += cycletime;
-	//printf("Advancing buffer:\t %f (ms)\n", cycletime);
-
-	//printf("Total cycle time:\t %f (ms)\n", cumtime);
-	//printf("\nTime per second: \t %f (ms)\n", cumtime*p.fs);
-	
 	/* save synapse weights */
 	FILE *f;
 	f = fopen("synapses.dat", "w");
 	for (k=0; k<numsyn_tot; k++) {
-		fprintf(f, "%g\n", synapses[dn->destidx[k]]);
+		fprintf(f, "%g\n", m2->synapses[m2->dn->destidx[k]]);
 	}
 	fclose(f);
 
@@ -319,19 +147,16 @@ int main(int argc, char *argv[])
 	sr_close(sr);
 
 	/* Clean up delay network */
-	dn_freedelnet(dn);
+	//dn_freedelnet(dn);
 
 	/* Clean up */
 	free(g);
-	free(traces_neu);
-	free(neurons);
-	free(traces_syn);
-	free(synapses);
-	free(neuroninputs);
-	free(neuronoutputs);
-	free(nextrand);
-	//free(sourceidx);
-	//free(destidx);
+	//free(neurons);
+	//free(traces_neu);
+	//free(traces_syn);
+	//free(synapses);
+	free(input_forced);
+	sim_freemodel(m2);
 
 	return 0;
 }

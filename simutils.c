@@ -279,7 +279,9 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 	FLOAT_T *synapseoutputs = dn->outputs;
 	for (k=0; k<p->num_neurons; k++) 
 	for (j=0; j < dn->nodes[k].num_in; j++) {
-		if (sourceidx[dn->nodes[k].idx_outbuf+j] < numsyn_exc) {
+		// only update excitatory synapses
+		//if (sourceidx[dn->nodes[k].idx_outbuf+j] < numsyn_exc) {
+		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) {
 			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] +
 					dt * (p->a_post * traces_syn[dn->nodes[k].idx_outbuf+j] * neuronoutputs[k] -
 						  p->a_pre * traces_neu[k] * synapseoutputs[dn->nodes[k].idx_outbuf+j]);
@@ -314,10 +316,9 @@ void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
 
 	/* derived params -- trim later, maybe cruft */
 	IDX_T n = m->p.num_neurons;
-	IDX_T n_exc = (unsigned int) ( (double) n * m->p.p_exc);
 	FLOAT_T dt = 1.0/m->p.fs;
 	IDX_T numsteps = m->p.dur/dt;
-	clock_t t_start, t_finish;
+	clock_t t_start=clock(), t_finish;
 
 	/* local state for simulation */
 	FLOAT_T *neuroninputs, *neuronoutputs; 
@@ -481,3 +482,67 @@ void runstdpmodel(sim_model *m, FLOAT_T *input, size_t inputlen,
 	free(neuronoutputs);
 	free(nextrand);
 }
+
+void sim_savemodel(sim_model *m, char *filename) {
+	FILE *f = fopen(filename, "wb");
+	
+	dn_savedelnet(m->dn, f);
+
+	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
+	fwrite(&m->numsyn_exc, sizeof(IDX_T), 1, f);
+	fwrite(&m->p, sizeof(trialparams), 1, f);
+	fwrite(m->neurons, sizeof(neuron), m->dn->num_nodes, f);
+	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
+	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->num_delays, f);
+	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->num_delays, f);
+
+
+	fclose(f);
+}
+
+sim_model *sim_loadmodel(char *filename) {
+	sim_model *m = malloc(sizeof(sim_model));
+	size_t loadsize;
+	FILE *f = fopen(filename, "rb");
+	
+	m->dn = dn_loaddelnet(f);
+
+	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->numsyn_exc, sizeof(IDX_T), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->p, sizeof(trialparams), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	m->neurons = malloc(sizeof(neuron)*m->dn->num_nodes);
+	loadsize = fread(m->neurons, sizeof(neuron), m->dn->num_nodes, f);
+	if (loadsize != m->dn->num_nodes) { printf("Failed to load model.\n"); exit(-1); }
+
+	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes);
+	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
+	if (loadsize != m->dn->num_nodes) { printf("Failed to load model.\n"); exit(-1); }
+
+	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->num_delays);
+	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->num_delays, f);
+	if (loadsize != m->dn->num_delays) { printf("Failed to load model.\n"); exit(-1); }
+
+	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->num_delays);
+	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->num_delays, f);
+	if (loadsize != m->dn->num_delays) { printf("Failed to load model.\n"); exit(-1); }
+
+	fclose(f);
+
+	return m;
+}
+
+void sim_freemodel(sim_model *m) {
+	dn_freedelnet(m->dn);
+	free(m->neurons);
+	free(m->traces_neu);
+	free(m->traces_syn);
+	free(m->synapses);
+	free(m);
+}
+

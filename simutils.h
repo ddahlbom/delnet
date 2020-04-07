@@ -15,32 +15,32 @@ typedef struct neuron_s {
 } neuron;
 
 typedef struct trialparams_s {
-	double fs;
-	double dur;
-	double num_neurons;
-	double p_contact;
-	double p_exc;
-	double tau_pre;
-	double tau_post;
-	double a_pre;
-	double a_post;
-	double synmax;
-	double w_exc;
-	double w_inh;
-	double lambda;
-	double maxdelay;
-	double randspikesize;
+	double fs; 				// <- both
+	double dur; 			// <- trial
+	double num_neurons; 	// <- structural
+	double p_contact; 		// <- structural
+	double p_exc; 			// <- structural
+	double maxdelay; 		// <- structrual
+	double tau_pre; 		// <- structural
+	double tau_post; 		// <- structural
+	double a_pre; 			// <- structural
+	double a_post; 			// <- structural
+	double synmax; 			// <- structural
+	double w_exc; 			// <- structural....
+	double w_inh; 			// <- trial...
+	double lambda; 			// <- trial
+	double randspikesize; 	// <- trial
 } trialparams;
 
 typedef struct sim_model_s {
+	IDX_T numinputneurons;
+	IDX_T numsyn_exc;
 	trialparams p;
 	dn_delaynet *dn;
 	neuron  *neurons;
 	FLOAT_T *traces_neu;
 	FLOAT_T *traces_syn;
 	FLOAT_T *synapses;
-	IDX_T numinputneurons;
-	IDX_T numsyn_exc;
 } sim_model;
 
 /*************************************************************
@@ -63,6 +63,11 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 
 /* other utility functions */
 double expsampl(double lambda);
+
+/* save and load and free models */
+void sim_savemodel(sim_model *m, char *filename);
+sim_model *sim_loadmodel(char *filename);
+void sim_freemodel(sim_model *m);
 
 /* kernels */
 void sim_getinputs(FLOAT_T *neuroninputs, dn_delaynet *dn, FLOAT_T *synapses);
