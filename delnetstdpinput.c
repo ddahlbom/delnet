@@ -32,7 +32,7 @@ FLOAT_T g_d_inh  = 2.0;
 
 int main(int argc, char *argv[])
 {
-	trialparams p;
+	modelparams p;
 	unsigned int i, k;
 	unsigned int n, n_exc;
 	unsigned int *g;
@@ -44,9 +44,9 @@ int main(int argc, char *argv[])
 	/* set parameters */
 	if (argc < 2) {
 		printf("No parameter file given.  Using defaults. \n");
-		setdefaultparams(&p);
+		setdefaultmparams(&p);
 	} else {
-		readparameters(&p, argv[1]);
+		readmparameters(&p, argv[1]);
 	}
 
 	/* derived parameters */
@@ -54,29 +54,16 @@ int main(int argc, char *argv[])
 	n_exc = (unsigned int) ( (double) n * p.p_exc);
 
 	/* print parameters */
-	printparameters(p);
+	printmparameters(p);
 
 	/* set up graph */
 	g = iblobgraph(&p);
 
 	/* analyze connectivity -- sanity check*/
-	analyzeconnectivity(g, n, n_exc, p);
+	analyzeconnectivity(g, n, n_exc, p.fs);
 
 	/* generate delay network */
 	dn = dn_delnetfromgraph(g, n);
-
-	/*
-	FILE *dnfile = fopen("delnetsaved.bin", "wb");
-	dn = dn_delnetfromgraph(g, n);
-	dn_savedelnet(dn, dnfile);
-	fclose(dnfile);
-	*/
-
-	/*
-	FILE *dnfile = fopen("delnetsaved.bin", "rb");
-	dn = dn_loaddelnet(dnfile);
-	fclose(dnfile);
-	*/
 
 	/* initialize neuron and synapse state  */
 	neuron *neurons = malloc(sizeof(neuron)*n);
@@ -119,8 +106,6 @@ int main(int argc, char *argv[])
 	}
 	fclose(infile);
 
-
-
 	/* run simulation */
 	sim_model m = { numinputneurons, numsyn_exc, p, dn, neurons, 
 					traces_neu, traces_syn, synapses };
@@ -133,7 +118,16 @@ int main(int argc, char *argv[])
 
 	printf("----------------------------------------\n");
 	sim_model *m2 = sim_loadmodel("model.bin");
-	runstdpmodel(m2, input_forced, N_pat, p.dur, sr, PROFILING);
+	trialparams tp = { .fs  = p.fs, 
+					   .dur = 2.5,
+					   .lambda = 3.0,
+					   .randspikesize = 20.0,
+					   .randinput=true,
+					   .inhibition=true,
+					   .numinputs=100,
+					   .inputidcs=NULL };
+
+	runstdpmodel(m2, tp, input_forced, N_pat, sr, PROFILING);
 
 	/* save synapse weights */
 	FILE *f;
@@ -143,20 +137,12 @@ int main(int argc, char *argv[])
 	}
 	fclose(f);
 
-	/* Save spikes */
-	sr_close(sr);
-
-	/* Clean up delay network */
-	//dn_freedelnet(dn);
-
 	/* Clean up */
-	free(g);
-	//free(neurons);
-	//free(traces_neu);
-	//free(traces_syn);
-	//free(synapses);
-	free(input_forced);
+	sr_close(sr);
 	sim_freemodel(m2);
+
+	free(g);
+	free(input_forced);
 
 	return 0;
 }
