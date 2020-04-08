@@ -46,7 +46,23 @@ void readmparameters(modelparams *p, char *filename)
 	p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
 
-	free(pl);
+	pl_free(pl);
+}
+
+void readtparameters(trialparams *p, char *filename)
+{
+	paramlist *pl = pl_readparams(filename);
+	
+	p->fs = pl_getvalue(pl, "fs");
+	p->dur = pl_getvalue(pl, "dur");
+	p->lambda = pl_getvalue(pl, "lambda");
+	p->randspikesize = pl_getvalue(pl, "randspikesize");
+	p->randinput = (bool) pl_getvalue(pl, "randinput");
+	p->inhibition = (bool) pl_getvalue(pl, "inhibition");
+	p->numinputs = (unsigned int) pl_getvalue(pl, "numinputs");
+	p->inputidcs = NULL;
+
+	pl_free(pl);
 }
 
 void printmparameters(modelparams p)

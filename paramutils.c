@@ -21,8 +21,7 @@ void pl_addparam(paramlist *pl, char *name, double val)
 
 paramnode *pl_popparam(paramlist *pl)
 {
-	if (pl->head == NULL)
-		return NULL;
+	if (pl->head == NULL) return NULL;
 	paramnode *temp;
 	temp = pl->head;
 	pl->head = pl->head->next;
@@ -49,8 +48,7 @@ int pl_lookup(paramlist *pl, char *name, double *outval)
 void pl_free(paramlist *pl)
 {
 	paramnode *node;
-	while ( (node = pl_popparam(pl)) != NULL )
-		free(node);
+	while ( (node = pl_popparam(pl)) != NULL ) free(node);
 	free(pl);
 }
 

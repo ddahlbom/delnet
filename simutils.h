@@ -58,6 +58,7 @@ typedef struct sim_model_s {
 /* parameter bookkeeping */
 void setdefaultmparams(modelparams *p);
 void readmparameters(modelparams *p, char *filename);
+void readtparameters(trialparams *p, char *filename);
 void printmparameters(modelparams p);
 void analyzeconnectivity(unsigned int *g, unsigned int n,
 							unsigned int n_exc, FLOAT_T fs);
