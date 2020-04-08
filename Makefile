@@ -2,32 +2,14 @@ CC= gcc
 CFLAGS= -g -Wall -I./ -L./
 LDLIBS = -lm 
 
-default: stdpoptim
+default: inputoptim
 
 
-sketch: delnetsketch.o delnet.o
-	$(CC) -o sketch-exec delnet.o delnetsketch.o $(LDLIBS)
+inputdebug: delnetstdpinput.o delnet.o spkrcd.o paramutils.o simkernels.o simutils.o
+	$(CC) -o runtrial-exec delnet.o delnetstdpinput.o spkrcd.o paramutils.o simkernels.o simutils.o $(LDLIBS)
 
-inputdebug: delnetstdpinput.o delnet.o spkrcd.o paramutils.o simutils.o
-	$(CC) -o stdpinput-exec delnet.o delnetstdpinput.o spkrcd.o paramutils.o simutils.o $(LDLIBS)
-
-inputoptim: delnetstdpinput-opt.o delnet-opt.o spkrcd.o paramutils.o simutils-opt.o
-	$(CC) -o stdpinput-exec delnet-opt.o delnetstdpinput-opt.o spkrcd.o paramutils.o simutils-opt.o $(LDLIBS)
-
-stdpdebug: delnetstdp.o delnet.o spkrcd.o paramutils.o simutils.o
-	$(CC) -o stdp-exec delnet.o delnetstdp.o spkrcd.o paramutils.o simutils.o $(LDLIBS)
-
-stdpoptim: delnetstdp-opt.o delnet-opt.o spkrcd.o paramutils.o simutils-opt.o
-	$(CC) -o stdp-exec delnet-opt.o delnetstdp-opt.o spkrcd.o paramutils.o simutils-opt.o $(LDLIBS)
-
-cuda: delnetstdpcuda.o delnetcuda.o
-	nvcc -o stdpcuda-exec delnetstdpcuda.o delnetcuda.o
-
-delnetstdpcuda.o: delnetstdpcuda.cu delnetcuda.o
-	nvcc -g -G -I./ -L./ -c delnetstdpcuda.cu
-
-delnetcuda.o: delnetcuda.cu delnetcuda.h
-	nvcc -g -G -c delnetcuda.cu
+inputoptim: delnetstdpinput-opt.o delnet-opt.o spkrcd.o paramutils.o simkernels-opt.o simutils-opt.o 
+	$(CC) -o runtrial-exec delnet-opt.o delnetstdpinput-opt.o spkrcd.o paramutils.o simkernels-opt.o simutils-opt.o $(LDLIBS)
 
 delnetstdpinput.o: delnetstdpinput.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdpinput.c
@@ -43,6 +25,12 @@ delnetstdp-opt.o: delnetstdp.c delnet.o
 
 delnetsketch.o: delnetsketch.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetsketch.c 
+
+simkernels-opt.o: simkernels.c simkernels.h
+	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simkernels-opt.o -c simkernels.c
+
+simkernels.o: simkernels.c simkernels.h
+	$(CC) $(CFLAGS) $(LDLIBS) -c simkernels.c
 
 simutils-opt.o: simutils.c simutils.h
 	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simutils-opt.o -c simutils.c
@@ -63,4 +51,4 @@ delnet.o: delnet.c delnet.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnet.c
 
 clean:
-	rm delnetsketch.o delnet.o sketch-exec stdp-exec delnetstdp.o delnetstdpcuda.o delnetcuda.o stdpcuda-exec
+	rm *.o stdpinput-exec

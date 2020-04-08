@@ -5,7 +5,6 @@
 
 #include "delnet.h"
 #include "spkrcd.h"
-//#include "paramutils.h"
 #include "simutils.h"
 
 #define PROFILING 1
@@ -18,8 +17,8 @@ int main(int argc, char *argv[])
 {
 	unsigned int i;
 	spikerecord *sr = sr_init("delnetstdpinput.dat", SPIKE_BLOCK_SIZE);
-	sim_model *m;
-	trialparams tp;
+	su_model *m;
+	su_trialparams tp;
 
 	srand(1);
 
@@ -28,8 +27,8 @@ int main(int argc, char *argv[])
 		printf("Need two parameter files (model and trial).  Exiting.\n");
 		exit(-1);
 	} else {
-		m = izhiblobstdpmodel(argv[1]);
-		readtparameters(&tp, argv[2]);
+		m = su_izhiblobstdpmodel(argv[1]);
+		su_readtparameters(&tp, argv[2]);
 	}
 
 	/* Generate an input sequence to repeat and save */
@@ -48,14 +47,14 @@ int main(int argc, char *argv[])
 	fclose(infile);
 
 	/* run simulation */
-	sim_runstdpmodel(m, tp, input_forced, N_pat, sr, PROFILING);
+	su_runstdpmodel(m, tp, input_forced, N_pat, sr, PROFILING);
 
 	/* save resulting model state */
-	sim_savemodel(m, "modelposttrial.dat");
+	su_savemodel(m, "modelposttrial.dat");
 
 	/* Clean up */
 	sr_close(sr);
-	sim_freemodel(m);
+	su_freemodel(m);
 	free(input_forced);
 
 	return 0;
