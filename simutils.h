@@ -93,9 +93,11 @@ void sim_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n
 void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
 							FLOAT_T *neuronoutputs, dn_delaynet *dn, IDX_T *sourceidx,
 							FLOAT_T dt, unsigned int numsyn_exc, modelparams *p);
-void runstdpmodel(sim_model *m, trialparams tp, FLOAT_T *input, size_t inputlen,
+
+/* run simulations */
+void sim_runstdpmodel(sim_model *m, trialparams tp, FLOAT_T *input, size_t inputlen,
 					spikerecord *sr, bool profiling);
 
-
+sim_model *izhiblobstdpmodel(char *mparamfilename);
 
 #endif

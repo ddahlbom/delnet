@@ -281,7 +281,9 @@ void sim_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_
 }
 
 
-void runstdpmodel(sim_model *m, trialparams tp, FLOAT_T *input, size_t inputlen,
+
+/* Functions for running simulations */
+void sim_runstdpmodel(sim_model *m, trialparams tp, FLOAT_T *input, size_t inputlen,
 					spikerecord *sr, bool profiling)
 {
 
@@ -466,7 +468,71 @@ void runstdpmodel(sim_model *m, trialparams tp, FLOAT_T *input, size_t inputlen,
 	free(nextrand);
 }
 
-void sim_savemodel(sim_model *m, char *filename) {
+
+/* make models */
+
+sim_model *izhiblobstdpmodel(char *mparamfilename)
+{
+	unsigned int *graph, n, n_exc, i;
+	sim_model *m = malloc(sizeof(sim_model));
+
+	/* default neuron params (Izhikevich RS and FS) */
+	FLOAT_T g_v_default = -65.0;
+	FLOAT_T g_u_default = -13.0;
+
+	FLOAT_T g_a_exc  = 0.02;
+	FLOAT_T g_d_exc  = 8.0;
+
+	FLOAT_T g_a_inh  = 0.1;
+	FLOAT_T g_d_inh  = 2.0;
+
+	/* set up delnet framework */
+	readmparameters(&m->p, mparamfilename);
+
+	n = m->p.num_neurons;
+	n_exc = (unsigned int) ( (double) n * m->p.p_exc);
+
+	graph = iblobgraph(&m->p);
+	m->dn = dn_delnetfromgraph(graph, n);
+
+	/* set up state for simulation */
+	neuron *neurons     = malloc(sizeof(neuron)*n);
+	FLOAT_T *traces_neu = calloc(n, sizeof(FLOAT_T));
+	FLOAT_T *traces_syn; 	// pack this
+	FLOAT_T *synapses; 		// for speed?
+	IDX_T numsyn_tot=0;
+
+	for (i=0; i<n_exc; i++) {
+		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
+		numsyn_tot += m->dn->nodes[i].num_in;
+	}
+	m->numsyn_exc = numsyn_tot;
+	for (i=n_exc; i<n; i++) {
+		neuron_set(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
+		numsyn_tot += m->dn->nodes[i].num_in;
+	}
+	traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
+	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
+	
+	/* initialize synapse weights */
+	for (i=0; i < m->numsyn_exc; i++)
+		synapses[m->dn->destidx[i]] = m->p.w_exc;
+	for (; i < numsyn_tot; i++)
+		synapses[m->dn->destidx[i]] = m->p.w_inh;
+
+	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
+	m->neurons = neurons;
+	m->traces_neu = traces_neu;
+	m->traces_syn = traces_syn;
+	m->synapses = synapses;
+
+	return m;
+}
+
+/* loading and freeing models */
+
+void sim_savemodel(sim_model *m, char *filename)
+{
 	FILE *f = fopen(filename, "wb");
 	
 	dn_savedelnet(m->dn, f);
@@ -483,7 +549,8 @@ void sim_savemodel(sim_model *m, char *filename) {
 	fclose(f);
 }
 
-sim_model *sim_loadmodel(char *filename) {
+sim_model *sim_loadmodel(char *filename)
+{
 	sim_model *m = malloc(sizeof(sim_model));
 	size_t loadsize;
 	FILE *f = fopen(filename, "rb");
