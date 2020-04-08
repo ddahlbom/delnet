@@ -29,6 +29,7 @@ void setdefaultmparams(modelparams *p)
 	p->w_inh = -5.0;
 }
 
+
 void readmparameters(modelparams *p, char *filename)
 {
 	paramlist *pl = pl_readparams(filename);	
@@ -49,6 +50,7 @@ void readmparameters(modelparams *p, char *filename)
 	pl_free(pl);
 }
 
+
 void readtparameters(trialparams *p, char *filename)
 {
 	paramlist *pl = pl_readparams(filename);
@@ -64,6 +66,7 @@ void readtparameters(trialparams *p, char *filename)
 
 	pl_free(pl);
 }
+
 
 void printmparameters(modelparams p)
 {
@@ -542,8 +545,11 @@ sim_model *izhiblobstdpmodel(char *mparamfilename)
 	m->traces_syn = traces_syn;
 	m->synapses = synapses;
 
+	free(graph);
+
 	return m;
 }
+
 
 /* loading and freeing models */
 
@@ -560,7 +566,6 @@ void sim_savemodel(sim_model *m, char *filename)
 	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
 	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->num_delays, f);
 	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->num_delays, f);
-
 
 	fclose(f);
 }

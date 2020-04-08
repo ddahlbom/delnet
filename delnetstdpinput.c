@@ -5,7 +5,7 @@
 
 #include "delnet.h"
 #include "spkrcd.h"
-#include "paramutils.h"
+//#include "paramutils.h"
 #include "simutils.h"
 
 #define PROFILING 1
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	FLOAT_T mag_pat = 20.0;
 	size_t N_pat = (size_t) (dur_pat * m->p.fs);
 	FLOAT_T f_pat = 10.0;
-	size_t dn_pat = (size_t) m->p.fs/ (size_t) f_pat;
+	size_t dn_pat = (size_t) m->p.fs/ (size_t) f_pat; 	// step between spikes
 	FLOAT_T *input_forced = calloc(N_pat, sizeof(FLOAT_T));
 	FILE *infile;
 	infile = fopen("forcedinput.dat", "w");
@@ -47,21 +47,11 @@ int main(int argc, char *argv[])
 	}
 	fclose(infile);
 
-
 	/* run simulation */
-	/*
-	trialparams tp = { 	.fs  = m->p.fs, 
-					   	.dur = 2.5,
-					   	.lambda = 3.0,
-					   	.randspikesize = 20.0,
-					   	.randinput=true,
-					   	.inhibition=true,
-					   	.numinputs=100,
-					   	.inputidcs=NULL  };
-	*/
-
 	sim_runstdpmodel(m, tp, input_forced, N_pat, sr, PROFILING);
 
+	/* save resulting model state */
+	sim_savemodel(m, "modelposttrial.dat");
 
 	/* Clean up */
 	sr_close(sr);
