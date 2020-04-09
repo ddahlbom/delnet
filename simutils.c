@@ -181,7 +181,7 @@ void su_runstdpmodel(su_model *m, su_trialparams tp, FLOAT_T *input, size_t inpu
 	neuroninputs = calloc(n, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n, sizeof(FLOAT_T));
 	unsigned long int numspikes = 0, numrandspikes = 0;
-	FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
+	//FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
 
 	for(size_t i=0; i<n; i++) nextrand[i] = sk_expsampl(tp.lambda);
 
@@ -205,10 +205,10 @@ void su_runstdpmodel(su_model *m, su_trialparams tp, FLOAT_T *input, size_t inpu
 		}
 
 		/* put in forced input */
-		if (t < tp.dur - offdur) {
-			for (size_t k=0; k < tp.numinputs; k++)
-				neuroninputs[k] += input[ i % inputlen ];
-		}
+		//if (t < tp.dur - offdur) {
+		for (size_t k=0; k < tp.numinputs; k++)
+			neuroninputs[k] += input[ i % inputlen ];
+		//}
 
 		/* ---------- update neuron state ---------- */
 		if (profiling) t_start = clock();

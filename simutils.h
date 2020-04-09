@@ -1,8 +1,10 @@
 #ifndef SIMUTILS_H
 #define SIMUTILS_H
 
-#include "spkrcd.h"
 #include <stdbool.h>
+
+#include "spkrcd.h"
+#include "delnet.h"
 
 /*************************************************************
  *  Structs

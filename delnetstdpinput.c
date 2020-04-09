@@ -48,14 +48,11 @@ int main(int argc, char *argv[])
 	size_t loadsize;
 
 	infile = fopen(infilename, "rb");
-
 	loadsize = fread(&N_pat, sizeof(long int), 1, infile);
 	if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
-	
 	input_forced = malloc(sizeof(double)*N_pat);
 	loadsize = fread(input_forced, sizeof(double), N_pat, infile);
 	if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
-
 	fclose(infile);
 
 	/* run simulation */
