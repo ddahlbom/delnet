@@ -25,7 +25,8 @@ int main(int argc, char *argv[])
 
 	/* set parameters */
 	if (argc < 4) {
-		printf("Need two parameter files (model and trial), input file, and a file name.  Exiting.\n");
+		printf("Need two parameter files (model and trial),\
+				input file, and a file name.  Exiting.\n");
 		exit(-1);
 	} else {
 		m = su_izhiblobstdpmodel(argv[1]);
