@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
@@ -15,42 +16,55 @@
  *************************************************************/
 int main(int argc, char *argv[])
 {
-	unsigned int i;
-	spikerecord *sr = sr_init("delnetstdpinput.dat", SPIKE_BLOCK_SIZE);
 	su_model *m;
 	su_trialparams tp;
+	char *infilename;
+	char outfilename[256];
 
 	srand(1);
 
 	/* set parameters */
-	if (argc < 3) {
-		printf("Need two parameter files (model and trial).  Exiting.\n");
+	if (argc < 4) {
+		printf("Need two parameter files (model and trial), input file, and a file name.  Exiting.\n");
 		exit(-1);
 	} else {
 		m = su_izhiblobstdpmodel(argv[1]);
 		su_readtparameters(&tp, argv[2]);
+		infilename = argv[3];
+		strcpy(outfilename, argv[4]);
 	}
 
-	/* Generate an input sequence to repeat and save */
-	FLOAT_T dur_pat = 0.100;
-	FLOAT_T mag_pat = 20.0;
-	size_t N_pat = (size_t) (dur_pat * m->p.fs);
-	FLOAT_T f_pat = 10.0;
-	size_t dn_pat = (size_t) m->p.fs/ (size_t) f_pat; 	// step between spikes
-	FLOAT_T *input_forced = calloc(N_pat, sizeof(FLOAT_T));
+	/* set up spike recorder */
+	char srname[256];
+	strcpy(srname, outfilename);
+	strcat(srname, "_spikes.dat");
+	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
+
+	/* load input sequence */
 	FILE *infile;
-	infile = fopen("forcedinput.dat", "w");
-	for (i=0; i<N_pat; i++) {
-		input_forced[i] = i % dn_pat == 0 ? mag_pat : 0.0;
-		fprintf(infile, "%g\n", input_forced[i]);
-	}
+	FLOAT_T *input_forced;
+	long int N_pat;
+	size_t loadsize;
+
+	infile = fopen(infilename, "rb");
+
+	loadsize = fread(&N_pat, sizeof(long int), 1, infile);
+	if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
+	
+	input_forced = malloc(sizeof(double)*N_pat);
+	loadsize = fread(input_forced, sizeof(double), N_pat, infile);
+	if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
+
 	fclose(infile);
 
 	/* run simulation */
 	su_runstdpmodel(m, tp, input_forced, N_pat, sr, PROFILING);
 
 	/* save resulting model state */
-	su_savemodel(m, "modelposttrial.dat");
+	char modelfilename[256];
+	strcpy(modelfilename, outfilename);
+	strcat(modelfilename, "_model.bin");
+	su_savemodel(m, modelfilename);
 
 	/* Clean up */
 	sr_close(sr);
