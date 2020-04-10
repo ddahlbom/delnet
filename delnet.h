@@ -51,6 +51,7 @@ typedef struct dn_delaynet_s {
 	FLOAT_T *delaybuf;
 	FLOAT_T *inputs;
 	FLOAT_T *outputs;
+	FLOAT_T *outputs_unsorted;
 	dn_node *nodes;
 	IDX_T *destidx;
 	IDX_T *sourceidx;
@@ -87,9 +88,11 @@ dn_vec_float 	dn_getinputvec(dn_delaynet *dn);
 FLOAT_T* 		dn_getinputaddress(IDX_T idx, dn_delaynet *dn);
 void 			dn_advance(dn_delaynet *dn);
 
-/* save and load delaynet */
-void dn_savedelnet(dn_delaynet *dn, FILE *stream);
-dn_delaynet *dn_loaddelnet(FILE *stream);
+/* save and load checkpoints (with buffers), network (no buffers)*/
+void dn_savecheckpt(dn_delaynet *dn, FILE *stream);
+dn_delaynet *dn_loadcheckpt(FILE *stream);
+void dn_save(dn_delaynet *dn, FILE *stream);
+dn_delaynet *dn_load(FILE *stream);
 
 
 #endif

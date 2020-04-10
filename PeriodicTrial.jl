@@ -88,7 +88,7 @@ end
 # Main Script
 ################################################################################
 # Model Parameters
-fs = 10000
+fs = 5000
 n = 1000
 p_contact = 0.1
 p_exc = 0.8
@@ -106,7 +106,7 @@ mp = ModelParams(fs, n, p_contact, p_exc, maxdelay, tau_pre, tau_post, a_pre,
 
 
 # Trial Parameters
-dur = 1.00
+dur = 3600.00
 λ = 3.0 				# noise density
 randspikesize = 20.0 	# noise magnitude
 randinput = 1
@@ -118,11 +118,11 @@ tp = TrialParams(fs, dur, λ, randspikesize, randinput, inhibition, numinputs, [
 
 # Input Parameters
 f_in = 10.0
-input = spiketrain(f_in, dur, fs) .* 20.0
+input = spiketrain(f_in, 1.0, fs) .* 20.0
 
 
 # Write Configuration Files
-trialname = "$(Int(round(f_in)))Hz_1000s"
+trialname = "$(Int(round(f_in)))Hz_$(Int(round(dur)))s_fs$(Int(round(fs)))"
 saveinput(input, trialname)
 writemparams(mp, trialname)
 writetparams(tp, trialname)
@@ -134,6 +134,6 @@ run(`./runtrial-exec $(trialname * "_mparams.dat") $(trialname * "_tparams.dat")
 
 # Open spikes and plot
 spikes = SpikePlot.loadspikes(trialname*"_spikes.dat"; timetype=Float64)
-p = SpikePlot.inputraster(0, dur, spikes, input, fs)
+p = SpikePlot.inputraster(max(0,dur-10.0), dur, spikes, input, fs)
 
 end

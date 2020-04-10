@@ -122,21 +122,27 @@ void dn_advance(dn_delaynet *dn)
 {
 	IDX_T k;
 
+	/* load network inputs into buffers */
 	for(k=0; k < dn->num_delays; k++) {
-		dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] =
-															dn->inputs[k];
-		//dn->inputs[k] = 0.0;
+		dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]] = dn->inputs[k];
 	}
 
+	/* advance the buffers */
 	for(k=0; k < dn->num_delays; k++) {
 		dn->del_offsets[k] = (dn->del_offsets[k] + 1) % dn->del_lens[k];
-
 	}
 
+	/* pull network outputs from buffers */
 	for (k=0; k < dn->num_delays; k++) {
-		dn->outputs[dn->destidx[k]] =
-				dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]];
-		//dn->delaybuf[dn->del_startidces[k] + dn->del_offsets[k]] = 0.0;
+		dn->outputs_unsorted[k] =
+				dn->delaybuf[dn->del_startidces[k]+
+								dn->del_offsets[k]];
+	}
+
+	/* sort output for access */
+	for (k=0; k< dn->num_delays; k++) {
+		// Works, as fast as original formulation!	
+		dn->outputs[k] = dn->outputs_unsorted[ dn->sourceidx[k] ];
 	}
 }
 
@@ -185,6 +191,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	dn->delaybuf = calloc(deltot, sizeof(FLOAT_T));
 	dn->inputs = calloc(numlines, sizeof(FLOAT_T));
 	dn->outputs = calloc(numlines, sizeof(FLOAT_T));
+	dn->outputs_unsorted = calloc(numlines, sizeof(FLOAT_T));
 
 	dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
 	dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
@@ -292,7 +299,7 @@ void dn_freedelnet(dn_delaynet *dn) {
 }
 
 
-void dn_savedelnet(dn_delaynet *dn, FILE *stream) {
+void dn_savecheckpt(dn_delaynet *dn, FILE *stream) {
 	fwrite(&dn->num_nodes, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->num_delays, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
@@ -313,7 +320,7 @@ void dn_savedelnet(dn_delaynet *dn, FILE *stream) {
 }
 
 
-dn_delaynet *dn_loaddelnet(FILE *stream) {
+dn_delaynet *dn_loadcheckpt(FILE *stream) {
 	size_t loadsize;
 	dn_delaynet *dn;
 	dn = malloc(sizeof(dn_delaynet));
@@ -370,6 +377,78 @@ dn_delaynet *dn_loaddelnet(FILE *stream) {
 	dn->del_targets = malloc(sizeof(IDX_T)*dn->num_delays);
 	loadsize = fread(dn->del_targets, sizeof(IDX_T), dn->num_delays, stream);
 	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	return dn;
+}
+
+
+void dn_save(dn_delaynet *dn, FILE *stream) {
+	fwrite(&dn->num_nodes, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->num_delays, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
+
+	fwrite(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+
+	fwrite(dn->destidx, sizeof(IDX_T), dn->num_delays, stream);
+	fwrite(dn->sourceidx, sizeof(IDX_T), dn->num_delays, stream);
+	fwrite(dn->del_offsets, sizeof(IDX_T), dn->num_delays, stream);
+	fwrite(dn->del_startidces, sizeof(IDX_T), dn->num_delays , stream);
+	fwrite(dn->del_lens, sizeof(IDX_T), dn->num_delays, stream);
+	fwrite(dn->del_sources, sizeof(IDX_T), dn->num_delays, stream);
+	fwrite(dn->del_targets, sizeof(IDX_T), dn->num_delays, stream);
+}
+
+
+dn_delaynet *dn_load(FILE *stream) {
+	size_t loadsize;
+	dn_delaynet *dn;
+	dn = malloc(sizeof(dn_delaynet));
+
+	/* load constants */
+	loadsize = fread(&dn->num_nodes, sizeof(IDX_T), 1, stream);
+	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
+	loadsize = fread(&dn->num_delays, sizeof(IDX_T), 1, stream);
+	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
+	loadsize = fread(&dn->buf_len, sizeof(IDX_T), 1, stream);
+	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	/* load saved chunks */
+	dn->nodes = malloc(sizeof(dn_node)*dn->num_nodes);
+	loadsize = fread(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+	if (loadsize != dn->num_nodes) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->destidx = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->destidx, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->sourceidx = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->sourceidx, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+	
+	dn->del_offsets = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->del_offsets, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_startidces = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->del_startidces, sizeof(IDX_T), dn->num_delays , stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_lens = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->del_lens, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_sources = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->del_sources, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_targets = malloc(sizeof(IDX_T)*dn->num_delays);
+	loadsize = fread(dn->del_targets, sizeof(IDX_T), dn->num_delays, stream);
+	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	/* allocate big chunks -- no reading*/
+	dn->delaybuf = calloc(dn->buf_len, sizeof(FLOAT_T));
+	dn->inputs = calloc(dn->num_delays, sizeof(FLOAT_T));
+	dn->outputs = calloc(dn->num_delays, sizeof(FLOAT_T));
 
 	return dn;
 }

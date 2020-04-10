@@ -407,7 +407,7 @@ void su_savemodel(su_model *m, char *filename)
 {
 	FILE *f = fopen(filename, "wb");
 	
-	dn_savedelnet(m->dn, f);
+	dn_savecheckpt(m->dn, f);
 
 	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	fwrite(&m->numsyn_exc, sizeof(IDX_T), 1, f);
@@ -426,7 +426,7 @@ su_model *su_loadmodel(char *filename)
 	size_t loadsize;
 	FILE *f = fopen(filename, "rb");
 	
-	m->dn = dn_loaddelnet(f);
+	m->dn = dn_loadcheckpt(f);
 
 	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
