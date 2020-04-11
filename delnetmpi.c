@@ -1,36 +1,37 @@
 #include <stdlib.h>
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
-#include <omp.h>
+//#include <mpi.h> 
+#include "/usr/include/mpich/mpi.h"
 
-#include "delnet.h"
+#include "delnetmpi.h"
 
 
 /*
  * -------------------- Util Functions --------------------
  */
 
-dn_list_uint *dn_list_uint_init() {
-	dn_list_uint *newlist;
-	newlist = malloc(sizeof(dn_list_uint));
+dn_mpi_list_uint *dn_mpi_list_uint_init() {
+	dn_mpi_list_uint *newlist;
+	newlist = malloc(sizeof(dn_mpi_list_uint));
 	newlist->count = 0;
 	newlist->head = NULL; 
 
 	return newlist;
 }
 
-void dn_list_uint_push(dn_list_uint *l, unsigned int val) {
-	dn_listnode_uint *newnode;
-	newnode = malloc(sizeof(dn_listnode_uint));
+void dn_mpi_list_uint_push(dn_mpi_list_uint *l, unsigned int val) {
+	dn_mpi_listnode_uint *newnode;
+	newnode = malloc(sizeof(dn_mpi_listnode_uint));
 	newnode->val = val;
 	newnode->next = l->head;
 	l->head = newnode;
 	l->count += 1;
 }
 
-unsigned int dn_list_uint_pop(dn_list_uint *l) {
+unsigned int dn_mpi_list_uint_pop(dn_mpi_list_uint *l) {
 	unsigned int val;
-	dn_listnode_uint *temp;
+	dn_mpi_listnode_uint *temp;
 
 	if (l->head != NULL) {
 		val = l->head->val;
@@ -47,17 +48,17 @@ unsigned int dn_list_uint_pop(dn_list_uint *l) {
 	return val;
 }
 
-void dn_list_uint_free(dn_list_uint *l) {
+void dn_mpi_list_uint_free(dn_mpi_list_uint *l) {
 	while (l->head != NULL) {
-		dn_list_uint_pop(l);
+		dn_mpi_list_uint_pop(l);
 	}
 	free(l);
 }
 
 
-dn_vec_float dn_orderbuf(IDX_T which, dn_delaynet *dn) {
+dn_mpi_vec_float dn_mpi_orderbuf(IDX_T which, dn_mpi_delaynet *dn) {
 	IDX_T k, n, idx;
-	dn_vec_float output;
+	dn_mpi_vec_float output;
 	
 	n = dn->del_lens[which];
 	output.n = n;
@@ -71,7 +72,7 @@ dn_vec_float dn_orderbuf(IDX_T which, dn_delaynet *dn) {
 	return output;
 }
 
-char *dn_vectostr(dn_vec_float input) {
+char *dn_mpi_vectostr(dn_mpi_vec_float input) {
 	int k;
 	char *output;
 	output = malloc(sizeof(char)*(input.n+1));
@@ -89,7 +90,7 @@ char *dn_vectostr(dn_vec_float input) {
  */
 
 /* push output of nodes into delay network (input of dn) */
-void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn) 
+void dn_mpi_pushoutput(FLOAT_T val, IDX_T idx, dn_mpi_delaynet *dn) 
 {
 	IDX_T i1, i2, k;
 
@@ -102,8 +103,8 @@ void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn)
 
 
 /* No getinputs()... would need to return vector */
-dn_vec_float dn_getinputvec(dn_delaynet *dn) {
-	dn_vec_float inputs;	
+dn_mpi_vec_float dn_mpi_getinputvec(dn_mpi_delaynet *dn) {
+	dn_mpi_vec_float inputs;	
 	inputs.data = malloc(sizeof(FLOAT_T)*dn->num_delays);
 	inputs.n = dn->num_delays;
 	for (int i=0; i<dn->num_delays; i++) {
@@ -113,12 +114,12 @@ dn_vec_float dn_getinputvec(dn_delaynet *dn) {
 }
 
 /* get inputs to neurons (outputs of delaynet)... */
-FLOAT_T *dn_getinputaddress(IDX_T idx, dn_delaynet *dn) {
+FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
 	return &dn->outputs[dn->nodes[idx].idx_outbuf];
 }
 
 
-void dn_advance(dn_delaynet *dn)
+void dn_mpi_advance(dn_mpi_delaynet *dn)
 {
 	IDX_T k;
 
@@ -146,7 +147,7 @@ void dn_advance(dn_delaynet *dn)
 }
 
 
-unsigned int *dn_blobgraph(unsigned int n, float p, unsigned int maxdel) {
+unsigned int *dn_mpi_blobgraph(unsigned int n, float p, unsigned int maxdel) {
 	unsigned int count = 0;
 	unsigned int *delmat;
 	unsigned int i, j;
@@ -166,16 +167,18 @@ unsigned int *dn_blobgraph(unsigned int n, float p, unsigned int maxdel) {
 }
 
 
-dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
+dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n, 
+											int commsize, int commrank)
+{
 	unsigned int i, j, delcount, startidx;
 	unsigned int deltot, numlines;
-	dn_delaynet *dn;
-	dn_list_uint **nodes_in;
+	dn_mpi_delaynet *dn;
+	dn_mpi_list_uint **nodes_in;
 
-	dn = malloc(sizeof(dn_delaynet));
-	nodes_in = malloc(sizeof(dn_list_uint)*n);
+	dn = malloc(sizeof(dn_mpi_delaynet));
+	nodes_in = malloc(sizeof(dn_mpi_list_uint)*n);
 	for (i=0; i<n; i++)
-		nodes_in[i] = dn_list_uint_init();
+		nodes_in[i] = dn_mpi_list_uint_init();
 
 	deltot = 0;
 	numlines = 0;
@@ -197,7 +200,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	dn->del_lens = malloc(sizeof(IDX_T)*numlines);
 	dn->del_sources = malloc(sizeof(IDX_T)*numlines);
 	dn->del_targets = malloc(sizeof(IDX_T)*numlines);
-	dn->nodes = malloc(sizeof(dn_node)*n);
+	dn->nodes = malloc(sizeof(dn_mpi_node)*n);
 
 	/* init nodes */
 	for (i=0; i<n; i++) {
@@ -213,7 +216,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	for (i = 0; i<n; i++)
 	for (j = 0; j<n; j++) {
 		if (g[i*n + j] != 0) {
-			dn_list_uint_push(nodes_in[j], i);
+			dn_mpi_list_uint_push(nodes_in[j], i);
 
 			dn->del_offsets[delcount] = 0;
 			dn->del_startidces[delcount] = startidx;
@@ -271,7 +274,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 
 	/* Clean up */
 	for (i=0; i<n; i++)
-		dn_list_uint_free(nodes_in[i]);
+		dn_mpi_list_uint_free(nodes_in[i]);
 	free(nodes_in);
 	free(num_outputs);
 	free(in_base_idcs);
@@ -282,7 +285,7 @@ dn_delaynet *dn_delnetfromgraph(unsigned int *g, unsigned int n) {
 	return dn;
 }
 
-void dn_freedelnet(dn_delaynet *dn) {
+void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->del_offsets);
 	free(dn->del_startidces);
 	free(dn->del_lens);
@@ -298,7 +301,7 @@ void dn_freedelnet(dn_delaynet *dn) {
 }
 
 
-void dn_savecheckpt(dn_delaynet *dn, FILE *stream) {
+void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream) {
 	fwrite(&dn->num_nodes, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->num_delays, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
@@ -307,7 +310,7 @@ void dn_savecheckpt(dn_delaynet *dn, FILE *stream) {
 	fwrite(dn->inputs, sizeof(FLOAT_T), dn->num_delays, stream);
 	fwrite(dn->outputs, sizeof(FLOAT_T), dn->num_delays, stream);
 
-	fwrite(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+	fwrite(dn->nodes, sizeof(dn_mpi_node), dn->num_nodes, stream);
 
 	fwrite(dn->destidx, sizeof(IDX_T), dn->num_delays, stream);
 	fwrite(dn->sourceidx, sizeof(IDX_T), dn->num_delays, stream);
@@ -319,10 +322,10 @@ void dn_savecheckpt(dn_delaynet *dn, FILE *stream) {
 }
 
 
-dn_delaynet *dn_loadcheckpt(FILE *stream) {
+dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream) {
 	size_t loadsize;
-	dn_delaynet *dn;
-	dn = malloc(sizeof(dn_delaynet));
+	dn_mpi_delaynet *dn;
+	dn = malloc(sizeof(dn_mpi_delaynet));
 
 	/* load constants */
 	loadsize = fread(&dn->num_nodes, sizeof(IDX_T), 1, stream);
@@ -345,8 +348,8 @@ dn_delaynet *dn_loadcheckpt(FILE *stream) {
 	loadsize = fread(dn->outputs, sizeof(FLOAT_T), dn->num_delays, stream);
 	if (loadsize != dn->num_delays) { printf("Failed to load delay network.\n"); exit(-1); }
 
-	dn->nodes = malloc(sizeof(dn_node)*dn->num_nodes);
-	loadsize = fread(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+	dn->nodes = malloc(sizeof(dn_mpi_node)*dn->num_nodes);
+	loadsize = fread(dn->nodes, sizeof(dn_mpi_node), dn->num_nodes, stream);
 	if (loadsize != dn->num_nodes) { printf("Failed to load delay network.\n"); exit(-1); }
 
 	dn->destidx = malloc(sizeof(IDX_T)*dn->num_delays);
@@ -381,12 +384,12 @@ dn_delaynet *dn_loadcheckpt(FILE *stream) {
 }
 
 
-void dn_save(dn_delaynet *dn, FILE *stream) {
+void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream) {
 	fwrite(&dn->num_nodes, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->num_delays, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
 
-	fwrite(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+	fwrite(dn->nodes, sizeof(dn_mpi_node), dn->num_nodes, stream);
 
 	fwrite(dn->destidx, sizeof(IDX_T), dn->num_delays, stream);
 	fwrite(dn->sourceidx, sizeof(IDX_T), dn->num_delays, stream);
@@ -398,10 +401,10 @@ void dn_save(dn_delaynet *dn, FILE *stream) {
 }
 
 
-dn_delaynet *dn_load(FILE *stream) {
+dn_mpi_delaynet *dn_mpi_load(FILE *stream) {
 	size_t loadsize;
-	dn_delaynet *dn;
-	dn = malloc(sizeof(dn_delaynet));
+	dn_mpi_delaynet *dn;
+	dn = malloc(sizeof(dn_mpi_delaynet));
 
 	/* load constants */
 	loadsize = fread(&dn->num_nodes, sizeof(IDX_T), 1, stream);
@@ -412,8 +415,8 @@ dn_delaynet *dn_load(FILE *stream) {
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
 
 	/* load saved chunks */
-	dn->nodes = malloc(sizeof(dn_node)*dn->num_nodes);
-	loadsize = fread(dn->nodes, sizeof(dn_node), dn->num_nodes, stream);
+	dn->nodes = malloc(sizeof(dn_mpi_node)*dn->num_nodes);
+	loadsize = fread(dn->nodes, sizeof(dn_mpi_node), dn->num_nodes, stream);
 	if (loadsize != dn->num_nodes) { printf("Failed to load delay network.\n"); exit(-1); }
 
 	dn->destidx = malloc(sizeof(IDX_T)*dn->num_delays);
