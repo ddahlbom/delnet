@@ -15,24 +15,6 @@
  *  Functions
  *************************************************************/
 
-/* --------------------	MPI Utils -------------------- */
-size_t su_mpi_maxnode(int rank, int commsize, size_t numpoints)
-{
-	size_t basesize = floor(numpoints/commsize);
-	return rank < (numpoints % commsize) ? basesize + 1 : basesize;
-}
-
-size_t su_mpi_nodeoffset(int rank, int commsize, size_t numpoints)
-{
-	size_t offset = 0;
-	int i=0;
-	while (i < rank) {
-		offset += su_mpi_maxnode(rank, commsize, numpoints);
-		i++;
-	}
-	return offset;
-}
-
 
 /* -------------------- Parameter Setting -------------------- */
 void su_mpi_setdefaultmparams(su_mpi_modelparams *p)
@@ -173,7 +155,7 @@ unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p)
 
 
 /* Functions for running simulations */
-void su_mpi_runstdpmodel(su_mpi_model *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
+void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
 					spikerecord *sr, int commrank, int commsize, bool profiling)
 {
 
@@ -360,10 +342,10 @@ void su_mpi_runstdpmodel(su_mpi_model *m, su_mpi_trialparams tp, FLOAT_T *input,
 
 
 /* make models */
-su_mpi_model *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
+su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
 {
-	unsigned int *graph, n, n_exc, i;
-	su_mpi_model *m = malloc(sizeof(su_mpi_model));
+	unsigned int *graph = 0, n, n_exc, i;
+	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 
 
 	/* default neuron params (Izhikevich RS and FS) */
@@ -381,8 +363,12 @@ su_mpi_model *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int c
 
 	n = m->p.num_neurons;
 	n_exc = (unsigned int) ((double) n * m->p.p_exc);
-	size_t maxnode = su_mpi_maxnode(commrank, commsize, n);
-	size_t nodeoffset =  su_mpi_nodeoffset(commrank, commsize, n);
+	size_t maxnode = dn_mpi_maxnode(commrank, commsize, n);
+	size_t nodeoffset =  dn_mpi_nodeoffset(commrank, commsize, n);
+	m->commrank = commrank;
+	m->commsize = commsize;
+	m->maxnode = maxnode;
+	m->nodeoffset = nodeoffset;
 
 	/* make sure all using the same graph */
 	if (commrank == 0) {
@@ -455,14 +441,18 @@ su_mpi_model *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int c
 
 /* loading and freeing models */
 
-void su_mpi_savemodel(su_mpi_model *m, char *filename)
+void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
 {
 	FILE *f = fopen(filename, "wb");
 	
 	dn_mpi_savecheckpt(m->dn, f);
 
 	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
-	//fwrite(&m->numsyn_exc, sizeof(IDX_T), 1, f);
+	fwrite(&m->commrank, sizeof(int), 1, f);
+	fwrite(&m->commsize, sizeof(int), 1, f);
+	fwrite(&m->maxnode, sizeof(size_t), 1, f);
+	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
+	fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes, f);
 	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
@@ -472,9 +462,9 @@ void su_mpi_savemodel(su_mpi_model *m, char *filename)
 	fclose(f);
 }
 
-su_mpi_model *su_mpi_loadmodel(char *filename)
+su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
 {
-	su_mpi_model *m = malloc(sizeof(su_mpi_model));
+	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 	size_t loadsize;
 	FILE *f = fopen(filename, "rb");
 	
@@ -483,8 +473,20 @@ su_mpi_model *su_mpi_loadmodel(char *filename)
 	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
-	//loadsize = fread(&m->numsyn_exc, sizeof(IDX_T), 1, f);
-	//if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+	loadsize = fread(&m->commrank, sizeof(int), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->commsize, sizeof(int), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->maxnode, sizeof(size_t), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->nodeoffset, sizeof(size_t), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+
+	loadsize = fread(&m->numsyn, sizeof(IDX_T), 1, f);
+	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
 	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
@@ -510,7 +512,7 @@ su_mpi_model *su_mpi_loadmodel(char *filename)
 	return m;
 }
 
-void su_mpi_freemodel(su_mpi_model *m) {
+void su_mpi_freemodel_l(su_mpi_model_l *m) {
 	dn_mpi_freedelnet(m->dn);
 	free(m->neurons);
 	free(m->traces_neu);

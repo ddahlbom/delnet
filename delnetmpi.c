@@ -1,10 +1,29 @@
 #include <stdlib.h>
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
+#include <math.h>
 //#include <mpi.h> 
-#include "/usr/include/mpich/mpi.h"
 
+#include "/usr/include/mpich/mpi.h"
 #include "delnetmpi.h"
+
+/* --------------------	MPI Utils -------------------- */
+size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints)
+{
+	size_t basesize = floor(numpoints/commsize);
+	return rank < (numpoints % commsize) ? basesize + 1 : basesize;
+}
+
+size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints)
+{
+	size_t offset = 0;
+	int i=0;
+	while (i < rank) {
+		offset += dn_mpi_maxnode(rank, commsize, numpoints);
+		i++;
+	}
+	return offset;
+}
 
 
 /*
@@ -103,6 +122,7 @@ void dn_mpi_pushoutput(FLOAT_T val, IDX_T idx, dn_mpi_delaynet *dn)
 
 
 /* No getinputs()... would need to return vector */
+/*
 dn_mpi_vec_float dn_mpi_getinputvec(dn_mpi_delaynet *dn) {
 	dn_mpi_vec_float inputs;	
 	inputs.data = malloc(sizeof(FLOAT_T)*dn->num_delays);
@@ -112,6 +132,7 @@ dn_mpi_vec_float dn_mpi_getinputvec(dn_mpi_delaynet *dn) {
 	}
 	return inputs;
 }
+*/
 
 /* get inputs to neurons (outputs of delaynet)... */
 FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
@@ -121,7 +142,7 @@ FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
 
 void dn_mpi_advance(dn_mpi_delaynet *dn)
 {
-	IDX_T k;
+	IDX_T k, k_global;
 
 	/* load network inputs into buffers */
 	for(k=0; k < dn->num_delays; k++) {
@@ -168,10 +189,13 @@ unsigned int *dn_mpi_blobgraph(unsigned int n, float p, unsigned int maxdel) {
 
 
 dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n, 
-											int commsize, int commrank)
+											int commrank, int commsize)
 {
 	unsigned int i, j, delcount, startidx;
-	unsigned int deltot, numlines;
+	unsigned int deltot_g, numlines_g, deltot_l, numlinesout_l, numlinesin_l;
+	size_t maxnode = dn_mpi_maxnode(commrank, commsize, n);
+	size_t nodeoffset = dn_mpi_nodeoffset(commrank, commsize, n);
+
 	dn_mpi_delaynet *dn;
 	dn_mpi_list_uint **nodes_in;
 
@@ -180,34 +204,64 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	for (i=0; i<n; i++)
 		nodes_in[i] = dn_mpi_list_uint_init();
 
-	deltot = 0;
-	numlines = 0;
-	for (i=0; i<n*n; i++) {
-		deltot += g[i];
-		numlines += g[i] != 0 ? 1 : 0;
-	}
-	dn->num_delays = numlines;
-	dn->buf_len = deltot;
-	dn->num_nodes = n;
+	/* analyze how much memory to allocate */
+	deltot_g = 0;
+	numlines_g = 0;
+	deltot_l = 0;
+	numlinesout_l = 0;
+	numlinesin_l = 0;
 
-	dn->delaybuf = calloc(deltot, sizeof(FLOAT_T));
-	dn->inputs = calloc(numlines, sizeof(FLOAT_T));
-	dn->outputs = calloc(numlines, sizeof(FLOAT_T));
-	dn->outputs_unsorted = calloc(numlines, sizeof(FLOAT_T));
-
-	dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
-	dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
-	dn->del_lens = malloc(sizeof(IDX_T)*numlines);
-	dn->del_sources = malloc(sizeof(IDX_T)*numlines);
-	dn->del_targets = malloc(sizeof(IDX_T)*numlines);
-	dn->nodes = malloc(sizeof(dn_mpi_node)*n);
-
-	/* init nodes */
 	for (i=0; i<n; i++) {
-		dn->nodes[i].idx_outbuf = 0;
-		dn->nodes[i].num_in = 0;
-		dn->nodes[i].idx_inbuf = 0;
-		dn->nodes[i].num_out = 0;
+		for(j=0; j<n; j++) {
+			deltot_g += g[i*n+j];
+			numlines_g += g[i*n+j] != 0 ? 1 : 0;
+			if (i >= nodeoffset && i < maxnode) {
+				deltot_l += g[i*n+j];
+				numlinesout_l += g[i*n+j] != 0 ? 1 : 0;
+			}
+			if (j >= nodeoffset && i < maxnode) {
+				numlinesin_l += g[i*n+j] != 0 ? 1 : 0;
+			}
+		}
+	}
+	dn->num_delays_g = numlines_g;
+	dn->buf_len = deltot_g;
+	dn->num_nodes_g = n;
+
+	dn->delaybuf = calloc(deltot_l, sizeof(FLOAT_T));
+	dn->inputs = calloc(numlinesin_l, sizeof(FLOAT_T));
+	dn->outputs = calloc(numlines_g, sizeof(FLOAT_T)); 	// <- ultimately refine this
+	dn->outputs_unsorted = calloc(numlinesout_l, sizeof(FLOAT_T));
+
+	// Original:
+	//dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
+	//dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
+	//dn->del_lens = malloc(sizeof(IDX_T)*numlines);
+	//dn->del_sources = malloc(sizeof(IDX_T)*numlines);
+	//dn->del_targets = malloc(sizeof(IDX_T)*numlines);
+	//dn->nodes = malloc(sizeof(dn_mpi_node)*n);
+	
+	// Local backup of original
+	IDX_T *del_offsets = malloc(sizeof(IDX_T)*numlines_g);
+	IDX_T *del_startidces = malloc(sizeof(IDX_T)*numlines_g);
+	IDX_T *del_lens = malloc(sizeof(IDX_T)*numlines_g);
+	IDX_T *del_sources = malloc(sizeof(IDX_T)*numlines_g);
+	IDX_T *del_targets = malloc(sizeof(IDX_T)*numlines_g);
+	dn_mpi_node *nodes = malloc(sizeof(dn_mpi_node)*n);
+
+
+	/* init nodes -- should've just calloc-ed*/
+	for (i=nodeoffset; i<nodeoffset+maxnode; i++) {
+		nodes[i].idx_outbuf = 0;
+		nodes[i].num_in = 0;
+		nodes[i].idx_inbuf = 0;
+		nodes[i].num_out = 0;
+		//if (i >= nodeoffset && i < nodeoffset+maxnode) {
+		//	dn->nodes[i].idx_outbuf = 0;
+		//	dn->nodes[i].num_in = 0;
+		//	dn->nodes[i].idx_inbuf = 0;
+		//	dn->nodes[i].num_out = 0;
+		//}
 	}
 
 	/* work through graph, allocate delay lines */
@@ -218,13 +272,13 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 		if (g[i*n + j] != 0) {
 			dn_mpi_list_uint_push(nodes_in[j], i);
 
-			dn->del_offsets[delcount] = 0;
-			dn->del_startidces[delcount] = startidx;
-			dn->del_lens[delcount] = g[i*n+j];
-			dn->del_sources[delcount] = i;
-			dn->del_targets[delcount] = j;
+			del_offsets[delcount] = 0;
+			del_startidces[delcount] = startidx;
+			del_lens[delcount] = g[i*n+j];
+			del_sources[delcount] = i;
+			del_targets[delcount] = j;
 
-			dn->nodes[i].num_out += 1;
+			nodes[i].num_out += 1;
 
 			startidx += g[i*n +j];
 			delcount += 1;
@@ -236,7 +290,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	num_outputs = calloc(n, sizeof(unsigned int));
 	in_base_idcs = calloc(n, sizeof(unsigned int));
 	for (i=0; i<n; i++) {
-		num_outputs[i] = dn->nodes[i].num_out;
+		num_outputs[i] = nodes[i].num_out;
 		for (j=0; j<i; j++)
 			in_base_idcs[i] += num_outputs[j]; 	// check logic here
 		//in_base_idcs[i] = i == 0 ? 0 : in_base_idcs[i-1] + num_outputs[i];
@@ -244,10 +298,10 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 
 	unsigned int idx = 0;
 	for (i=0; i<n; i++) {
-		dn->nodes[i].num_in = nodes_in[i]->count;
-		dn->nodes[i].idx_outbuf = idx;
-		idx += dn->nodes[i].num_in;
-		dn->nodes[i].idx_inbuf = in_base_idcs[i];
+		nodes[i].num_in = nodes_in[i]->count;
+		nodes[i].idx_outbuf = idx;
+		idx += nodes[i].num_in;
+		nodes[i].idx_inbuf = in_base_idcs[i];
 	}
 
 	unsigned int *num_inputs, *out_base_idcs, *out_counts, *inverseidces;
@@ -255,22 +309,59 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	out_base_idcs = calloc(n, sizeof(unsigned int));
 	out_counts = calloc(n, sizeof(unsigned int));
 	for (i=0; i<n; i++) {
-		num_inputs[i] = dn->nodes[i].num_in;
+		num_inputs[i] = nodes[i].num_in;
 		for (j=0; j<i; j++)
 			out_base_idcs[i] += num_inputs[j]; // check logic here
 		//out_base_idcs[i] = i == 0 ? 0 : in_base_idcs[i-1] + num_inputs[i];
 	}
 
-	inverseidces = calloc(numlines, sizeof(unsigned int));
-	for (i=0; i < numlines; i++) {
-		inverseidces[i] = out_base_idcs[dn->del_targets[i]] + 
-						  out_counts[dn->del_targets[i]];
-		out_counts[dn->del_targets[i]] += 1;
+	inverseidces = calloc(numlines_g, sizeof(unsigned int));
+	for (i=0; i < numlines_g; i++) {
+		inverseidces[i] = out_base_idcs[del_targets[i]] + 
+						  out_counts[del_targets[i]];
+		out_counts[del_targets[i]] += 1;
 	}
 	dn->destidx = inverseidces;
-	dn->sourceidx = malloc(sizeof(unsigned int)*numlines);
-	for (i=0; i<numlines; i++)
+	dn->sourceidx = malloc(sizeof(unsigned int)*numlines_g);
+	for (i=0; i<numlines_g; i++)
 		dn->sourceidx[dn->destidx[i]] = i;
+
+
+	/* take just the local info */
+	dn->del_offsets = malloc(sizeof(IDX_T)*numlinesout_l);
+	dn->del_startidces = malloc(sizeof(IDX_T)*numlinesout_l);
+	dn->del_lens = malloc(sizeof(IDX_T)*numlinesout_l);
+	dn->del_sources = malloc(sizeof(IDX_T)*numlinesout_l);
+	dn->del_targets = malloc(sizeof(IDX_T)*numlinesout_l);
+	dn->nodes = malloc(sizeof(dn_mpi_node)*maxnode);
+
+	IDX_T idx0, idx1;
+	idx0 = nodes[nodeoffset].idx_inbuf;
+	idx1 = nodes[nodeoffset+maxnode].idx_inbuf+nodes[nodeoffset+maxnode].num_out;
+
+	// ASSERT!
+	if (idx1-idx0 != numlinesout_l) {
+		printf("You f*!@ed up indexing!\n");
+		exit(-1);
+	}
+
+	for (i=0; i<numlinesout_l; i++) {
+		dn->del_offsets[i] = del_offsets[i+idx0];
+		dn->del_startidces[i] = del_startidces[i+idx0] ;
+		dn->del_lens[i] = del_lens[i+idx0];
+		dn->del_sources[i] = del_sources[i+idx0];
+		dn->del_targets[i] = del_targets[i+idx0];
+	}
+
+	for (i=0; i<maxnode; i++)
+		dn->nodes[i] = nodes[nodeoffset+1];
+
+	/* free the unused global info */
+	free(del_offsets);
+	free(del_startidces);
+	free(del_lens);
+	free(del_sources);
+	free(del_targets);
 
 	/* Clean up */
 	for (i=0; i<n; i++)
@@ -293,6 +384,7 @@ void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->del_targets);
 	free(dn->inputs);
 	free(dn->outputs);
+	free(dn->outputs_unsorted);
 	free(dn->destidx);
 	free(dn->sourceidx);
 	free(dn->delaybuf);

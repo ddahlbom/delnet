@@ -43,9 +43,16 @@ typedef struct dn_mpi_node_s {
 
 typedef struct dn_mpi_delaynet_s {
 	/* size info */
-	IDX_T num_nodes;
-	IDX_T num_delays;
+	IDX_T num_nodes_g;
+	IDX_T num_delays_g;
+	IDX_T num_nodes_l;
+	IDX_T num_delays_l;
+	IDX_T numlinesin_l;
 	IDX_T buf_len;
+	int commrank;
+	int commsize;
+	size_t maxnode; // <- num_nodes_l
+	size_t nodeoffset;
 
 	/* pointers */
 	FLOAT_T *delaybuf;
@@ -66,6 +73,10 @@ typedef struct dn_mpi_delaynet_s {
 /*
  * -------------------- Functions --------------------
  */
+
+/* MPI utils */
+size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints);
+size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints);
 
 /* lists (simple LIFO, for unsigned ints) */
 dn_mpi_list_uint* 	dn_mpi_list_uint_init();

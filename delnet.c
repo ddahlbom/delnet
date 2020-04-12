@@ -96,7 +96,7 @@ void dn_pushoutput(FLOAT_T val, IDX_T idx, dn_delaynet *dn)
 	i1 = dn->nodes[idx].idx_inbuf;
 	i2 = i1 + dn->nodes[idx].num_out;
 
-	for (k = i1; k < i2; k++)
+	for (k = i1; k < i2; k++) 	// send same message to all delay lines
 		dn->inputs[k] = val;
 }
 
@@ -290,6 +290,7 @@ void dn_freedelnet(dn_delaynet *dn) {
 	free(dn->del_targets);
 	free(dn->inputs);
 	free(dn->outputs);
+	free(dn->outputs_unsorted);
 	free(dn->destidx);
 	free(dn->sourceidx);
 	free(dn->delaybuf);

@@ -19,7 +19,7 @@
  *************************************************************/
 int main(int argc, char *argv[])
 {
-	su_mpi_model *m;
+	su_mpi_model_l *m;
 	su_mpi_trialparams tp;
 	char *infilename;
 	char outfilename[256];
@@ -42,8 +42,8 @@ int main(int argc, char *argv[])
 	} else {
 		if (commrank==0) {
 			m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
-			su_mpi_savemodel(m, "mpimodel.bin");
-			su_mpi_freemodel(m);
+			su_mpi_savemodel_l(m, "mpimodel.bin");
+			su_mpi_freemodel_l(m);
 		}
 		su_mpi_readtparameters(&tp, argv[2]);
 		infilename = argv[3];
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	m = su_mpi_loadmodel(mpifilename); 	/* everyone loads the same model */
+	m = su_mpi_loadmodel_l(mpifilename); 	/* everyone loads the same model */
 
 	/* set up spike recorder */
 	char srname[256];
@@ -85,11 +85,11 @@ int main(int argc, char *argv[])
 	strcpy(modelfilename, outfilename);
 	strcat(modelfilename, rankstr);
 	strcat(modelfilename, "_model.bin");
-	su_mpi_savemodel(m, modelfilename);
+	su_mpi_savemodel_l(m, modelfilename);
 
 	/* Clean up */
 	sr_close(sr);
-	su_mpi_freemodel(m);
+	su_mpi_freemodel_l(m);
 	free(input_forced);
 	MPI_Finalize();
 

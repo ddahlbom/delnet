@@ -42,8 +42,13 @@ typedef struct su_mpi_trialparams_s {
 	IDX_T *inputidcs;
 } su_mpi_trialparams;
 
-typedef struct su_mpi_model_s {
+typedef struct su_mpi_model_l_s {
 	IDX_T numinputneurons;
+	int commrank;
+	int commsize;
+	size_t maxnode;
+	size_t nodeoffset;
+	IDX_T numsyn;
 	//IDX_T numsyn_exc;
 	su_mpi_modelparams p;
 	dn_mpi_delaynet *dn;
@@ -51,7 +56,7 @@ typedef struct su_mpi_model_s {
 	FLOAT_T *traces_neu;
 	FLOAT_T *traces_syn;
 	FLOAT_T *synapses;
-} su_mpi_model;
+} su_mpi_model_l;
 
 /*************************************************************
  *  Function Declarations
@@ -72,15 +77,15 @@ unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p);
 void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T d);
 
 /* save and load and free models */
-void su_mpi_savemodel(su_mpi_model *m, char *filename);
-su_mpi_model *su_mpi_loadmodel(char *filename);
-void su_mpi_freemodel(su_mpi_model *m);
+void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename);
+su_mpi_model_l *su_mpi_loadmodel_l(char *filename);
+void su_mpi_freemodel_l(su_mpi_model_l *m);
 
 /* generate model */
-su_mpi_model *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
+su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
 
 /* run simulations */
-void su_mpi_runstdpmodel(su_mpi_model *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
+void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
 					spikerecord *sr, int commrank, int commsize, bool profiling);
 
 
