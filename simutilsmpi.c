@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-//#include <mpi.h> 
+#include <mpi.h> 
 
-#include "/usr/include/mpich/mpi.h"
+//#include "/usr/include/mpich/mpi.h"
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
 #include "simkernelsmpi.h"
@@ -274,7 +274,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) t_start = clock();
 
 		sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
-							m->dn, m->dn->sourceidx, dt, &m->p);
+							m->dn, dt, &m->p);
 
 		if (profiling) {
 			t_finish = clock();
@@ -423,9 +423,9 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	
 	/* initialize synapse weights */
 	for (i=0; i < numsyn_exc; i++)
-		synapses[m->dn->destidx[i]] = m->p.w_exc;
+		synapses[m->dn->destidx_g[i]] = m->p.w_exc;
 	for (; i < numsyn_tot; i++)
-		synapses[m->dn->destidx[i]] = m->p.w_inh;
+		synapses[m->dn->destidx_g[i]] = m->p.w_inh;
 
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
 	m->neurons = neurons;
@@ -445,7 +445,7 @@ void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
 {
 	FILE *f = fopen(filename, "wb");
 	
-	dn_mpi_savecheckpt(m->dn, f);
+	dn_mpi_save(m->dn, f);
 
 	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	fwrite(&m->commrank, sizeof(int), 1, f);
@@ -454,10 +454,10 @@ void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
 	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
 	fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
-	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes, f);
-	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
-	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->num_delays, f);
-	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->num_delays, f);
+	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
+	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
+	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
+	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
 
 	fclose(f);
 }
@@ -468,7 +468,7 @@ su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
 	size_t loadsize;
 	FILE *f = fopen(filename, "rb");
 	
-	m->dn = dn_mpi_loadcheckpt(f);
+	m->dn = dn_mpi_load(f);
 
 	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
@@ -491,21 +491,21 @@ su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
 	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->num_nodes);
-	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes, f);
-	if (loadsize != m->dn->num_nodes) { printf("Failed to load model.\n"); exit(-1); }
+	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->num_nodes_l);
+	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
+	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes);
-	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes, f);
-	if (loadsize != m->dn->num_nodes) { printf("Failed to load model.\n"); exit(-1); }
+	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes_l);
+	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
+	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->num_delays);
-	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->num_delays, f);
-	if (loadsize != m->dn->num_delays) { printf("Failed to load model.\n"); exit(-1); }
+	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesout_l);
+	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
+	if (loadsize != m->dn->numlinesout_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->num_delays);
-	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->num_delays, f);
-	if (loadsize != m->dn->num_delays) { printf("Failed to load model.\n"); exit(-1); }
+	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesout_l);
+	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
+	if (loadsize != m->dn->numlinesout_l) { printf("Failed to load model.\n"); exit(-1); }
 
 	fclose(f);
 

@@ -4,7 +4,7 @@ LDLIBS = -lm
 
 default: inputoptim
 
-mpidebug: delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernels.o simutilsmpi.o
+mpidebug: delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o
 	mpicc -g -o runtrial-mpi delnetmpi.o delnetstdpinputmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o $(LDLIBS)
 
 mpioptim: delnetstdpinputmpi.o delnetmpi-opt.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o

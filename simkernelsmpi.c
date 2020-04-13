@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
+#include <mpi.h>
 
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
@@ -50,7 +51,7 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synap
 {
 	size_t k,j;
 	FLOAT_T *delayoutputs;
-	for (k=0; k<dn->num_nodes; k++) {
+	for (k=0; k<dn->num_nodes_l; k++) {
 		// get inputs to neuron (outputs of delaylines)
 		neuroninputs[k] = 0.0;
 		delayoutputs = dn_mpi_getinputaddress(k,dn); //dn->outputs
@@ -111,7 +112,7 @@ void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 	size_t k, j;
 	FLOAT_T *neuroninputs;
 
-	for (k=0; k<dn->num_nodes; k++) {
+	for (k=0; k<dn->num_nodes_l; k++) {
 		for (j=0; j < dn->nodes[k].num_in; j++) {
 			neuroninputs = dn_mpi_getinputaddress(k,dn);
 			spike_pre[dn->nodes[k].idx_outbuf +j] = neuroninputs[j];
@@ -132,7 +133,7 @@ void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_
 }
 
 void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
-							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, IDX_T *sourceidx,
+							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp)
 {
 	size_t k, j;
@@ -140,7 +141,6 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 	for (k=0; k<mp->num_neurons; k++) 
 	for (j=0; j < dn->nodes[k].num_in; j++) {
 		// only update excitatory synapses
-		//if (sourceidx[dn->nodes[k].idx_outbuf+j] < numsyn_exc) {
 		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) {
 			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] +
 					dt * (mp->a_post * traces_syn[dn->nodes[k].idx_outbuf+j] * neuronoutputs[k] -

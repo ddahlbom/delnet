@@ -16,6 +16,6 @@ void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
 								FLOAT_T dt, su_mpi_modelparams *mp);
 void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
-							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, IDX_T *sourceidx,
+							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp);
 #endif

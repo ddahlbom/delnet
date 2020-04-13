@@ -43,11 +43,13 @@ typedef struct dn_mpi_node_s {
 
 typedef struct dn_mpi_delaynet_s {
 	/* size info */
+	IDX_T num_nodes_g;
 	IDX_T num_nodes_l;
 	IDX_T nodeoffset;
 	IDX_T numlinesout_l;
 	IDX_T numlinesin_l;
 	IDX_T numlines_g;
+	IDX_T lineoffset;
 	IDX_T buf_len;
 	int commrank;
 	int commsize;

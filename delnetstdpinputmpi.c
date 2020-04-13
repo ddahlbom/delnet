@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include "/usr/include/mpich/mpi.h"
-//#include <mpi.h>
+//#include "/usr/include/mpich/mpi.h"
+#include <mpi.h>
 
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
@@ -39,19 +39,27 @@ int main(int argc, char *argv[])
 		printf("Need two parameter files (model and trial),\
 				input file, and a file name.  Exiting.\n");
 		exit(-1);
-	} else {
-		if (commrank==0) {
-			m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
-			su_mpi_savemodel_l(m, "mpimodel.bin");
-			su_mpi_freemodel_l(m);
-		}
-		su_mpi_readtparameters(&tp, argv[2]);
-		infilename = argv[3];
-		strcpy(outfilename, argv[4]);
 	}
+	//if (commrank==0) {
+	//	m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
+	//	su_mpi_savemodel_l(m, "mpimodel.bin");
+	//	su_mpi_freemodel_l(m);
+	//}
+	m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
+	//su_mpi_readtparameters(&tp, argv[2]);
+	tp.fs = 2000.0;
+	tp.dur = 2.5;
+	tp.lambda = 3.0;
+	tp.randspikesize = 20.0;
+	tp.randinput = 1;
+	tp.inhibition = 1;
+	tp.numinputs = 100;
+
+	infilename = argv[3];
+	strcpy(outfilename, argv[4]);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	m = su_mpi_loadmodel_l(mpifilename); 	/* everyone loads the same model */
+	//m = su_mpi_loadmodel_l(mpifilename); 	/* everyone loads the same model */
 
 	/* set up spike recorder */
 	char srname[256];
@@ -60,6 +68,7 @@ int main(int argc, char *argv[])
 	strcpy(srname, outfilename);
 	strcat(srname, rankstr);
 	strcat(srname, "_spikes.dat");
+	printf("about to try spike record\n");
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
 
 	/* load input sequence */
