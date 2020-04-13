@@ -67,6 +67,7 @@ typedef struct dn_mpi_delaynet_s {
 	IDX_T *del_lens;
 	IDX_T *del_sources;
 	IDX_T *del_targets;
+
 } dn_mpi_delaynet;
 
 

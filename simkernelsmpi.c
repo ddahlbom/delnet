@@ -1,6 +1,5 @@
 #include <math.h>
 #include <stdlib.h>
-#include <mpi.h>
 
 #include "delnetmpi.h"
 #include "simutilsmpi.h"

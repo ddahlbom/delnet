@@ -11,6 +11,7 @@
 #include "spkrcd.h"
 
 #define PROFILING 1
+#define DEBUG 1
 
 
 
@@ -40,20 +41,16 @@ int main(int argc, char *argv[])
 				input file, and a file name.  Exiting.\n");
 		exit(-1);
 	}
-	//if (commrank==0) {
-	//	m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
-	//	su_mpi_savemodel_l(m, "mpimodel.bin");
-	//	su_mpi_freemodel_l(m);
-	//}
 	m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
-	//su_mpi_readtparameters(&tp, argv[2]);
-	tp.fs = 2000.0;
-	tp.dur = 2.5;
-	tp.lambda = 3.0;
-	tp.randspikesize = 20.0;
-	tp.randinput = 1;
-	tp.inhibition = 1;
-	tp.numinputs = 100;
+	if (DEBUG) printf("Made model on process %d\n", commrank);
+
+	if (commrank == 1) {
+		su_mpi_readtparameters(&tp, argv[2]);
+		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
+	} else {
+		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
+	}
+	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
 
 	infilename = argv[3];
 	strcpy(outfilename, argv[4]);
@@ -68,7 +65,6 @@ int main(int argc, char *argv[])
 	strcpy(srname, outfilename);
 	strcat(srname, rankstr);
 	strcat(srname, "_spikes.dat");
-	printf("about to try spike record\n");
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
 
 	/* load input sequence */

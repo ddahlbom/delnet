@@ -38,10 +38,10 @@ delnetsketch.o: delnetsketch.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetsketch.c 
 
 simkernelsmpi-opt.o: simkernelsmpi.c simkernelsmpi.h
-	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simkernelsmpi-opt.o -c simkernelsmpi.c
+	mpicc $(CFLAGS) -O3 $(LDLIBS) -o simkernelsmpi-opt.o -c simkernelsmpi.c
 
 simkernelsmpi.o: simkernelsmpi.c simkernelsmpi.h
-	$(CC) $(CFLAGS) $(LDLIBS) -c simkernelsmpi.c
+	mpicc $(CFLAGS) $(LDLIBS) -c simkernelsmpi.c
 
 simkernels-opt.o: simkernels.c simkernels.h
 	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simkernels-opt.o -c simkernels.c
@@ -50,10 +50,10 @@ simkernels.o: simkernels.c simkernels.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c simkernels.c
 
 simutilsmpi-opt.o: simutilsmpi.c simutilsmpi.h
-	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simutilsmpi-opt.o -c simutilsmpi.c
+	mpicc $(CFLAGS) -O3 $(LDLIBS) -o simutilsmpi-opt.o -c simutilsmpi.c
 
 simutilsmpi.o: simutilsmpi.c simutilsmpi.h
-	$(CC) $(CFLAGS) $(LDLIBS) -c simutilsmpi.c
+	mpicc $(CFLAGS) $(LDLIBS) -c simutilsmpi.c
 
 simutils-opt.o: simutils.c simutils.h
 	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o simutils-opt.o -c simutils.c

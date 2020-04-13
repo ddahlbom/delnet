@@ -11,6 +11,8 @@
 #include "paramutils.h"
 #include "spkrcd.h"
 
+#define DEBUG 1
+
 /*************************************************************
  *  Functions
  *************************************************************/
@@ -383,26 +385,35 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 			/* send graph to other processes */
 			for (int k=1; k<commsize; k++) {
-				MPI_Isend(graph, n*n, MPI_UNSIGNED, 1, 0, MPI_COMM_WORLD, &sendReq[k-1] );
+				//MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD, &sendReq[k-1] );
+				if (DEBUG) printf("Sending graph from rank 0 to rank %d\n", k);
+				MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD);
+				if (DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
 			}
 
 			/* wait for processes to be received */
-			for (int k=1; k<commsize; k++) {
-				MPI_Wait(&recvReq[k-1], &recvStatus[k-1]);
-			}
+			//for (int k=1; k<commsize; k++) {
+			//	MPI_Wait(&recvReq[k-1], &recvStatus[k-1]);
+			//}
 			free(sendReq);
 			free(recvReq);
 			free(recvStatus);
 		}
 	} else {
 		MPI_Status recvStatus;
+		graph = malloc(sizeof(unsigned int)*n*n);
+		if (DEBUG) printf("Waiting for graph on rank %d from rank 0\n", commrank);
 		MPI_Recv(graph, n*n, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &recvStatus);
+		if (DEBUG) printf("Received graph on rank %d from rank 0\n", commrank);
 	}
 
+	if (DEBUG) printf("Making delnet on process %d\n", commrank);
 	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
+	if (DEBUG) printf("Made delnet on process %d\n", commrank);
 
 
 	/* set up state for simulation */
+	if (DEBUG) printf("Allocating state on rank %d\n", commrank);
 	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
@@ -422,6 +433,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 	
 	/* initialize synapse weights */
+	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
 	for (i=0; i < numsyn_exc; i++)
 		synapses[m->dn->destidx_g[i]] = m->p.w_exc;
 	for (; i < numsyn_tot; i++)
@@ -433,6 +445,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	m->traces_syn = traces_syn;
 	m->synapses = synapses;
 
+	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
 	free(graph);
 
 	return m;

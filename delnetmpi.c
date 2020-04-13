@@ -7,6 +7,8 @@
 //#include "/usr/include/mpich/mpi.h"
 #include "delnetmpi.h"
 
+#define DEBUG 1
+
 /* --------------------	MPI Utils -------------------- */
 size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints)
 {
@@ -143,6 +145,7 @@ FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
 void dn_mpi_advance(dn_mpi_delaynet *dn)
 {
 	IDX_T i, k, k_global;
+	if (DEBUG)  printf("Entered advancement function\n");
 
 	/* load network inputs into buffers */
 	for(k=0; k < dn->numlinesin_l; k++) {
@@ -170,9 +173,10 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	MPI_Status *sendStatus = malloc(sizeof(dn->commsize)-1);
 	MPI_Status *recvStatus = malloc(sizeof(dn->commsize)-1);
 
-	/* Non-blocking recieves */
+	/* Non-blocking receives */
 	for (i=0; i<dn->commsize; i++) {
 		if (i!=dn->commrank) {
+			if (DEBUG) printf("Receving at %d from %d\n", dn->commrank, i);
 			blocksize = dn_mpi_maxnode(i, dn->commsize, dn->num_nodes_g);
 			offset = dn_mpi_nodeoffset(i, dn->commsize, dn->num_nodes_g);
 			MPI_Irecv(&dn->outputs_unsorted[offset],
@@ -192,6 +196,7 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	count = 0;
 	for (i=0; i<dn->commsize; i++) {
 		if (i!=dn->commrank) {
+			if (DEBUG) printf("Sending from %d to %d\n", dn->commrank, i);
 			MPI_Isend(&dn->outputs_unsorted[offset],
 					  blocksize,
 					  MPI_DOUBLE,
@@ -216,13 +221,18 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 			MPI_Wait(&sendReq[i], &sendStatus[i]);
 		}
 	}
-	
+	free(recvReq);
+	free(sendReq);
+	free(sendStatus);
+	free(recvStatus);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* sort output for access */
 	for (k=0; k< dn->numlinesout_l; k++) {
 		k_global = k + dn->lineoffset;
 		dn->outputs[k] = dn->outputs_unsorted[ dn->sourceidx_g[k_global] ];
 	}
+
 }
 
 
@@ -273,16 +283,15 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 		for(j=0; j<n; j++) {
 			deltot_g += g[i*n+j];
 			numlines_g += g[i*n+j] != 0 ? 1 : 0;
-			if (i >= nodeoffset && i < num_nodes_l) {
+			if (i >= nodeoffset && i < nodeoffset + num_nodes_l) {
 				deltot_l += g[i*n+j];
 				numlinesout_l += g[i*n+j] != 0 ? 1 : 0;
 			}
-			if (j >= nodeoffset && i < num_nodes_l) {
+			if (j >= nodeoffset && j < nodeoffset + num_nodes_l) {
 				numlinesin_l += g[i*n+j] != 0 ? 1 : 0;
 			}
 		}
 	}
-
 
 	dn->num_nodes_g = n;
 	dn->num_nodes_l = num_nodes_l;
@@ -299,14 +308,13 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	dn->outputs = calloc(numlines_g, sizeof(FLOAT_T)); 	// <- ultimately refine this
 	dn->outputs_unsorted = calloc(numlinesout_l, sizeof(FLOAT_T));
 
-
 	// Original:
-	//dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
-	//dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
-	//dn->del_lens = malloc(sizeof(IDX_T)*numlines);
-	//dn->del_sources = malloc(sizeof(IDX_T)*numlines);
-	//dn->del_targets = malloc(sizeof(IDX_T)*numlines);
-	//dn->nodes = malloc(sizeof(dn_mpi_node)*n);
+	// dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
+	// dn->del_startidces = malloc(sizeof(IDX_T)*numlines);
+	// dn->del_lens = malloc(sizeof(IDX_T)*numlines);
+	// dn->del_sources = malloc(sizeof(IDX_T)*numlines);
+	// dn->del_targets = malloc(sizeof(IDX_T)*numlines);
+	// dn->nodes = malloc(sizeof(dn_mpi_node)*n);
 	
 	// Local backup of original
 	IDX_T *del_offsets = malloc(sizeof(IDX_T)*numlines_g);
@@ -341,7 +349,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 
 			nodes[i].num_out += 1;
 
-			startidx += g[i*n +j];
+			startidx += g[i*n+j];
 			delcount += 1;
 		}
 	}
@@ -403,7 +411,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 
 	// ASSERT!
 	if (idx1-idx0 != numlinesout_l) {
-		printf("idx1-idx0: %d \t numlinesout_l: %d\n", idx1-idx0, numlinesout_l);
+		printf("Process %d -- idx1-idx0: %d \t numlinesout_l: %d\n", commrank, idx1-idx0, numlinesout_l);
 		printf("You f*!@ed up indexing!\n");
 		exit(-1);
 	}
@@ -417,7 +425,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	}
 
 	for (i=0; i<num_nodes_l; i++)
-		dn->nodes[i] = nodes[nodeoffset+1];
+		dn->nodes[i] = nodes[nodeoffset+i];
 
 	/* free the unused global info */
 	free(del_offsets);
@@ -430,6 +438,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	for (i=0; i<n; i++)
 		dn_mpi_list_uint_free(nodes_in[i]);
 	free(nodes_in);
+	free(nodes);
 	free(num_outputs);
 	free(in_base_idcs);
 	free(num_inputs);
