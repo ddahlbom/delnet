@@ -10,8 +10,8 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
 						su_mpi_trialparams *tp);
 unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
-								unsigned int n, FLOAT_T t, spikerecord *sr,
-								unsigned int offset);
+									unsigned int n, FLOAT_T t, spikerecord *sr,
+									unsigned int offset);
 void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 								dn_mpi_delaynet *dn, FLOAT_T dt,
 								su_mpi_modelparams *mp);

@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 	
 	/* rand seed */
-	srand(1);
+	//srand(1);
 
 	/* set parameters */
 	if (argc < 4) {
@@ -86,6 +86,8 @@ int main(int argc, char *argv[])
 		if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
 
 		fclose(infile);
+
+		//for (int q=0; q<N_pat; q++) printf("%g\n", input_forced[q]);
 
 		MPI_Bcast( &N_pat, 1, MPI_LONG, 0, MPI_COMM_WORLD);
 		MPI_Bcast( input_forced, N_pat, MPI_DOUBLE, 0, MPI_COMM_WORLD);

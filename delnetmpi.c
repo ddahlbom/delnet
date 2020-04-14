@@ -166,7 +166,7 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	/* pull network outputs from buffers */
 	//for (k=0; k < dn->numlinesout_l; k++) {
 	for (k=0; k < dn->numlinesout_l; k++) {
-		k_global = k + dn->lineoffset_in;
+		k_global = k + dn->lineoffset_in; 	// because still in input buffer order
 		dn->outputs_unsorted[k_global] =
 				dn->delaybuf[dn->del_startidces[k]+
 								dn->del_offsets[k]];
@@ -198,10 +198,7 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 		if (i!=dn->commrank) {
 			if (DEBUG) printf("Sending block info from %d to %d\n", dn->commrank, i);
 			MPI_Isend(&dn->lineoffset_in, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD, &offsetSendReq[i]);
-			//MPI_Isend(&dn->lineoffset_out, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD, &offsetSendReq[i]);
 			MPI_Isend(&dn->numlinesout_l, 1, MPI_UNSIGNED, i, LENGTH, MPI_COMM_WORLD, &lengthSendReq[i]);
-			//MPI_Send(&dn->lineoffset_out, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD);
-			//MPI_Send(&dn->numlinesin_l, 1, MPI_UNSIGNED, i, LENGTH, MPI_COMM_WORLD);
 		}
 	}
 
@@ -243,7 +240,6 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 		if (i!=dn->commrank) {
 			if (DEBUG) printf("Sending data from %d to %d\n", dn->commrank, i);
 			MPI_Isend(&dn->outputs_unsorted[dn->lineoffset_in],
-					  //dn->numlinesin_l,
 					  dn->numlinesout_l,
 					  MPI_DOUBLE,
 					  i,
@@ -271,12 +267,12 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	}
 
 
-	// probably not necessary with all the MPI_Waits
-	MPI_Barrier(MPI_COMM_WORLD);
+	// probably not necessary with Waits 
+	//MPI_Barrier(MPI_COMM_WORLD);
 
 	/* sort output for access */
 	for (k=0; k< dn->numlinesin_l; k++) {
-		k_global = k + dn->lineoffset_out;
+		k_global = k + dn->lineoffset_out; 	// <--- confirm this (lineoffset_out?)
 		dn->outputs[k] = dn->outputs_unsorted[ dn->sourceidx_g[k_global] ];
 	}
 	if (DEBUG) printf("Exiting advancing step...\n");

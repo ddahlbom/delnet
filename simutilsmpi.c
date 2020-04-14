@@ -244,7 +244,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) t_start = clock();
 
 		for (size_t k=0; k<n_l; k++)
-			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // neuron outputs into dn inputs
+			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // node outputs into delnet 
 
 		if (profiling) {
 			t_finish = clock();
@@ -378,6 +378,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 	/* make sure all using the same graph */
 	if (commrank == 0) {
+		srand(1);
 		graph = su_mpi_iblobgraph(&m->p);
 		if (commsize > 1) {
 			MPI_Request *sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
@@ -419,7 +420,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
 	FLOAT_T *synapses; 		
-	//IDX_T numsyn_tot=0, numsyn_exc;
+	IDX_T numsyn_tot=0, numsyn_exc;
 
 	for (i=0; i<maxnode; i++) {
 		if (nodeoffset + i < n_exc)
@@ -428,16 +429,15 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
 	}
 
-	//for (i=nodeoffset; i<n_exc && i<nodeoffset+maxnode; i++) {
-	//	su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
-	//	//numsyn_tot += m->dn->nodes[i].num_in;
-	//}
-	//numsyn_exc = numsyn_tot;
-	//for (i = n_exc; i<n && i<maxnode; i++) {
-	//for (; i<n && i<maxnode+nodeoffset; i++) {
-	//	su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
-	//	//numsyn_tot += m->dn->nodes[i].num_in;
-	//}
+	// Find a better way than this to find number of excitatory synapses
+	for (i=0; i<n_exc; i++) {
+		numsyn_tot += m->dn->nodes[i].num_in;
+	}
+	numsyn_exc = numsyn_tot;
+	for (i = n_exc; i<n && i<maxnode; i++) {
+		numsyn_tot += m->dn->nodes[i].num_in;
+	}
+
 	//traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
 	//synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
@@ -451,8 +451,8 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
 	unsigned int i_g;	
 	for (i=0; i < m->dn->numlinesin_l; i++) {
-		i_g = i + m->dn->lineoffset_out;
-		synapses[i] = m->dn->sourceidx_g[i_g] < n_exc ? m->p.w_exc : m->p.w_inh;
+		i_g = i + m->dn->lineoffset_out; 	// <----- confirm this (out or in?)
+		synapses[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
 	}
 
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
