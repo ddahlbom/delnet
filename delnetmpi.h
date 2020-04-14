@@ -49,7 +49,8 @@ typedef struct dn_mpi_delaynet_s {
 	IDX_T numlinesout_l;
 	IDX_T numlinesin_l;
 	IDX_T numlines_g;
-	IDX_T lineoffset;
+	IDX_T lineoffset_in;
+	IDX_T lineoffset_out;
 	IDX_T buf_len;
 	int commrank;
 	int commsize;

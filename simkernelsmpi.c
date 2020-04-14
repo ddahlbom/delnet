@@ -3,6 +3,7 @@
 
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
+#include "simkernelsmpi.h"
 
 
 /* -------------------- Random Sampling -------------------- */
@@ -76,25 +77,26 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 	return num;
 }
 
-void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, su_mpi_modelparams *mp,
+void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
 						su_mpi_trialparams *tp)
 {
 	size_t k;
-	for (k=0; k<mp->num_neurons; k++) {
+	for (k=0; k<num_neurons; k++) {
 		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k],
 							neurons[k].a, 1000.0/tp->fs);
 	}
 }
 
 unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
-								unsigned int n, FLOAT_T t, spikerecord *sr)
+									unsigned int n, FLOAT_T t, spikerecord *sr,
+									unsigned int offset)
 {
 	size_t k;
 	unsigned int numspikes=0;
 	for (k=0; k<n; k++) {
 		neuronoutputs[k] = 0.0;
 		if (neurons[k].v >= 30.0) {
-			sr_save_spike(sr, k, t);
+			sr_save_spike(sr, k+offset, t);
 			neuronoutputs[k] = 1.0;
 			neurons[k].v = -65.0;
 			neurons[k].u += neurons[k].d;
@@ -137,7 +139,7 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 {
 	size_t k, j;
 	FLOAT_T *synapseoutputs = dn->outputs;
-	for (k=0; k<mp->num_neurons; k++) 
+	for (k=0; k<dn->num_nodes_l; k++) 
 	for (j=0; j < dn->nodes[k].num_in; j++) {
 		// only update excitatory synapses
 		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) {

@@ -2,12 +2,17 @@
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
 #include <math.h>
-#include <mpi.h> 
+// #include <mpi.h> 
 
 //#include "/usr/include/mpich/mpi.h"
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
 #include "delnetmpi.h"
 
-#define DEBUG 1
+#define DEBUG 0
+
+#define OFFSET 0
+#define LENGTH 1
+#define DATA 2
 
 /* --------------------	MPI Utils -------------------- */
 size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints)
@@ -148,7 +153,8 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	if (DEBUG)  printf("Entered advancement function\n");
 
 	/* load network inputs into buffers */
-	for(k=0; k < dn->numlinesin_l; k++) {
+	//for(k=0; k < dn->numlinesin_l; k++) {
+	for(k=0; k < dn->numlinesout_l; k++) {
 		dn->delaybuf[dn->del_startidces[k]+dn->del_offsets[k]] = dn->inputs[k];
 	}
 
@@ -158,81 +164,122 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	}
 
 	/* pull network outputs from buffers */
+	//for (k=0; k < dn->numlinesout_l; k++) {
 	for (k=0; k < dn->numlinesout_l; k++) {
-		k_global = k + dn->lineoffset;
+		k_global = k + dn->lineoffset_in;
 		dn->outputs_unsorted[k_global] =
 				dn->delaybuf[dn->del_startidces[k]+
 								dn->del_offsets[k]];
 	}
 
-	/* Synchronize outputs_unsorted through MPI */
-	size_t blocksize, offset;
-	unsigned int count = 0;
-	MPI_Request *recvReq = malloc(sizeof(dn->commsize)-1);
-	MPI_Request *sendReq = malloc(sizeof(dn->commsize)-1);
-	MPI_Status *sendStatus = malloc(sizeof(dn->commsize)-1);
-	MPI_Status *recvStatus = malloc(sizeof(dn->commsize)-1);
 
-	/* Non-blocking receives */
+	/* Synchronize outputs_unsorted through MPI */
+	unsigned int blocksize[dn->commsize], offset[dn->commsize];
+
+	MPI_Request offsetRecvReq[dn->commsize];
+	MPI_Request lengthRecvReq[dn->commsize];
+	MPI_Request dataRecvReq[dn->commsize];
+
+	MPI_Request offsetSendReq[dn->commsize];
+	MPI_Request lengthSendReq[dn->commsize];
+	MPI_Request dataSendReq[dn->commsize];
+
+	// Nonblocking receives for block information
 	for (i=0; i<dn->commsize; i++) {
 		if (i!=dn->commrank) {
-			if (DEBUG) printf("Receving at %d from %d\n", dn->commrank, i);
-			blocksize = dn_mpi_maxnode(i, dn->commsize, dn->num_nodes_g);
-			offset = dn_mpi_nodeoffset(i, dn->commsize, dn->num_nodes_g);
-			MPI_Irecv(&dn->outputs_unsorted[offset],
-					  blocksize,
+			if (DEBUG) printf("Receiving block info at %d from %d\n", dn->commrank, i);
+			MPI_Irecv(&offset[i], 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD, &offsetRecvReq[i]);
+			MPI_Irecv(&blocksize[i], 1, MPI_UNSIGNED, i, LENGTH, MPI_COMM_WORLD, &lengthRecvReq[i]);
+		}
+	}
+
+	// Nonblocking sends of block information
+	for (i=0; i<dn->commsize; i++) {
+		if (i!=dn->commrank) {
+			if (DEBUG) printf("Sending block info from %d to %d\n", dn->commrank, i);
+			MPI_Isend(&dn->lineoffset_in, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD, &offsetSendReq[i]);
+			//MPI_Isend(&dn->lineoffset_out, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD, &offsetSendReq[i]);
+			MPI_Isend(&dn->numlinesout_l, 1, MPI_UNSIGNED, i, LENGTH, MPI_COMM_WORLD, &lengthSendReq[i]);
+			//MPI_Send(&dn->lineoffset_out, 1, MPI_UNSIGNED, i, OFFSET, MPI_COMM_WORLD);
+			//MPI_Send(&dn->numlinesin_l, 1, MPI_UNSIGNED, i, LENGTH, MPI_COMM_WORLD);
+		}
+	}
+
+	// Wait to recieve block information
+	for (i=0; i<dn->commsize; i++) {
+		if (i!=dn->commrank) {
+			if (DEBUG) printf("Waiting for block info from %d on %d\n", i, dn->commrank);
+			MPI_Wait(&offsetRecvReq[i], MPI_STATUS_IGNORE);
+			MPI_Wait(&lengthRecvReq[i], MPI_STATUS_IGNORE);
+		}
+	}
+
+	// Wait to for sent block information to be received
+	for (i=0; i<dn->commsize; i++) {
+		if (i!=dn->commrank) {
+			if (DEBUG) printf("Waiting for block information to be recieved on %d from %d\n", i, dn->commrank);
+			MPI_Wait(&offsetSendReq[i], MPI_STATUS_IGNORE);
+			MPI_Wait(&lengthSendReq[i], MPI_STATUS_IGNORE);
+		}
+	}
+
+
+	// Non-blocking receives for actual data
+	for (i=0; i<dn->commsize; i++) {
+		if (i!=dn->commrank) {
+			if (DEBUG) printf("Waiting for data from %d on %d\n", i, dn->commrank);
+			MPI_Irecv(&dn->outputs_unsorted[offset[i]],
+					  blocksize[i],
 					  MPI_DOUBLE,
 					  i,
-					  0,
+					  DATA, 
 					  MPI_COMM_WORLD,
-					  &recvReq[count]);
-			count += 1;
+					  &dataRecvReq[i]);
 		}
 	}
 
 	/* Non-blocking sends */
-	blocksize = dn_mpi_maxnode(dn->commrank, dn->commsize, dn->num_nodes_g);
-	offset = dn_mpi_nodeoffset(dn->commrank, dn->commsize, dn->num_nodes_g);
-	count = 0;
 	for (i=0; i<dn->commsize; i++) {
 		if (i!=dn->commrank) {
-			if (DEBUG) printf("Sending from %d to %d\n", dn->commrank, i);
-			MPI_Isend(&dn->outputs_unsorted[offset],
-					  blocksize,
+			if (DEBUG) printf("Sending data from %d to %d\n", dn->commrank, i);
+			MPI_Isend(&dn->outputs_unsorted[dn->lineoffset_in],
+					  //dn->numlinesin_l,
+					  dn->numlinesout_l,
 					  MPI_DOUBLE,
 					  i,
-					  0,
+					  DATA,
 					  MPI_COMM_WORLD,
-					  &sendReq[count]);
-			count += 1;
+					  &dataSendReq[i]);
+		}
+	}
+	
+
+	// Wait to receive data information
+	for (i=0; i<dn->commsize; i++) {
+		if (i!=dn->commrank) {
+			if (DEBUG) printf("Waiting on data from %d on %d\n", i, dn->commrank);
+			MPI_Wait(&dataRecvReq[i], MPI_STATUS_IGNORE);
 		}
 	}
 
-	/* Confirm receipt of data locally */
-	for (i=0; i<dn->commsize-1; i++) {
+	// Wait for sent data to be received 
+	for (i=0; i<dn->commsize; i++) {
 		if (i!=dn->commrank) {
-			MPI_Wait(&recvReq[i], &recvStatus[i]);
+			if (DEBUG) printf("Waiting for data to be recieved on %d from %d\n", i, dn->commrank);
+			MPI_Wait(&dataSendReq[i], MPI_STATUS_IGNORE);
 		}
 	}
-		
-	/* Confirm delivery of data remotely */
-	for (i=0; i<dn->commsize-1; i++) {
-		if (i!=dn->commrank) {
-			MPI_Wait(&sendReq[i], &sendStatus[i]);
-		}
-	}
-	free(recvReq);
-	free(sendReq);
-	free(sendStatus);
-	free(recvStatus);
+
+
+	// probably not necessary with all the MPI_Waits
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* sort output for access */
-	for (k=0; k< dn->numlinesout_l; k++) {
-		k_global = k + dn->lineoffset;
+	for (k=0; k< dn->numlinesin_l; k++) {
+		k_global = k + dn->lineoffset_out;
 		dn->outputs[k] = dn->outputs_unsorted[ dn->sourceidx_g[k_global] ];
 	}
-
+	if (DEBUG) printf("Exiting advancing step...\n");
 }
 
 
@@ -280,13 +327,15 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	numlinesin_l = 0;
 
 	for (i=0; i<n; i++) {
-		for(j=0; j<n; j++) {
+		for (j=0; j<n; j++) {
 			deltot_g += g[i*n+j];
 			numlines_g += g[i*n+j] != 0 ? 1 : 0;
+			// Block or rows -- number of lines out
 			if (i >= nodeoffset && i < nodeoffset + num_nodes_l) {
 				deltot_l += g[i*n+j];
 				numlinesout_l += g[i*n+j] != 0 ? 1 : 0;
 			}
+			// Block of columns -- number of lines in
 			if (j >= nodeoffset && j < nodeoffset + num_nodes_l) {
 				numlinesin_l += g[i*n+j] != 0 ? 1 : 0;
 			}
@@ -304,9 +353,9 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	dn->commsize = commsize;
 
 	dn->delaybuf = calloc(deltot_l, sizeof(FLOAT_T));
-	dn->inputs = calloc(numlinesin_l, sizeof(FLOAT_T));
-	dn->outputs = calloc(numlines_g, sizeof(FLOAT_T)); 	// <- ultimately refine this
-	dn->outputs_unsorted = calloc(numlinesout_l, sizeof(FLOAT_T));
+	dn->inputs = calloc(numlinesout_l, sizeof(FLOAT_T));
+	dn->outputs = calloc(numlinesin_l, sizeof(FLOAT_T)); 	
+	dn->outputs_unsorted = calloc(numlines_g, sizeof(FLOAT_T)); // <- ultimately refine this
 
 	// Original:
 	// dn->del_offsets = malloc(sizeof(IDX_T)*numlines);
@@ -326,7 +375,8 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 
 
 	/* init nodes -- should've just calloc-ed*/
-	for (i=nodeoffset; i<nodeoffset+num_nodes_l; i++) {
+	//for (i=nodeoffset; i<nodeoffset+num_nodes_l; i++) {
+	for (i=0; i<n; i++) {
 		nodes[i].idx_outbuf = 0;
 		nodes[i].num_in = 0;
 		nodes[i].idx_inbuf = 0;
@@ -396,6 +446,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 		dn->sourceidx_g[dn->destidx_g[i]] = i;
 
 
+	/* -- DIVERGES FROM GLOBAL HERE -- */
 	/* take just the local info */
 	dn->del_offsets = malloc(sizeof(IDX_T)*numlinesout_l);
 	dn->del_startidces = malloc(sizeof(IDX_T)*numlinesout_l);
@@ -404,28 +455,44 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	dn->del_targets = malloc(sizeof(IDX_T)*numlinesout_l);
 	dn->nodes = malloc(sizeof(dn_mpi_node)*num_nodes_l);
 
-	IDX_T idx0, idx1;
-	idx0 = nodes[nodeoffset].idx_inbuf;
-	idx1 = nodes[nodeoffset+num_nodes_l-1].idx_inbuf+nodes[nodeoffset+num_nodes_l-1].num_out;
-	dn->lineoffset = idx0;
+	IDX_T i0_inbuf, i1_inbuf, i0_outbuf, i1_outbuf;
+	i0_inbuf = nodes[nodeoffset].idx_inbuf;
+	i1_inbuf = nodes[nodeoffset+num_nodes_l-1].idx_inbuf + nodes[nodeoffset+num_nodes_l-1].num_out;
+	i0_outbuf = nodes[nodeoffset].idx_outbuf;
+	i1_outbuf = nodes[nodeoffset+num_nodes_l-1].idx_outbuf + nodes[nodeoffset+num_nodes_l-1].num_in;
+
+	dn->lineoffset_in = i0_inbuf;
+	dn->lineoffset_out = i0_outbuf;
 
 	// ASSERT!
-	if (idx1-idx0 != numlinesout_l) {
-		printf("Process %d -- idx1-idx0: %d \t numlinesout_l: %d\n", commrank, idx1-idx0, numlinesout_l);
+	if (i1_inbuf-i0_inbuf != numlinesout_l) {
+		printf("Process %d -- i1_inbuf-i0_inbuf: %d \t numlinesout_l: %d\n", commrank, i1_inbuf-i0_inbuf, numlinesout_l);
+		printf("You f*!@ed up indexing!\n");
+		exit(-1);
+	}
+
+	if (i1_outbuf-i0_outbuf != numlinesin_l) {
+		printf("Process %d -- i1_outbuf-i0_outbuf: %d \t numlinesin_l: %d\n", commrank, i1_outbuf-i0_outbuf, numlinesin_l);
 		printf("You f*!@ed up indexing!\n");
 		exit(-1);
 	}
 
 	for (i=0; i<numlinesout_l; i++) {
-		dn->del_offsets[i] = del_offsets[i+idx0]; // kinda stupid -- they're all zero
-		dn->del_startidces[i] = del_startidces[i+idx0] - del_startidces[idx0];
-		dn->del_lens[i] = del_lens[i+idx0];
-		dn->del_sources[i] = del_sources[i+idx0];
-		dn->del_targets[i] = del_targets[i+idx0];
+		dn->del_offsets[i] = del_offsets[i+i0_inbuf]; // kinda stupid -- they're all zero
+		dn->del_startidces[i] = del_startidces[i+i0_inbuf] - del_startidces[i0_inbuf];
+		dn->del_lens[i] = del_lens[i+i0_inbuf];
+		dn->del_sources[i] = del_sources[i+i0_inbuf];
+		dn->del_targets[i] = del_targets[i+i0_inbuf];
 	}
 
-	for (i=0; i<num_nodes_l; i++)
-		dn->nodes[i] = nodes[nodeoffset+i];
+	IDX_T in_offset = nodes[nodeoffset].idx_inbuf;
+	IDX_T out_offset = nodes[nodeoffset].idx_outbuf;
+	for (i=0; i<num_nodes_l; i++) {
+		dn->nodes[i].idx_inbuf = nodes[nodeoffset+i].idx_inbuf - in_offset;
+		dn->nodes[i].idx_outbuf = nodes[nodeoffset+i].idx_outbuf - out_offset;
+		dn->nodes[i].num_out = nodes[nodeoffset+i].num_out;
+		dn->nodes[i].num_in = nodes[nodeoffset+i].num_in;
+	}
 
 	/* free the unused global info */
 	free(del_offsets);
@@ -472,14 +539,15 @@ void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream) {
 	fwrite(&dn->numlinesout_l, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->numlinesin_l, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->numlines_g, sizeof(IDX_T), 1, stream);
-	fwrite(&dn->lineoffset, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->lineoffset_in, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->lineoffset_out, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->commrank, sizeof(int), 1, stream);
 	fwrite(&dn->commsize, sizeof(int), 1, stream);
 
 	fwrite(dn->delaybuf, sizeof(FLOAT_T), dn->buf_len, stream);
-	fwrite(dn->inputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
-	fwrite(dn->outputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	fwrite(dn->inputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	fwrite(dn->outputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
 	fwrite(dn->outputs_unsorted, sizeof(FLOAT_T), dn->numlines_g, stream);
 	fwrite(dn->nodes, sizeof(dn_mpi_node), dn->num_nodes_l, stream);
 	fwrite(dn->destidx_g, sizeof(IDX_T), dn->numlines_g, stream);
@@ -510,7 +578,9 @@ dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream) {
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
 	loadsize = fread(&dn->numlines_g, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
-	loadsize = fread(&dn->lineoffset, sizeof(IDX_T), 1, stream);
+	loadsize = fread(&dn->lineoffset_in, sizeof(IDX_T), 1, stream);
+	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
+	loadsize = fread(&dn->lineoffset_out, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
 	loadsize = fread(&dn->buf_len, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
@@ -524,13 +594,13 @@ dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream) {
 	loadsize = fread(dn->delaybuf, sizeof(FLOAT_T), dn->buf_len, stream);
 	if (loadsize != dn->buf_len) { printf("Failed to load delay network.\n"); exit(-1); }
 
-	dn->inputs = malloc(sizeof(FLOAT_T)*dn->numlinesin_l);
-	loadsize = fread(dn->inputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
-	if (loadsize != dn->numlinesin_l) { printf("Failed to load delay network.\n"); exit(-1); }
-	
-	dn->outputs = malloc(sizeof(FLOAT_T)*dn->numlinesout_l);
-	loadsize = fread(dn->outputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	dn->inputs = malloc(sizeof(FLOAT_T)*dn->numlinesout_l);
+	loadsize = fread(dn->inputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
 	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
+	
+	dn->outputs = malloc(sizeof(FLOAT_T)*dn->numlinesin_l);
+	loadsize = fread(dn->outputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
+	if (loadsize != dn->numlinesin_l) { printf("Failed to load delay network.\n"); exit(-1); }
 
 	dn->outputs_unsorted = malloc(sizeof(FLOAT_T)*dn->numlines_g);
 	loadsize = fread(dn->outputs_unsorted, sizeof(FLOAT_T), dn->numlines_g, stream);
@@ -579,15 +649,16 @@ void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream) {
 	fwrite(&dn->numlinesout_l, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->numlinesin_l, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->numlines_g, sizeof(IDX_T), 1, stream);
-	fwrite(&dn->lineoffset, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->lineoffset_in, sizeof(IDX_T), 1, stream);
+	fwrite(&dn->lineoffset_out, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->buf_len, sizeof(IDX_T), 1, stream);
 	fwrite(&dn->commrank, sizeof(int), 1, stream);
 	fwrite(&dn->commsize, sizeof(int), 1, stream);
 
 	/*
 	fwrite(dn->delaybuf, sizeof(FLOAT_T), dn->buf_len, stream);
-	fwrite(dn->inputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
-	fwrite(dn->outputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	fwrite(dn->inputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	fwrite(dn->outputs, sizeof(FLOAT_T), dn->numlinesin_l, stream);
 	fwrite(dn->outputs_unsorted, sizeof(FLOAT_T), dn->numlines_g, stream);
 	*/
 
@@ -620,7 +691,9 @@ dn_mpi_delaynet *dn_mpi_load(FILE *stream) {
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
 	loadsize = fread(&dn->numlines_g, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
-	loadsize = fread(&dn->lineoffset, sizeof(IDX_T), 1, stream);
+	loadsize = fread(&dn->lineoffset_in, sizeof(IDX_T), 1, stream);
+	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
+	loadsize = fread(&dn->lineoffset_out, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
 	loadsize = fread(&dn->buf_len, sizeof(IDX_T), 1, stream);
 	if (loadsize != 1) { printf("Failed to load delay network.\n"); exit(-1); }
@@ -683,8 +756,8 @@ dn_mpi_delaynet *dn_mpi_load(FILE *stream) {
 
 	/* allocate big chunks -- no reading*/
 	dn->delaybuf = calloc(dn->buf_len, sizeof(FLOAT_T));
-	dn->inputs = calloc(dn->numlinesin_l, sizeof(FLOAT_T));
-	dn->outputs = calloc(dn->numlinesout_l, sizeof(FLOAT_T));
+	dn->inputs = calloc(dn->numlinesout_l, sizeof(FLOAT_T));
+	dn->outputs = calloc(dn->numlinesin_l, sizeof(FLOAT_T));
 	dn->outputs_unsorted = calloc(dn->numlines_g, sizeof(FLOAT_T));
 
 	return dn;

@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	m = su_mpi_izhiblobstdpmodel(argv[1], commrank, commsize);
 	if (DEBUG) printf("Made model on process %d\n", commrank);
 
-	if (commrank == 1) {
+	if (commrank == 0) {
 		su_mpi_readtparameters(&tp, argv[2]);
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	} else {
@@ -73,13 +73,29 @@ int main(int argc, char *argv[])
 	long int N_pat;
 	size_t loadsize;
 
-	infile = fopen(infilename, "rb");
-	loadsize = fread(&N_pat, sizeof(long int), 1, infile);
-	if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
-	input_forced = malloc(sizeof(double)*N_pat);
-	loadsize = fread(input_forced, sizeof(double), N_pat, infile);
-	if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
-	fclose(infile);
+
+	if (DEBUG) printf("Loading input on process %d\n", commrank);
+	if (commrank == 0) {
+		infile = fopen(infilename, "rb");
+
+		loadsize = fread(&N_pat, sizeof(long int), 1, infile);
+		if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
+
+		input_forced = malloc(sizeof(double)*N_pat);
+		loadsize = fread(input_forced, sizeof(double), N_pat, infile);
+		if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
+
+		fclose(infile);
+
+		MPI_Bcast( &N_pat, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		MPI_Bcast( input_forced, N_pat, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	} else {
+		MPI_Bcast( &N_pat, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		input_forced = malloc(sizeof(double)*N_pat);
+		MPI_Bcast( input_forced, N_pat, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	}
+	if (DEBUG) printf("Loaded input on process %d\n", commrank);
+
 
 	/* run simulation */
 	MPI_Barrier(MPI_COMM_WORLD); 	// Probably unnecessary

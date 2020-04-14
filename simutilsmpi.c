@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-#include <mpi.h> 
+//#include <mpi.h> 
 
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
 //#include "/usr/include/mpich/mpi.h"
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
@@ -11,7 +12,7 @@
 #include "paramutils.h"
 #include "spkrcd.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /*************************************************************
  *  Functions
@@ -175,20 +176,22 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	advancingbuffer 	 = 0;
 
 	/* derived params -- trim later, maybe cruft */
-	IDX_T n = m->p.num_neurons;
+	IDX_T n_l = m->dn->num_nodes_l;
 	FLOAT_T dt = 1.0/tp.fs;
 	IDX_T numsteps = tp.dur/dt;
 	clock_t t_start=clock(), t_finish;
 
 	/* local state for simulation */
 	FLOAT_T *neuroninputs, *neuronoutputs; 
-	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n);
-	neuroninputs = calloc(n, sizeof(FLOAT_T));
-	neuronoutputs = calloc(n, sizeof(FLOAT_T));
+	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
+	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
+	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	unsigned long int numspikes = 0, numrandspikes = 0;
 	//FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
 
-	for(size_t i=0; i<n; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
+	/* initialize random input states */
+	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
+
 
 	for (size_t i=0; i<numsteps; i++) {
 
@@ -202,7 +205,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) t_start = clock();
 
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
-		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, m->p.num_neurons, &tp);
+		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
 
 		if (profiling) {
 			t_finish = clock();
@@ -211,14 +214,14 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 		/* put in forced input */
 		//if (t < tp.dur - offdur) {
-		for (size_t k=0; k < tp.numinputs; k++)
+		for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++) 	// (num forced inputs...)
 			neuroninputs[k] += input[ i % inputlen ];
 		//}
 
 		/* ---------- update neuron state ---------- */
 		if (profiling) t_start = clock();
 
-		sk_mpi_updateneurons(m->neurons, neuroninputs, &m->p, &tp);
+		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
 
 		if (profiling) {
 			t_finish = clock();
@@ -228,7 +231,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- calculate neuron outputs ---------- */
 		if (profiling) t_start = clock();
 
-		numspikes += sk_mpi_checkspiking(m->neurons, neuronoutputs, n, t, sr);
+		numspikes += sk_mpi_checkspiking(m->neurons, neuronoutputs, n_l, t,
+											sr, m->dn->nodeoffset);
 
 		if (profiling) {
 			t_finish = clock();
@@ -239,8 +243,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- push the neuron output into the buffer ---------- */
 		if (profiling) t_start = clock();
 
-		for (size_t k=0; k<n; k++)
-			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn);
+		for (size_t k=0; k<n_l; k++)
+			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // neuron outputs into dn inputs
 
 		if (profiling) {
 			t_finish = clock();
@@ -264,7 +268,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update neuron traces ---------- */
 		if (profiling) t_start = clock();
 
-		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n, dt, &m->p);
+		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
 
 		if (profiling) {
 			t_finish = clock();
@@ -299,8 +303,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	/* -------------------- Performance Analysis -------------------- */
 	if (profiling) {
 		printf("----------------------------------------\n");
-		printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n)*tp.dur) );
-		printf("Firing rate: %g\n", ((double) numspikes) / (((double) n)*tp.dur) );
+		printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n_l)*tp.dur) );
+		printf("Firing rate: %g\n", ((double) numspikes) / (((double) n_l)*tp.dur) );
 		double cycletime, cumtime = 0.0;
 
 		printf("----------------------------------------\n");
@@ -376,12 +380,9 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	if (commrank == 0) {
 		graph = su_mpi_iblobgraph(&m->p);
 		if (commsize > 1) {
-			MPI_Request *sendReq;
-			MPI_Request *recvReq;
-			MPI_Status *recvStatus;
-			sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			recvReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			recvStatus = malloc(sizeof(MPI_Status) * (commsize-1));
+			MPI_Request *sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
+			MPI_Request *recvReq = malloc(sizeof(MPI_Request) * (commsize-1));
+			MPI_Status *recvStatus = malloc(sizeof(MPI_Status) * (commsize-1));
 
 			/* send graph to other processes */
 			for (int k=1; k<commsize; k++) {
@@ -418,26 +419,41 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
 	FLOAT_T *synapses; 		
-	IDX_T numsyn_tot=0, numsyn_exc;
+	//IDX_T numsyn_tot=0, numsyn_exc;
 
-	for (i=nodeoffset; i<n_exc && i<maxnode; i++) {
-		su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
-		numsyn_tot += m->dn->nodes[i].num_in;
+	for (i=0; i<maxnode; i++) {
+		if (nodeoffset + i < n_exc)
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
+		else
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
 	}
-	numsyn_exc = numsyn_tot;
-	for (i = n_exc; i<n && i<maxnode; i++) {
-		su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
-		numsyn_tot += m->dn->nodes[i].num_in;
-	}
-	traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
-	synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
+
+	//for (i=nodeoffset; i<n_exc && i<nodeoffset+maxnode; i++) {
+	//	su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
+	//	//numsyn_tot += m->dn->nodes[i].num_in;
+	//}
+	//numsyn_exc = numsyn_tot;
+	//for (i = n_exc; i<n && i<maxnode; i++) {
+	//for (; i<n && i<maxnode+nodeoffset; i++) {
+	//	su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
+	//	//numsyn_tot += m->dn->nodes[i].num_in;
+	//}
+	//traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
+	//synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
+	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+	synapses = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
 	
 	/* initialize synapse weights */
 	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
-	for (i=0; i < numsyn_exc; i++)
-		synapses[m->dn->destidx_g[i]] = m->p.w_exc;
-	for (; i < numsyn_tot; i++)
-		synapses[m->dn->destidx_g[i]] = m->p.w_inh;
+	//for (i=0; i < numsyn_exc; i++)
+	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
+	//for (; i < numsyn_tot; i++)
+	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
+	unsigned int i_g;	
+	for (i=0; i < m->dn->numlinesin_l; i++) {
+		i_g = i + m->dn->lineoffset_out;
+		synapses[i] = m->dn->sourceidx_g[i_g] < n_exc ? m->p.w_exc : m->p.w_inh;
+	}
 
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
 	m->neurons = neurons;
@@ -469,8 +485,8 @@ void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
 	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
-	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
-	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
+	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
 
 	fclose(f);
 }
@@ -512,13 +528,13 @@ su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
 	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
 	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesout_l);
-	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
-	if (loadsize != m->dn->numlinesout_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
+	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesout_l);
-	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesout_l, f);
-	if (loadsize != m->dn->numlinesout_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
+	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
 
 	fclose(f);
 
