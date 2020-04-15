@@ -420,7 +420,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
 	FLOAT_T *synapses; 		
-	IDX_T numsyn_tot=0, numsyn_exc;
+	IDX_T numsyn_tot = 0;
 
 	for (i=0; i<maxnode; i++) {
 		if (nodeoffset + i < n_exc)
@@ -458,6 +458,38 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
 	//for (; i < numsyn_tot; i++)
 	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
+	unsigned int numsyn_exc = 0;
+	int rootnode = -1;
+
+	// Find out number of excitatory synapses
+	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
+		numsyn_exc = m->dn->lineoffset_in + m->dn->nodes[n_exc - m->nodeoffset].num_out;
+		printf("Number of excitatory synapses: %d\n", numsyn_exc);
+		for (int q=0; q < commsize; q++) {
+			if (q != commrank) {
+				MPI_Send(&numsyn_exc,
+						sizeof(unsigned int),
+						MPI_UNSIGNED, 
+						q, 
+						101,
+						MPI_COMM_WORLD);
+			}
+		}
+	} else {
+		MPI_Recv(&numsyn_exc,
+				sizeof(unsigned int),
+				MPI_UNSIGNED,
+				MPI_ANY_SOURCE,
+				101,
+				MPI_COMM_WORLD,
+				MPI_STATUS_IGNORE);
+
+	}
+
+	if (DEBUG) {
+		printf("On rank %d we think there are %d excitatory synapses.\n",
+				commrank, numsyn_exc);
+	}
 
 	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
 	unsigned int i_g;
@@ -465,7 +497,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 		i_g = i + m->dn->lineoffset_out;
 		// 80000 = 800*100 ~= number of excitatory synapses, find real way to
 		// calc -- may need message passing, or return from model building
-		synapses_local[i] = m->dn->sourceidx_g[i_g] < 80000 ? m->p.w_exc : m->p.w_inh;
+		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
 	}
 
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params

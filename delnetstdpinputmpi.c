@@ -51,6 +51,11 @@ int main(int argc, char *argv[])
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	}
 	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
+	// Need to figure out a way to check this...
+	//if (m->fs != tp->fs) {
+	//	printf("Sampling rate of model and trial parameters differ! Exiting.\n");
+	//	exit(-1);
+	//}
 
 	infilename = argv[3];
 	strcpy(outfilename, argv[4]);
