@@ -430,18 +430,18 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	}
 
 	// Find a better way than this to find number of excitatory synapses
-	for (i=0; i<n_exc; i++) {
-		numsyn_tot += m->dn->nodes[i].num_in;
-	}
-	numsyn_exc = numsyn_tot;
-	for (i = n_exc; i<n && i<maxnode; i++) {
-		numsyn_tot += m->dn->nodes[i].num_in;
-	}
+	//for (i=0; i<n_exc; i++) {
+	//	numsyn_tot += m->dn->nodes[i].num_in;
+	//}
+	//numsyn_exc = numsyn_tot;
+	//for (i = n_exc; i<n ; i++) {
+	//	numsyn_tot += m->dn->nodes[i].num_in;
+	//}
 
 	//traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
 	//synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
 	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
-	synapses = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	//synapses = calloc(m->dn->numlines_g, sizeof(FLOAT_T));
 	
 	/* initialize synapse weights */
 	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
@@ -449,20 +449,34 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
 	//for (; i < numsyn_tot; i++)
 	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
-	unsigned int i_g;	
-	for (i=0; i < m->dn->numlinesin_l; i++) {
-		i_g = i + m->dn->lineoffset_out; 	// <----- confirm this (out or in?)
-		synapses[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
+	//unsigned int i_g;	
+	//for (i=0; i < m->dn->numlinesin_l; i++) {
+	//	i_g = i + m->dn->lineoffset_out; 	// <----- confirm this (*out* or in?)
+	//	synapses[i] = m->dn->destidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
+	//}
+	//for (i=0; i < numsyn_exc; i++)
+	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
+	//for (; i < numsyn_tot; i++)
+	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
+
+	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	unsigned int i_g;
+	for (i=0; i< m->dn->numlinesin_l; i++) {
+		i_g = i + m->dn->lineoffset_out;
+		// 80000 = 800*100 ~= number of excitatory synapses, find real way to
+		// calc -- may need message passing, or return from model building
+		synapses_local[i] = m->dn->sourceidx_g[i_g] < 80000 ? m->p.w_exc : m->p.w_inh;
 	}
 
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
 	m->neurons = neurons;
 	m->traces_neu = traces_neu;
 	m->traces_syn = traces_syn;
-	m->synapses = synapses;
+	m->synapses = synapses_local;
 
 	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
 	free(graph);
+	//free(synapses);
 
 	return m;
 }
