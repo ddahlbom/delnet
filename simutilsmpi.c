@@ -364,7 +364,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T g_a_inh  = 0.1;
 	FLOAT_T g_d_inh  = 2.0;
 
-	/* set up delnet framework */
+	/* set up delnet framework -- MAYBE BCAST THIS*/
 	su_mpi_readmparameters(&m->p, mparamfilename);
 
 	n = m->p.num_neurons;
@@ -376,7 +376,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	m->maxnode = maxnode;
 	m->nodeoffset = nodeoffset;
 
-	/* make sure all using the same graph */
+	/* make sure all using the same graph -- CHANGE THIS TO BCAST! */
 	if (commrank == 0) {
 		srand(1);
 		graph = su_mpi_iblobgraph(&m->p);
@@ -393,10 +393,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 				if (DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
 			}
 
-			/* wait for processes to be received */
-			//for (int k=1; k<commsize; k++) {
-			//	MPI_Wait(&recvReq[k-1], &recvStatus[k-1]);
-			//}
 			free(sendReq);
 			free(recvReq);
 			free(recvStatus);
@@ -419,7 +415,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
-	FLOAT_T *synapses; 		
 	IDX_T numsyn_tot = 0;
 
 	for (i=0; i<maxnode; i++) {
@@ -429,41 +424,15 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
 	}
 
-	// Find a better way than this to find number of excitatory synapses
-	//for (i=0; i<n_exc; i++) {
-	//	numsyn_tot += m->dn->nodes[i].num_in;
-	//}
-	//numsyn_exc = numsyn_tot;
-	//for (i = n_exc; i<n ; i++) {
-	//	numsyn_tot += m->dn->nodes[i].num_in;
-	//}
-
-	//traces_syn = calloc(numsyn_tot, sizeof(FLOAT_T));		
-	//synapses = calloc(numsyn_tot, sizeof(FLOAT_T));
-	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
-	//synapses = calloc(m->dn->numlines_g, sizeof(FLOAT_T));
-	
 	/* initialize synapse weights */
 	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
-	//for (i=0; i < numsyn_exc; i++)
-	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
-	//for (; i < numsyn_tot; i++)
-	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
-	//unsigned int i_g;	
-	//for (i=0; i < m->dn->numlinesin_l; i++) {
-	//	i_g = i + m->dn->lineoffset_out; 	// <----- confirm this (*out* or in?)
-	//	synapses[i] = m->dn->destidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
-	//}
-	//for (i=0; i < numsyn_exc; i++)
-	//	synapses[m->dn->destidx_g[i]] = m->p.w_exc;
-	//for (; i < numsyn_tot; i++)
-	//	synapses[m->dn->destidx_g[i]] = m->p.w_inh;
 	unsigned int numsyn_exc = 0;
-	int rootnode = -1;
 
 	// Find out number of excitatory synapses
 	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
-		numsyn_exc = m->dn->lineoffset_in + m->dn->nodes[n_exc - m->nodeoffset].num_out;
+		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
+		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
+						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
 		printf("Number of excitatory synapses: %d\n", numsyn_exc);
 		for (int q=0; q < commsize; q++) {
 			if (q != commrank) {
@@ -492,14 +461,15 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	}
 
 	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+
+	//numsyn_exc = 83893; <- number in serial implementation
 	unsigned int i_g;
 	for (i=0; i< m->dn->numlinesin_l; i++) {
 		i_g = i + m->dn->lineoffset_out;
-		// 80000 = 800*100 ~= number of excitatory synapses, find real way to
-		// calc -- may need message passing, or return from model building
 		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
 	}
-
+	
 	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
 	m->neurons = neurons;
 	m->traces_neu = traces_neu;
