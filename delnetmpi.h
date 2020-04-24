@@ -58,16 +58,29 @@ typedef struct dn_mpi_delaynet_s {
 	/* pointers */
 	FLOAT_T *delaybuf;
 	FLOAT_T *inputs;
-	FLOAT_T *outputs;
-	FLOAT_T *outputs_unsorted;
+	FLOAT_T *outputs; 			// to be replaced with outputs_l
+	FLOAT_T *outputs_unsorted;  // to be replaced with out_unsorted_l
 	dn_mpi_node *nodes;
-	IDX_T *destidx_g;
-	IDX_T *sourceidx_g;
+	IDX_T *destidx_g; 			// can probably be deleted
+	IDX_T *sourceidx_g; 		// to be replaced with sourceidx_l
 	IDX_T *del_offsets;
 	IDX_T *del_startidces;
 	IDX_T *del_lens;
 	IDX_T *del_sources;
 	IDX_T *del_targets;
+
+	/* new mpi revisions */
+	size_t *sourceidx_l; 	// len = numlinesin_l
+	unsigned int *out_unsorted_blocklens; //len = commsize
+	FLOAT_T **out_unsorted_blocks; // commsize arrays of sizes given by above
+	FLOAT_T *out_unsorted_l; // len = numlinesin_l
+	FLOAT_T *outputs_l; // will replace outputs
+	size_t **block_idcs; // len = commsize
+
+	/* rev 2 */ // NOT YET ADDED TO SAVE/LOAD FUNCTIONS!
+	unsigned int *incoming_blocklens;
+
+
 
 } dn_mpi_delaynet;
 
