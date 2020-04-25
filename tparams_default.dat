@@ -1,5 +1,5 @@
 fs 				2000.0
-dur 			2.5
+dur 			1	
 lambda 			3.0
 randspikesize 	20.0
 randinput 		1

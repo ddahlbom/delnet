@@ -148,7 +148,7 @@ dn_mpi_vec_float dn_mpi_getinputvec(dn_mpi_delaynet *dn) {
 
 /* get inputs to neurons (outputs of delaynet)... */
 FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
-	return &dn->outputs[dn->nodes[idx].idx_outbuf];
+	return &dn->outputs_l[dn->nodes[idx].idx_outbuf];
 }
 
 
@@ -174,7 +174,8 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	//for (k=0; k < dn->numlinesout_l; k++) {
 	for (k=0; k < dn->numlinesout_l; k++) {
 		k_global = k + dn->lineoffset_in; 	// because still in input buffer order
-		dn->outputs_unsorted[k_global] =
+		//dn->outputs_unsorted[k_global] =
+		dn->outputs_unsorted[k] =
 				dn->delaybuf[dn->del_startidces[k]+
 								dn->del_offsets[k]];
 	}
@@ -252,6 +253,7 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 	/*
 	 * -------------------- END MPI DATA TRANSFER -------------------- 
 	 */
+	MPI_Barrier(MPI_COMM_WORLD);
 
 
 	/* sort output for access */
@@ -485,6 +487,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	free(del_sources);
 	free(del_targets);
 
+	/* ----- Diverges from Simple MPI Version -- sort out local blocks ----- */
 	/* Now building on previous step... step up local blocks */
 	FLOAT_T **out_unsorted_blocks = calloc(commsize, sizeof(FLOAT_T*));
 	unsigned int *out_unsorted_blocklens = calloc(commsize, sizeof(unsigned int));
