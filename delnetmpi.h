@@ -13,6 +13,7 @@
 #define getrandom(max1) ((rand()%(int)((max1)))) // random integer between 0 and max-1
 #define unirand() (((FLOAT_T) rand()) / ((FLOAT_T) RAND_MAX + 1.0))
 
+#define MAXBUFFERLEN 4
 
 /*
  * -------------------- Structs --------------------
@@ -32,6 +33,12 @@ typedef struct dn_mpi_list_uint_s {
 	unsigned int count;
 	struct dn_mpi_listnode_uint_s *head;
 } dn_mpi_list_uint;
+
+
+typedef struct dn_mpi_eventbuffer_s {
+	int buffer[MAXBUFFERLEN];
+	unsigned int bufferlen;
+} dn_mpi_eventbuffer;
 
 
 typedef struct dn_mpi_node_s {
@@ -63,15 +70,19 @@ typedef struct dn_mpi_delaynet_s {
 	dn_mpi_node *nodes;
 	IDX_T *destidx_g;
 	IDX_T *sourceidx_g;
-	IDX_T *del_offsets;
-	IDX_T *del_startidces;
-	IDX_T *del_lens;
+	//IDX_T *del_offsets;
+	//IDX_T *del_startidces;
+	//IDX_T *del_lens;
 	IDX_T *del_sources;
 	IDX_T *del_targets;
 
 	/* MPI revisions */
 	unsigned int *outblocksizes;
 	unsigned int *outblockoffsets;
+
+	/* non-buffered revision */
+	dn_mpi_eventbuffer *ebs;
+
 
 } dn_mpi_delaynet;
 
@@ -113,5 +124,8 @@ dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream);
 void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream);
 dn_mpi_delaynet *dn_mpi_load(FILE *stream);
 
+/* nonbuffered event handling */
+void dn_mpi_pushevent(dn_mpi_eventbuffer *eb);
+FLOAT_T dn_mpi_advancebuffer(dn_mpi_eventbuffer *eb);
 
 #endif
