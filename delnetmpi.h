@@ -59,7 +59,8 @@ typedef struct dn_mpi_delaynet_s {
 	FLOAT_T *delaybuf;
 	FLOAT_T *inputs;
 	FLOAT_T *outputs;
-	FLOAT_T *outputs_unsorted;
+	FLOAT_T *outputs_unsorted_g;
+	FLOAT_T *outputs_unsorted_l;
 	dn_mpi_node *nodes;
 	IDX_T *destidx_g;
 	IDX_T *sourceidx_g;
@@ -68,6 +69,10 @@ typedef struct dn_mpi_delaynet_s {
 	IDX_T *del_lens;
 	IDX_T *del_sources;
 	IDX_T *del_targets;
+
+	/* MPI revisions */
+	int *recvcounts;
+	int *recvoffsets;
 
 } dn_mpi_delaynet;
 
