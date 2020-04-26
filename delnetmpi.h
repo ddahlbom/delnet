@@ -69,6 +69,10 @@ typedef struct dn_mpi_delaynet_s {
 	IDX_T *del_sources;
 	IDX_T *del_targets;
 
+	/* MPI revisions */
+	unsigned int *outblocksizes;
+	unsigned int *outblockoffsets;
+
 } dn_mpi_delaynet;
 
 
@@ -79,6 +83,7 @@ typedef struct dn_mpi_delaynet_s {
 /* MPI utils */
 size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints);
 size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints);
+void dn_mpi_syncoutputs(dn_mpi_delaynet *dn);
 
 /* lists (simple LIFO, for unsigned ints) */
 dn_mpi_list_uint* 	dn_mpi_list_uint_init();

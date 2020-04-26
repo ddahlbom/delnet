@@ -1,4 +1,4 @@
-fs 				2000.0
+fs 				10000.0
 p_contact 		0.1
 p_exc 			0.8
 num_neurons 	1000.0

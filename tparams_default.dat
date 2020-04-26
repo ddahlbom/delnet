@@ -1,4 +1,4 @@
-fs 				2000.0
+fs 				10000.0
 dur 			2.5
 lambda 			3.0
 randspikesize 	20.0
