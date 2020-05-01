@@ -7,6 +7,11 @@
 
 
 /* -------------------- Random Sampling -------------------- */
+
+/*
+ * Samples from an exponential distribution. For generating 
+ * Poissonian noise.
+ */
 double sk_mpi_expsampl(double lambda)
 {
 	return -log( (((double) rand()) / ((double) RAND_MAX + 1.0)))/lambda;
@@ -15,14 +20,26 @@ double sk_mpi_expsampl(double lambda)
 
 
 /* -------------------- Neuron Equations -------------------- */
+
+/*
+ * First function for Runge-Kutta method. This is the Izhikevich
+ * "simple" model, voltage variable.
+ */
 static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
 	return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
 
+/*
+ * Second function for Runge-Kutta method. This is the Izhikevich
+ * "simple" model, recover variable.
+ */
 static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a) {
 	return a*(0.2*v - u);
 }
 
+/*
+ * Update neuron state using 4th order Runge-Kutta
+ */
 void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T h) {
 	FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
 
@@ -47,6 +64,11 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 
 
 /*-------------------- Kernels -------------------- */
+
+/*
+ * Takes the neuron inputs, multiples them by appropriate
+ * synaptic weight, sums, and returns result.
+ */
 void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synapses)
 {
 	size_t k,j;
@@ -61,10 +83,13 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synap
 	}
 }
 
+
+/*
+ * An update function for generating Poissonian input noise.
+ */
 unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T t, 
 							size_t num_neurons, su_mpi_trialparams *tp)
 {
-	//  random input
 	unsigned int num = 0, k;
 	for (k=0; k<num_neurons; k++) {
 		if (nextrand[k] < t) {
@@ -77,6 +102,11 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 	return num;
 }
 
+
+/*
+ * Function for updating all neurons (calls RK update function above for all
+ * nodes).
+ */
 void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
 						su_mpi_trialparams *tp)
 {

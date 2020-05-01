@@ -23,7 +23,7 @@ inline void dn_mpi_pushevent(dn_mpi_eventbuffer *eb)
 			return;
 		}
 	}
-	printf("Too many spikes for buffer!");
+	printf("Too many spikes for buffer!\n");
 }
 
 inline FLOAT_T dn_mpi_advancebuffer(dn_mpi_eventbuffer *eb)

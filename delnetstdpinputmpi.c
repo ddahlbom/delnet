@@ -3,16 +3,20 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-//#include "/usr/include/mpich/mpi.h"
-#include <mpi.h>
 
 #include "delnetmpi.h"
 #include "simutilsmpi.h"
 #include "spkrcd.h"
 
+/* Include appropriate MPI header depending on platform */
+#ifdef __amd64__
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#else
+#include <mpi.h>
+#endif
+
 #define PROFILING 1
 #define DEBUG 1
-
 
 
 /*************************************************************
@@ -33,7 +37,7 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 	
 	/* rand seed */
-	//srand(1);
+	srand(commrank+1);
 
 	/* set parameters */
 	if (argc < 4) {
@@ -51,17 +55,11 @@ int main(int argc, char *argv[])
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	}
 	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
-	// Need to figure out a way to check this...
-	//if (m->fs != tp->fs) {
-	//	printf("Sampling rate of model and trial parameters differ! Exiting.\n");
-	//	exit(-1);
-	//}
 
 	infilename = argv[3];
 	strcpy(outfilename, argv[4]);
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	//m = su_mpi_loadmodel_l(mpifilename); 	/* everyone loads the same model */
+	MPI_Barrier(MPI_COMM_WORLD); 	// not necessary -- for debugging
 
 	/* set up spike recorder */
 	char srname[256];
@@ -80,6 +78,7 @@ int main(int argc, char *argv[])
 
 
 	if (DEBUG) printf("Loading input on process %d\n", commrank);
+	/* open file if on rank 0 and share with other ranks using MPI_Bcast */
 	if (commrank == 0) {
 		infile = fopen(infilename, "rb");
 
@@ -91,8 +90,6 @@ int main(int argc, char *argv[])
 		if (loadsize != N_pat) {printf("Failed to load input\n"); exit(-1); }
 
 		fclose(infile);
-
-		//for (int q=0; q<N_pat; q++) printf("%g\n", input_forced[q]);
 
 		MPI_Bcast( &N_pat, 1, MPI_LONG, 0, MPI_COMM_WORLD);
 		MPI_Bcast( input_forced, N_pat, MPI_DOUBLE, 0, MPI_COMM_WORLD);

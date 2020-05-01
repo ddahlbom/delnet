@@ -376,7 +376,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	m->maxnode = maxnode;
 	m->nodeoffset = nodeoffset;
 
-	/* make sure all using the same graph -- CHANGE THIS TO BCAST! */
+	/* make sure all using the same graph -- CAN CHANGE THIS TO BCAST! */
 	if (commrank == 0) {
 		srand(1);
 		graph = su_mpi_iblobgraph(&m->p);
@@ -417,6 +417,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T *traces_syn; 	
 	IDX_T numsyn_tot = 0;
 
+	/* initialize neuron values */
 	for (i=0; i<maxnode; i++) {
 		if (nodeoffset + i < n_exc)
 			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
@@ -463,7 +464,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
 	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
 
-	//numsyn_exc = 83893; <- number in serial implementation
 	unsigned int i_g;
 	for (i=0; i< m->dn->numlinesin_l; i++) {
 		i_g = i + m->dn->lineoffset_out;
@@ -478,7 +478,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
 	free(graph);
-	//free(synapses);
 
 	return m;
 }
