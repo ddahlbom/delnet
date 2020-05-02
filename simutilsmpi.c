@@ -156,6 +156,12 @@ unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p)
 }
 
 
+double meantime(double *vals, int n)
+{
+	double mean = 0;
+	for (int k=0; k<n; k++) mean += vals[k];
+	return mean/(double)n;
+}
 
 /* Functions for running simulations */
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
@@ -166,6 +172,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 			updatingneutraces, updatingsynstrengths, pushingoutput,
 			advancingbuffer;
 
+	/* timing info */
 	gettinginputs 		 = 0;
 	updatingsyntraces 	 = 0;
 	updatingneurons 	 = 0;
@@ -179,7 +186,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	IDX_T n_l = m->dn->num_nodes_l;
 	FLOAT_T dt = 1.0/tp.fs;
 	IDX_T numsteps = tp.dur/dt;
-	clock_t t_start=clock(), t_finish;
 
 	/* local state for simulation */
 	FLOAT_T *neuroninputs, *neuronoutputs; 
@@ -193,6 +199,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 
 
+	double t_start=MPI_Wtime(), t_finish;
 	for (size_t i=0; i<numsteps; i++) {
 
 		/* ---------- calculate time update ---------- */
@@ -202,14 +209,14 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 
 		/* ---------- get delay outputs (neuron inputs) from buffer ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
 
 		if (profiling) {
-			t_finish = clock();
-			gettinginputs += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			gettinginputs += ((double)(t_finish - t_start));
 		}
 
 		/* put in forced input */
@@ -219,127 +226,191 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		//}
 
 		/* ---------- update neuron state ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
 
 		if (profiling) {
-			t_finish = clock();
-			updatingneurons += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			updatingneurons += ((double)(t_finish - t_start));
 		}
 
 		/* ---------- calculate neuron outputs ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		numspikes += sk_mpi_checkspiking(m->neurons, neuronoutputs, n_l, t,
 											sr, m->dn->nodeoffset);
 
 		if (profiling) {
-			t_finish = clock();
-			spikechecking += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			spikechecking += ((double)(t_finish - t_start));
 		}
 
 
 		/* ---------- push the neuron output into the buffer ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		for (size_t k=0; k<n_l; k++)
 			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // node outputs into delnet 
 
 		if (profiling) {
-			t_finish = clock();
-			pushingoutput += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			pushingoutput += ((double)(t_finish - t_start));
 		}
 
 
 		/* ---------- update synapse traces ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		//su_mpi_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
 		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, &m->p);
 
 		if (profiling) {
-			t_finish = clock();
-			updatingsyntraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			updatingsyntraces += ((double)(t_finish - t_start));
 		}
 
 
 
 		/* ---------- update neuron traces ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
 
 		if (profiling) {
-			t_finish = clock();
-			updatingneutraces += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			updatingneutraces += ((double)(t_finish - t_start));
 		}
 
 
 		/* ---------- update synapses ---------- */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
 							m->dn, dt, &m->p);
 
 		if (profiling) {
-			t_finish = clock();
-			updatingsynstrengths += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			updatingsynstrengths += ((double)(t_finish - t_start));
 		}
 
 
 		/* advance the buffer */
-		if (profiling) t_start = clock();
+		if (profiling) t_start = MPI_Wtime();
 
 		dn_mpi_advance(m->dn);
 
 		if (profiling) {
-			t_finish = clock();
-			advancingbuffer += ((double)(t_finish - t_start))/CLOCKS_PER_SEC;
+			t_finish = MPI_Wtime();
+			advancingbuffer += ((double)(t_finish - t_start));
 		}
 	}
 
 
 	/* -------------------- Performance Analysis -------------------- */
 	if (profiling) {
-		printf("----------------------------------------\n");
-		printf("Random input rate: %g\n", ((double) numrandspikes) / (((double) n_l)*tp.dur) );
-		printf("Firing rate: %g\n", ((double) numspikes) / (((double) n_l)*tp.dur) );
 		double cycletime, cumtime = 0.0;
-
-		printf("----------------------------------------\n");
+		double firingrate;
+		double *firingrates_g;
+		double *gettinginputs_g;
+		double *updatingsyntraces_g;
+		double *updatingneurons_g;
+		double *spikechecking_g;
+		double *pushingoutput_g;
+		double *updatingsynstrengths_g;
+		double *advancingbuffer_g;
+		double *totaltime_g;
+		if (commrank==0) {
+			firingrates_g = calloc(commsize, sizeof(double));
+			gettinginputs_g = calloc(commsize, sizeof(double));
+			updatingsyntraces_g = calloc(commsize, sizeof(double));
+			updatingneurons_g = calloc(commsize, sizeof(double));
+			spikechecking_g = calloc(commsize, sizeof(double));
+			pushingoutput_g = calloc(commsize, sizeof(double));
+			updatingsynstrengths_g = calloc(commsize, sizeof(double));
+			advancingbuffer_g = calloc(commsize, sizeof(double));
+			totaltime_g = calloc(commsize, sizeof(double));
+		}
+		firingrate = ((double) numspikes) / (((double) n_l)*tp.dur);
+		if (commrank==0) 
+			MPI_Gather(&firingrate, 1, MPI_DOUBLE, firingrates_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&firingrate, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*gettinginputs/numsteps;
 		cumtime += cycletime;
-		printf("Getting inputs:\t\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, gettinginputs_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*updatingsyntraces/numsteps;
 		cumtime += cycletime;
-		printf("Update syntraces:\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingsyntraces_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*updatingneurons/numsteps;
 		cumtime += cycletime;
-		printf("Update neurons:\t\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingneurons_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*spikechecking/numsteps;
 		cumtime += cycletime;
-		printf("Check spiked:\t\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, spikechecking_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*pushingoutput/numsteps;
 		cumtime += cycletime;
-		printf("Pushing buffer:\t\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, pushingoutput_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*updatingsynstrengths/numsteps;
 		cumtime += cycletime;
-		printf("Updating synapses:\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingsynstrengths_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		cycletime = 1000.0*advancingbuffer/numsteps;
 		cumtime += cycletime;
-		printf("Advancing buffer:\t %f (ms)\n", cycletime);
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, advancingbuffer_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		printf("Total cycle time:\t %f (ms)\n", cumtime);
-		printf("\nTime per second: \t %f (ms)\n", cumtime*m->p.fs);
+		if (commrank==0) 
+			MPI_Gather(&cumtime, 1, MPI_DOUBLE, totaltime_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cumtime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+		if (commrank==0) {
+			FILE *f;
+			f = fopen("performance_data.txt", "w");
+
+			fprintf(f, "----------------------------------------\n");
+			fprintf(f, "Firing rate: %g\n",  meantime(firingrates_g, commsize));
+			fprintf(f, "Getting inputs:\t\t %f (ms)\n", meantime(gettinginputs_g, commsize));
+			fprintf(f, "Update syntraces:\t %f (ms)\n", meantime(updatingsyntraces_g, commsize));
+			fprintf(f, "Update neurons:\t\t %f (ms)\n", meantime(updatingneurons_g, commsize));
+			fprintf(f, "Check spiked:\t\t %f (ms)\n", meantime(spikechecking_g, commsize));
+			fprintf(f, "Pushing buffer:\t\t %f (ms)\n", meantime(pushingoutput_g, commsize));
+			fprintf(f, "Updating synapses:\t %f (ms)\n", meantime(updatingsynstrengths_g, commsize));
+			fprintf(f, "Advancing buffer:\t %f (ms)\n", meantime(advancingbuffer_g, commsize));
+			fprintf(f, "Total cycle time:\t %f (ms)\n", meantime(totaltime_g, commsize));
+			fprintf(f, "\nTime per second: \t %f (ms)\n", meantime(totaltime_g, commsize)*m->p.fs);
+					
+			fclose(f);
+		}
 	}
+
 
 	free(neuroninputs);
 	free(neuronoutputs);
@@ -347,7 +418,12 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 }
 
 
-/* make models */
+/*
+ * Function that generates the actual model, which contains both a delay network
+ * and the relevant state (neuron voltages, synapse weights, etc.) for the nodes
+ * themselves. Rank 0 generates the actual random graph and shares it will all 
+ * other ranks.
+ */
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
 {
 	unsigned int *graph = 0, n, n_exc, i;
@@ -415,7 +491,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
-	IDX_T numsyn_tot = 0;
 
 	/* initialize neuron values */
 	for (i=0; i<maxnode; i++) {

@@ -28,7 +28,6 @@ int main(int argc, char *argv[])
 	su_mpi_trialparams tp;
 	char *infilename;
 	char outfilename[256];
-	char mpifilename[] = "mpimodel.bin";
 	int commsize, commrank;
 
 	/* Init MPI */
