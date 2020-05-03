@@ -171,12 +171,11 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 	FLOAT_T *synapseoutputs = dn->outputs;
 	for (k=0; k<dn->num_nodes_l; k++) 
 	for (j=0; j < dn->nodes[k].num_in; j++) {
-		// only update excitatory synapses
-		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) {
+		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) { 	// only update excitatory synapses
 			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] +
 					dt * (mp->a_post * traces_syn[dn->nodes[k].idx_outbuf+j] * neuronoutputs[k] -
 						  mp->a_pre * traces_neu[k] * synapseoutputs[dn->nodes[k].idx_outbuf+j]);
-			// clamp value	
+			/* clamp value	*/
 			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] < 0.0 ? 
 										0.0 : synapses[dn->nodes[k].idx_outbuf+j];
 			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] > mp->synmax ?

@@ -4,6 +4,11 @@
 #define SPIKE_BLOCK_SIZE 8192
 #define SR_FLOAT_T float
 
+#ifdef __cplusplus
+#define EXTERNC extern "C"
+#else
+#define EXTERNC
+#endif
 
 /*
  * -------------------- Structures --------------------
@@ -29,7 +34,7 @@ typedef struct spikerecord_s {
 
 
 spikerecord *sr_init(char *filename, size_t spikes_in_block);
-void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time);
+EXTERNC void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time);
 void sr_close(spikerecord *sr);
 
 

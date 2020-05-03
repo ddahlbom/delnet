@@ -15,6 +15,11 @@
 
 #define MAXBUFFERLEN 8 
 
+#ifdef __cplusplus
+#define EXTERNC extern "C"
+#else
+#define EXTERNC
+#endif
 /*
  * -------------------- Structs --------------------
  */
@@ -115,7 +120,7 @@ dn_mpi_vec_float dn_mpi_orderbuf(IDX_T which, dn_mpi_delaynet *dn);
 /* control and interact with a delaynet */
 void 			dn_mpi_pushoutput(FLOAT_T val, IDX_T idx, dn_mpi_delaynet *dn);
 dn_mpi_vec_float 	dn_mpi_getinputvec(dn_mpi_delaynet *dn);
-FLOAT_T* 		dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn);
+EXTERNC FLOAT_T* 		dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn);
 void 			dn_mpi_advance(dn_mpi_delaynet *dn);
 
 /* save and load checkpoints (with buffers), network (no buffers)*/

@@ -75,7 +75,6 @@ int main(int argc, char *argv[])
 	long int N_pat;
 	size_t loadsize;
 
-
 	if (DEBUG) printf("Loading input on process %d\n", commrank);
 	/* open file if on rank 0 and share with other ranks using MPI_Bcast */
 	if (commrank == 0) {
@@ -98,7 +97,6 @@ int main(int argc, char *argv[])
 		MPI_Bcast( input_forced, N_pat, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	}
 	if (DEBUG) printf("Loaded input on process %d\n", commrank);
-
 
 	/* run simulation */
 	MPI_Barrier(MPI_COMM_WORLD); 	// Probably unnecessary

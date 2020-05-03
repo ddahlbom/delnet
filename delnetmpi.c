@@ -2,10 +2,14 @@
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
 #include <math.h>
-// #include <mpi.h> 
 
-//#include "/usr/include/mpich/mpi.h"
+#ifdef __amd64__
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#else
+#include <mpi.h>
+#endif
+
+#include "cuallocate.h"
 #include "delnetmpi.h"
 
 #define DEBUG 0
@@ -289,8 +293,10 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	dn->commsize = commsize;
 
 	dn->delaybuf = calloc(deltot_l, sizeof(FLOAT_T));
-	dn->inputs = calloc(numlinesout_l, sizeof(FLOAT_T));
-	dn->outputs = calloc(numlinesin_l, sizeof(FLOAT_T)); 	
+	//dn->inputs = calloc(numlinesout_l, sizeof(FLOAT_T));
+	cuAllocDouble(&dn->inputs, numlinesin_l, commrank);
+	//dn->outputs = calloc(numlinesin_l, sizeof(FLOAT_T)); 	
+	cuAllocDouble(&dn->outputs, numlinesin_l, commrank);
 	dn->outputs_unsorted = calloc(numlines_g, sizeof(FLOAT_T)); // <- ultimately refine this
 
 	// Local backup of original
@@ -376,7 +382,8 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	IDX_T *del_lens_l = malloc(sizeof(IDX_T)*numlinesout_l);
 	dn->del_sources = malloc(sizeof(IDX_T)*numlinesout_l);
 	dn->del_targets = malloc(sizeof(IDX_T)*numlinesout_l);
-	dn->nodes = malloc(sizeof(dn_mpi_node)*num_nodes_l);
+	//dn->nodes = malloc(sizeof(dn_mpi_node)*num_nodes_l);
+	cuAlloc((void **) &dn->nodes, num_nodes_l, sizeof(dn_mpi_node), commrank);
 
 	IDX_T i0_inbuf, i1_inbuf, i0_outbuf, i1_outbuf;
 	i0_inbuf = nodes[nodeoffset].idx_inbuf;
@@ -461,13 +468,16 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->del_sources);
 	free(dn->del_targets);
-	free(dn->inputs);
-	free(dn->outputs);
+	//free(dn->inputs);
+	cuFreeDouble(dn->inputs);
+	//free(dn->outputs);
+	cuFreeDouble(dn->outputs);
 	free(dn->outputs_unsorted);
 	free(dn->destidx_g);
 	free(dn->sourceidx_g);
 	free(dn->delaybuf);
-	free(dn->nodes);
+	//free(dn->nodes);
+	cuFree((void *) dn->nodes);
 	free(dn);
 }
 

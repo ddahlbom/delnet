@@ -2,13 +2,17 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-//#include <mpi.h> 
 
+#ifdef __amd64__
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-//#include "/usr/include/mpich/mpi.h"
+#else
+#include <mpi.h>
+#endif
+
 #include "delnetmpi.h"
+#include "cuallocate.h"
 #include "simutilsmpi.h"
-#include "simkernelsmpi.h"
+#include "simkernelsmpicuda.h"
 #include "paramutils.h"
 #include "spkrcd.h"
 
@@ -163,6 +167,14 @@ double meantime(double *vals, int n)
 	return mean/(double)n;
 }
 
+double maxtime(double *vals, int n) 
+{
+	double max = 0;
+	for (int k=0; k<n; k++) 
+		if (vals[k] > max) max = vals[k];
+	return max;
+}
+
 /* Functions for running simulations */
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
 					spikerecord *sr, int commrank, int commsize, bool profiling)
@@ -263,7 +275,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) t_start = MPI_Wtime();
 
 		//su_mpi_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, &m->p);
+		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -311,15 +323,15 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	if (profiling) {
 		double cycletime, cumtime = 0.0;
 		double firingrate;
-		double *firingrates_g;
-		double *gettinginputs_g;
-		double *updatingsyntraces_g;
-		double *updatingneurons_g;
-		double *spikechecking_g;
-		double *pushingoutput_g;
-		double *updatingsynstrengths_g;
-		double *advancingbuffer_g;
-		double *totaltime_g;
+		double *firingrates_g=0;
+		double *gettinginputs_g=0;
+		double *updatingsyntraces_g=0;
+		double *updatingneurons_g=0;
+		double *spikechecking_g=0;
+		double *pushingoutput_g=0;
+		double *updatingsynstrengths_g=0;
+		double *advancingbuffer_g=0;
+		double *totaltime_g=0;
 		if (commrank==0) {
 			firingrates_g = calloc(commsize, sizeof(double));
 			gettinginputs_g = calloc(commsize, sizeof(double));
@@ -393,10 +405,15 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 		if (commrank==0) {
 			FILE *f;
-			f = fopen("performance_data.txt", "w");
-
+			f = fopen("performance_data.txt", "a");
+			fprintf(f, "----------------------------------------\n");
+			fprintf(f, "Sampling Frequency: %g\n", m->p.fs);
+			fprintf(f, "Number of Neurons: %g\n", m->p.num_neurons);
+			fprintf(f, "Probability of Contact: %g\n", m->p.p_contact);
+			fprintf(f, "Maximum delay: %g\n", m->p.maxdelay);
 			fprintf(f, "----------------------------------------\n");
 			fprintf(f, "Firing rate: %g\n",  meantime(firingrates_g, commsize));
+			fprintf(f, "----------------------------------------\n");
 			fprintf(f, "Getting inputs:\t\t %f (ms)\n", meantime(gettinginputs_g, commsize));
 			fprintf(f, "Update syntraces:\t %f (ms)\n", meantime(updatingsyntraces_g, commsize));
 			fprintf(f, "Update neurons:\t\t %f (ms)\n", meantime(updatingneurons_g, commsize));
@@ -405,8 +422,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 			fprintf(f, "Updating synapses:\t %f (ms)\n", meantime(updatingsynstrengths_g, commsize));
 			fprintf(f, "Advancing buffer:\t %f (ms)\n", meantime(advancingbuffer_g, commsize));
 			fprintf(f, "Total cycle time:\t %f (ms)\n", meantime(totaltime_g, commsize));
-			fprintf(f, "\nTime per second: \t %f (ms)\n", meantime(totaltime_g, commsize)*m->p.fs);
-					
+			fprintf(f, "\nTime per second: \t %f (ms)\n", maxtime(totaltime_g, commsize)*m->p.fs);
 			fclose(f);
 		}
 	}
@@ -537,7 +553,8 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	}
 
 	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
-	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+	//traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+	cuAllocDouble(&traces_syn, m->dn->numlinesin_l, commrank);
 
 	unsigned int i_g;
 	for (i=0; i< m->dn->numlinesin_l; i++) {
@@ -635,7 +652,7 @@ void su_mpi_freemodel_l(su_mpi_model_l *m) {
 	dn_mpi_freedelnet(m->dn);
 	free(m->neurons);
 	free(m->traces_neu);
-	free(m->traces_syn);
+	cuFreeDouble(m->traces_syn);
 	free(m->synapses);
 	free(m);
 }
