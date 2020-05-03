@@ -187,6 +187,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	/* timing info */
 	gettinginputs 		 = 0;
 	updatingsyntraces 	 = 0;
+	updatingneutraces 	 = 0;
 	updatingneurons 	 = 0;
 	spikechecking 		 = 0;
 	updatingneutraces 	 = 0;
@@ -200,10 +201,12 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	IDX_T numsteps = tp.dur/dt;
 
 	/* local state for simulation */
-	FLOAT_T *neuroninputs, *neuronoutputs; 
 	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
-	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
-	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
+	FLOAT_T *neuroninputs, *neuronoutputs; 
+	//neuroninputs = calloc(n_l, sizeof(FLOAT_T));
+	//neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
+	cuAllocDouble(&neuroninputs, n_l, commrank);
+	cuAllocDouble(&neuronoutputs, n_l, commrank);
 	unsigned long int numspikes = 0, numrandspikes = 0;
 	//FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
 
@@ -240,7 +243,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update neuron state ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
+		//sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
+		sk_mpi_updateneurons_cuda(m->neurons, neuroninputs, n_l, tp.fs);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -288,6 +292,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
+		//sk_mpi_updateneurontraces_cuda(m->traces_neu, neuronoutputs, n_l, dt, m->p.tau_post);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -298,8 +303,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update synapses ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
-							m->dn, dt, &m->p);
+		//sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
+		//					m->dn, dt, &m->p);
+		sk_mpi_updatesynapses_cuda(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
+								   m->dn, dt, m->p.a_pre, m->p.a_post, m->p.synmax);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -332,6 +339,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		double *updatingsynstrengths_g=0;
 		double *advancingbuffer_g=0;
 		double *totaltime_g=0;
+		double *updatingneutraces_g=0;
 		if (commrank==0) {
 			firingrates_g = calloc(commsize, sizeof(double));
 			gettinginputs_g = calloc(commsize, sizeof(double));
@@ -340,6 +348,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 			spikechecking_g = calloc(commsize, sizeof(double));
 			pushingoutput_g = calloc(commsize, sizeof(double));
 			updatingsynstrengths_g = calloc(commsize, sizeof(double));
+			updatingneutraces_g = calloc(commsize, sizeof(double));
 			advancingbuffer_g = calloc(commsize, sizeof(double));
 			totaltime_g = calloc(commsize, sizeof(double));
 		}
@@ -384,6 +393,13 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
+		cycletime = 1000.0*updatingneutraces/numsteps;
+		cumtime += cycletime;
+		if (commrank==0) 
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingneutraces_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		else
+			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
 		cycletime = 1000.0*updatingsynstrengths/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
@@ -421,6 +437,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 			fprintf(f, "Update neurons:\t\t %f (ms)\n", meantime(updatingneurons_g, commsize));
 			fprintf(f, "Check spiked:\t\t %f (ms)\n", meantime(spikechecking_g, commsize));
 			fprintf(f, "Pushing buffer:\t\t %f (ms)\n", meantime(pushingoutput_g, commsize));
+			fprintf(f, "Updating neuron traces:\t %f (ms)\n", meantime(updatingneurons_g, commsize));
 			fprintf(f, "Updating synapses:\t %f (ms)\n", meantime(updatingsynstrengths_g, commsize));
 			fprintf(f, "Advancing buffer:\t %f (ms)\n", meantime(advancingbuffer_g, commsize));
 			fprintf(f, "Total cycle time:\t %f (ms)\n", meantime(totaltime_g, commsize));
@@ -430,8 +447,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	}
 
 
-	free(neuroninputs);
-	free(neuronoutputs);
+	//free(neuroninputs);
+	//free(neuronoutputs);
+	cuFreeDouble(neuroninputs);
+	cuFreeDouble(neuronoutputs);
 	free(nextrand);
 }
 
@@ -506,8 +525,12 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 	/* set up state for simulation */
 	if (DEBUG) printf("Allocating state on rank %d\n", commrank);
-	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
-	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
+	//su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
+	su_mpi_neuron *neurons;
+	cuAlloc((void **) &neurons, maxnode, sizeof(su_mpi_neuron), commrank);
+	//FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
+	FLOAT_T *traces_neu;
+	cuAllocDouble(&traces_neu, maxnode, commrank);
 	FLOAT_T *traces_syn; 	
 
 	/* initialize neuron values */
@@ -554,7 +577,9 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 				commrank, numsyn_exc);
 	}
 
-	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	//FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	FLOAT_T *synapses_local;
+	cuAllocDouble(&synapses_local, m->dn->numlinesin_l, commrank);
 	//traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
 	cuAllocDouble(&traces_syn, m->dn->numlinesin_l, commrank);
 
@@ -652,10 +677,10 @@ su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
 
 void su_mpi_freemodel_l(su_mpi_model_l *m) {
 	dn_mpi_freedelnet(m->dn);
-	free(m->neurons);
-	free(m->traces_neu);
+	cuFree(m->neurons);
+	cuFreeDouble(m->traces_neu);
 	cuFreeDouble(m->traces_syn);
-	free(m->synapses);
+	cuFreeDouble(m->synapses);
 	free(m);
 }
 

@@ -17,7 +17,7 @@ void cuAlloc(void **block, size_t numelements, size_t typesize, int commRank)
 	}
 
 	// Assign rank to appropriate device
-	if( (cE = cudaSetDevice( commRank % cudaDeviceCount )) != cudaSuccess) {
+	if ( (cE = cudaSetDevice( commRank % cudaDeviceCount )) != cudaSuccess) {
 		printf(" Unable to have rank %d set to cuda %d, error is %d \n",
 				commRank, (commRank % cudaDeviceCount), cE);
 		exit(-1);

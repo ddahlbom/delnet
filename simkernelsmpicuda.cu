@@ -29,6 +29,8 @@ double sk_mpi_expsampl(double lambda)
  * First function for Runge-Kutta method. This is the Izhikevich
  * "simple" model, voltage variable.
  */
+
+extern "C"
 static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
 	return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
@@ -37,13 +39,15 @@ static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
  * Second function for Runge-Kutta method. This is the Izhikevich
  * "simple" model, recover variable.
  */
+
+extern "C"
 static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a) {
 	return a*(0.2*v - u);
 }
-
 /*
  * Update neuron state using 4th order Runge-Kutta
  */
+
 extern "C"
 void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T h) {
 	FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
@@ -66,7 +70,6 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 	*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + input;
 	*u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
 }
-
 
 /*-------------------- Kernels -------------------- */
 
@@ -123,6 +126,49 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T n
 		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k],
 							neurons[k].a, 1000.0/tp->fs);
 	}
+}
+
+__global__
+void sk_mpi_updateneurons_cuker(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
+								double fs)
+{
+	size_t k;
+	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
+	unsigned int stride = blockDim.x * gridDim.x; 
+	FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h, h;
+	h = 1000.0/fs;
+	half_h = h*0.5;
+	sixth_h = h/6.0;
+
+	for (k=index; k<num_neurons; k+=stride) {
+		
+		K1 = (0.04*(neurons[k].v) + 5.0)*(neurons[k].v) + 140.0 - (neurons[k].u);
+		L1 = neurons[k].a*(0.2*(neurons[k].v) - (neurons[k].u));
+
+		K2 = (0.04*( neurons[k].v + half_h*K1 ) + 5.0)*( neurons[k].v +
+				half_h*K1 ) + 140.0 - (neurons[k].u + half_h*L1);
+		L2 = neurons[k].a*(0.2*( neurons[k].v + half_h*K1 ) - (neurons[k].u + half_h*L1));
+
+		K3 = (0.04*( neurons[k].v + half_h*K2 ) + 5.0)*( neurons[k].v +
+				half_h*K2 ) + 140.0 - (neurons[k].u + half_h*L2);
+		L3 = neurons[k].a*(0.2*( neurons[k].v + half_h*K2 ) - (neurons[k].u + half_h*L2));
+
+		K4 = (0.04*( neurons[k].v + h*K3 ) + 5.0)*( neurons[k].v + h*K3 ) +
+				140.0 - (neurons[k].u + h*L3);
+		L4 = neurons[k].a*(0.2*( neurons[k].v + h*K3 ) - ( neurons[k].u + h*L3 ));
+
+		neurons[k].v = neurons[k].v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + neuroninputs[k];
+		neurons[k].u = neurons[k].u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
+	}
+}
+
+extern "C"
+void sk_mpi_updateneurons_cuda(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
+							   double fs)
+{
+	unsigned int numblocks = (num_neurons + TPB - 1) / TPB;
+	sk_mpi_updateneurons_cuker<<<numblocks, TPB>>>(neurons, neuroninputs, num_neurons, fs);
+	cudaDeviceSynchronize();
 }
 
 extern "C"
@@ -207,6 +253,29 @@ void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_
 	for (k=0; k<n; k++) { 		
 		traces_neu[k] = traces_neu[k]*(1.0 - (dt/mp->tau_post)) + neuronoutputs[k];
 	}
+}
+
+__global__
+void sk_mpi_updateneurontraces_cuker(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
+								FLOAT_T dt, FLOAT_T tau_post) 
+{
+	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
+	unsigned int stride = blockDim.x * gridDim.x; 
+
+	size_t k;
+	for (k=index; k<n; k += stride) { 		
+		traces_neu[k] = traces_neu[k]*(1.0 - (dt/tau_post)) + neuronoutputs[k];
+	}
+}
+
+extern "C"
+void sk_mpi_updateneurontraces_cuda(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
+								FLOAT_T dt, FLOAT_T tau_post) 
+{
+	unsigned int numblocks = (n + TPB - 1)/TPB;
+	sk_mpi_updateneurontraces_cuker<<<numblocks, TPB>>>(traces_neu, neuronoutputs, n, dt, tau_post);
+
+	cudaDeviceSynchronize();
 }
 
 extern "C"
