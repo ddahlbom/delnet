@@ -406,6 +406,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (commrank==0) {
 			FILE *f;
 			f = fopen("performance_data.txt", "a");
+			fprintf(f, "\n----------------------------------------\n");
+			fprintf(f, "Number of processes: %d\n", commsize);
 			fprintf(f, "----------------------------------------\n");
 			fprintf(f, "Sampling Frequency: %g\n", m->p.fs);
 			fprintf(f, "Number of Neurons: %g\n", m->p.num_neurons);
