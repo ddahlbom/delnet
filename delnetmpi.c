@@ -2,14 +2,10 @@
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
 #include <math.h>
+// #include <mpi.h> 
 
-#ifdef __amd64__
+//#include "/usr/include/mpich/mpi.h"
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#else
-#include <mpi.h>
-#endif
-
-#include "cuallocate.h"
 #include "delnetmpi.h"
 
 #define DEBUG 0
@@ -17,31 +13,6 @@
 #define OFFSET 0
 #define LENGTH 1
 #define DATA 2
-
-/* -------------------- Nonbuffered additions -------------------- */
-inline void dn_mpi_pushevent(dn_mpi_eventbuffer *eb)
-{
-	for (int i=0; i<MAXBUFFERLEN; i++) {
-		if (eb->buffer[i] == 0) {
-			eb->buffer[i] = eb->bufferlen;
-			return;
-		}
-	}
-	printf("Too many spikes for buffer!\n");
-}
-
-inline FLOAT_T dn_mpi_advancebuffer(dn_mpi_eventbuffer *eb)
-{
-	FLOAT_T out = 0.0;
-	for (int i=0; i<MAXBUFFERLEN; i++) {
-		if (eb->buffer[i] > 0) {
-			eb->buffer[i] -= 1;
-			if (eb->buffer[i] == 0)
-				out = 1.0;
-		}
-	}
-	return out;
-}
 
 
 /* --------------------	MPI Utils -------------------- */
@@ -158,10 +129,39 @@ void dn_mpi_list_uint_free(dn_mpi_list_uint *l) {
 }
 
 
+dn_mpi_vec_float dn_mpi_orderbuf(IDX_T which, dn_mpi_delaynet *dn) {
+	IDX_T k, n, idx;
+	dn_mpi_vec_float output;
+	
+	n = dn->del_lens[which];
+	output.n = n;
+	output.data = malloc(sizeof(FLOAT_T) * n);
+
+	for (k=0; k<n; k++) {
+		idx = dn->del_startidces[which] +
+			((dn->del_offsets[which]+k) % dn->del_lens[which]);
+		output.data[n-k-1] = dn->delaybuf[idx];
+	}
+	return output;
+}
+
 char *dn_mpi_vectostr(dn_mpi_vec_float input) {
 	int k;
 	char *output;
 	output = malloc(sizeof(char)*(input.n+1));
+	output[input.n] = '\0';
+	for(k=0; k < input.n; k++) {
+		output[k] = input.data[k] == 0.0 ? '-' : '1';
+	}
+	return output;
+}
+
+
+
+/*
+ * -------------------- delnet Functions --------------------
+ */
+
 	output[input.n] = '\0';
 	for(k=0; k < input.n; k++) {
 		output[k] = input.data[k] == 0.0 ? '-' : '1';
@@ -650,6 +650,9 @@ dn_mpi_delaynet *dn_mpi_load(FILE *stream) {
 	loadsize = fread(dn->outputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
 	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
 
+	loadsize = fread(dn->outputs, sizeof(FLOAT_T), dn->numlinesout_l, stream);
+	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
+
 	dn->outputs_unsorted = malloc(sizeof(FLOAT_T)*dn->numlines_g);
 	loadsize = fread(dn->outputs_unsorted, sizeof(FLOAT_T), dn->numlines_g, stream);
 	if (loadsize != dn->numlines_g) { printf("Failed to load delay network.\n"); exit(-1); }
@@ -666,6 +669,18 @@ dn_mpi_delaynet *dn_mpi_load(FILE *stream) {
 	dn->sourceidx_g = malloc(sizeof(IDX_T)*dn->numlines_g);
 	loadsize = fread(dn->sourceidx_g, sizeof(IDX_T), dn->numlines_g, stream);
 	if (loadsize != dn->numlines_g) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_offsets = malloc(sizeof(IDX_T)*dn->numlinesout_l);
+	loadsize = fread(dn->del_offsets, sizeof(IDX_T), dn->numlinesout_l, stream);
+	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_startidces = malloc(sizeof(IDX_T)*dn->numlinesout_l);
+	loadsize = fread(dn->del_startidces, sizeof(IDX_T), dn->numlinesout_l , stream);
+	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
+
+	dn->del_lens = malloc(sizeof(IDX_T)*dn->numlinesout_l);
+	loadsize = fread(dn->del_lens, sizeof(IDX_T), dn->numlinesout_l, stream);
+	if (loadsize != dn->numlinesout_l) { printf("Failed to load delay network.\n"); exit(-1); }
 
 	dn->del_sources = malloc(sizeof(IDX_T)*dn->numlinesout_l);
 	loadsize = fread(dn->del_sources, sizeof(IDX_T), dn->numlinesout_l, stream);
