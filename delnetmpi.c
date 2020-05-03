@@ -249,6 +249,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	unsigned int i, j, delcount, startidx;
 	unsigned int deltot_g, numlines_g, deltot_l, numlinesout_l, numlinesin_l;
 	size_t num_nodes_l = dn_mpi_maxnode(commrank, commsize, n);
+	printf("num_nodes_l: %lu\n", num_nodes_l);
 	size_t nodeoffset = dn_mpi_nodeoffset(commrank, commsize, n);
 
 	dn_mpi_delaynet *dn;
