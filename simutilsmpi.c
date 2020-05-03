@@ -274,8 +274,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update synapse traces ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		//su_mpi_updatesynapsetraces(traces_syn, spike_pre, dn, offsets, dt, &p);
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		//sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		sk_mpi_updatesynapsetraces_cuda(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
