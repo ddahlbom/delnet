@@ -13,7 +13,7 @@
 #define getrandom(max1) ((rand()%(int)((max1)))) // random integer between 0 and max-1
 #define unirand() (((FLOAT_T) rand()) / ((FLOAT_T) RAND_MAX + 1.0))
 
-#define MAXBUFFERLEN 8 
+#define MAXBUFFERLEN 16
 
 #ifdef __cplusplus
 #define EXTERNC extern "C"

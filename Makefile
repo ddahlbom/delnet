@@ -14,8 +14,8 @@ mpi-cuda-local: delnetstdpinputmpi.c delnetmpi.c delnetmpi.h spkrcd.c spkrcd.h p
 	mpicc -g -Wall $(OPTFLAG) -c delnetmpi.c -o delnetmpi.o 
 	gcc -g -Wall $(OPTFLAG) -c spkrcd.c -o spkrcd.o	
 	gcc -g -Wall $(OPTFLAG) -c paramutils.c -o paramutils.o
-	nvcc -g -G $(OPTFLAG) -c simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
-	nvcc -g -G $(OPTFLAG) -c cuallocate.cu -o cuallocate.o
+	nvcc -g -G -c simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
+	nvcc -g -G -c cuallocate.cu -o cuallocate.o
 	mpicc -g -Wall -c simutilsmpi.c -o simutilsmpi.o -lm $(LINKFLAGS) 	# optimization breaks this!!
 	mpicc -g -Wall $(OPTFLAG) delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpicuda.o cuallocate.o simutilsmpi.o -o runtrial-mpicuda $(LINKFLAGSLOCAL)
 

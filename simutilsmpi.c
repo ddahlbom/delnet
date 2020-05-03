@@ -209,9 +209,22 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	cuAllocDouble(&neuronoutputs, n_l, commrank);
 	unsigned long int numspikes = 0, numrandspikes = 0;
 	//FLOAT_T offdur = 1.0; // <--- get rid of this after testing!
+	//FLOAT_T spikesize = 1.5/(m->p.p_contact * m->p.num_neurons * 0.0007497);
+	//printf("Spike size: %g\n", spikesize);
+	//tp.randspikesize = spikesize; 
+	FLOAT_T spikesize = tp.randspikesize;
+
+	/* Rescale input magnitude with network size */
+	for (size_t k=0; k<inputlen; k++) input[k] = input[k] == 0 ? 0 : spikesize; 
 
 	/* initialize random input states */
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
+	FLOAT_T *inputlocal;
+	FLOAT_T f_input = 20.0;
+	FLOAT_T dt_input = 1.0/f_input;
+	unsigned int stepspercycle = floor(dt_input*tp.fs);
+	inputlocal = calloc(stepspercycle, sizeof(FLOAT_T));
+	inputlocal[0] = spikesize;
 
 
 	double t_start=MPI_Wtime(), t_finish;
@@ -223,7 +236,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 			printf("Time: %f\n", t);
 
 
-		/* ---------- get delay outputs (neuron inputs) from buffer ---------- */
+		/* ---------- get delay outputs (neuron inputs) from buffer and put in inputs ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
@@ -237,14 +250,15 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* put in forced input */
 		//if (t < tp.dur - offdur) {
 		for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++) 	// (num forced inputs...)
-			neuroninputs[k] += input[ i % inputlen ];
+			//neuroninputs[k] += input[ i % inputlen ];
+			neuroninputs[k] += inputlocal[ i % stepspercycle ];
 		//}
 
 		/* ---------- update neuron state ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		//sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
-		sk_mpi_updateneurons_cuda(m->neurons, neuroninputs, n_l, tp.fs);
+		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
+		//sk_mpi_updateneurons_cuda(m->neurons, neuroninputs, n_l, tp.fs);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -452,6 +466,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	cuFreeDouble(neuroninputs);
 	cuFreeDouble(neuronoutputs);
 	free(nextrand);
+	free(inputlocal);
 }
 
 
@@ -544,12 +559,16 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	/* initialize synapse weights */
 	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
 	unsigned int numsyn_exc = 0;
+	unsigned int numsyn_tot = 0;
 
 	// Find out number of excitatory synapses
 	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
 		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
 		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
 						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
+		numsyn_tot = m->dn->lineoffset_out + m->dn->nodes[(n-1) - m->nodeoffset].idx_outbuf
+						+ m->dn->nodes[(n-1) - m->nodeoffset].num_in;
+		//printf("Number of synapses: %d\n", numsyn_tot);
 		printf("Number of excitatory synapses: %d\n", numsyn_exc);
 		for (int q=0; q < commsize; q++) {
 			if (q != commrank) {
