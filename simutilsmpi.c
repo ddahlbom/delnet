@@ -564,15 +564,15 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	/* initialize synapse weights */
 	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
 	unsigned int numsyn_exc = 0;
-	unsigned int numsyn_tot = 0;
+	//unsigned int numsyn_tot = 0;
 
 	// Find out number of excitatory synapses
 	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
 		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
 		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
 						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
-		numsyn_tot = m->dn->lineoffset_out + m->dn->nodes[(n-1) - m->nodeoffset].idx_outbuf
-						+ m->dn->nodes[(n-1) - m->nodeoffset].num_in;
+		//numsyn_tot = m->dn->lineoffset_out + m->dn->nodes[(n-1) - m->nodeoffset].idx_outbuf
+		//				+ m->dn->nodes[(n-1) - m->nodeoffset].num_in;
 		//printf("Number of synapses: %d\n", numsyn_tot);
 		printf("Number of excitatory synapses: %d\n", numsyn_exc);
 		for (int q=0; q < commsize; q++) {
