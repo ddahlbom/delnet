@@ -7,7 +7,7 @@ LINKFLAGSAIMOS = -lm -L/usr/local/cuda-10.1/lib64/ -lcudadevrt -lcudart -lstdc++
 default: aimos 
 
 opt: OPTFLAG += -O3
-opt: default
+opt: aimos 
 optlocal: OPTFLAG += -O3
 optlocal: local 
 optlocalnocuda: OPTFLAG += -O3
@@ -41,9 +41,9 @@ aimos: delnetstdpinputmpi.c delnetmpi.c delnetmpi.h spkrcd.c spkrcd.h paramutils
 	mpicc -g -Wall $(OPTFLAG) -c delnetmpi.c -o delnetmpi.o 
 	gcc -g -Wall $(OPTFLAG) -c spkrcd.c -o spkrcd.o	
 	gcc -g -Wall $(OPTFLAG) -c paramutils.c -o paramutils.o
-	nvcc -g -G -c $(OPTFLAG) simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
-	nvcc -g -G -c $(OPTFLAG) cuallocate.cu -o cuallocate.o
-	mpicc -g -Wall -c simutilsmpicuda.c -o simutilsmpicuda.o -lm $(LINKFLAGS) 	# optimization breaks this!!
+	nvcc -g -G -c -arch=sm_70 $(OPTFLAG) simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
+	nvcc -g -G -c -arch=sm_70 $(OPTFLAG) cuallocate.cu -o cuallocate.o
+	mpicc -g -Wall -c simutilsmpicuda.c -o simutilsmpicuda.o -lm  	# optimization breaks this!!
 	mpicc -g -Wall $(OPTFLAG) delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpicuda.o cuallocate.o simutilsmpicuda.o -o runtrial-mpicuda $(LINKFLAGSAIMOS)
 
 aimosnocuda: delnetstdpinputmpi.c delnetmpi.c delnetmpi.h spkrcd.c spkrcd.h paramutils.c paramutils.h simkernelsmpicuda.cu simkernelsmpicuda.h simutilsmpi.c simutilsmpi.h cuallocate.cu cuallocate.h
@@ -51,9 +51,9 @@ aimosnocuda: delnetstdpinputmpi.c delnetmpi.c delnetmpi.h spkrcd.c spkrcd.h para
 	mpicc -g -Wall $(OPTFLAG) -c delnetmpi.c -o delnetmpi.o 
 	gcc -g -Wall $(OPTFLAG) -c spkrcd.c -o spkrcd.o	
 	gcc -g -Wall $(OPTFLAG) -c paramutils.c -o paramutils.o
-	nvcc -g -G -c $(OPTFLAG) simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
-	nvcc -g -G -c $(OPTFLAG) cuallocate.cu -o cuallocate.o
-	mpicc -g -Wall -c simutilsmpi.c -o simutilsmpi.o -lm $(LINKFLAGS) 	# optimization breaks this!!
+	nvcc -g -G -c -arch=sm_70 $(OPTFLAG) simkernelsmpicuda.cu -o simkernelsmpicuda.o -lm
+	nvcc -g -G -c -arch=sm_70 $(OPTFLAG) cuallocate.cu -o cuallocate.o
+	mpicc -g -Wall -c simutilsmpi.c -o simutilsmpi.o -lm  	# optimization breaks this!!
 	mpicc -g -Wall $(OPTFLAG) delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpicuda.o cuallocate.o simutilsmpi.o -o runtrial-mpi $(LINKFLAGSAIMOS)
 
 clean:
