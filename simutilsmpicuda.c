@@ -220,7 +220,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	/* initialize random input states */
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 	FLOAT_T *inputlocal;
-	FLOAT_T f_input = 20.0;
+	FLOAT_T f_input = 10.0;
 	FLOAT_T dt_input = 1.0/f_input;
 	unsigned int stepspercycle = floor(dt_input*tp.fs);
 	inputlocal = calloc(stepspercycle, sizeof(FLOAT_T));
@@ -292,8 +292,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update synapse traces ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
-		//sk_mpi_updatesynapsetraces_cuda(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		//sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		sk_mpi_updatesynapsetraces_cuda(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
@@ -317,10 +317,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update synapses ---------- */
 		if (profiling) t_start = MPI_Wtime();
 
-		sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
-							m->dn, dt, &m->p);
-		//sk_mpi_updatesynapses_cuda(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
-		//						   m->dn, dt, m->p.a_pre, m->p.a_post, m->p.synmax);
+		//sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
+		//					m->dn, dt, &m->p);
+		sk_mpi_updatesynapses_cuda(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
+								   m->dn, dt, m->p.a_pre, m->p.a_post, m->p.synmax);
 
 		if (profiling) {
 			t_finish = MPI_Wtime();
