@@ -4,10 +4,37 @@
 #include <time.h>
 
 #ifdef __amd64__
+
+typedef unsigned long long ticks;
+
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#define CLOCKSPEED 3200000000
+
 char perfFileName[] = "performance_data.txt";
+static __inline__ ticks getticks(void)
+{
+    unsigned int lo,hi;
+    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+    return ((ticks)hi << 32) | lo;
+}
+
 #else
+
 char perfFileName[] = "/gpfs/u/home/PCP9/PCP9dhlb/barn/delnet/performance_data.txt";
+char prefix[] = "/gpfs/u/home/PCP9/PCP9dhlb/scratch/";
+static __inline__ ticks getticks(void)
+{
+  unsigned int tbl, tbu0, tbu1;
+
+  do {
+    __asm__ __volatile__ ("mftbu %0" : "=r"(tbu0));
+    __asm__ __volatile__ ("mftb %0" : "=r"(tbl));
+    __asm__ __volatile__ ("mftbu %0" : "=r"(tbu1));
+  } while (tbu0 != tbu1);
+
+  return (((ticks)tbu0) << 32) | tbl;
+}
+
 #include <mpi.h>
 #endif
 
@@ -182,7 +209,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 					spikerecord *sr, int commrank, int commsize, bool profiling)
 {
 
-	double gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
+	ticks gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
 			advancingbuffer;
 
@@ -229,9 +256,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	inputlocal[0] = spikesize;
 
 
-	double t_start=MPI_Wtime(), t_finish, totaltime_start, totaltime_finish, totalcum=0;
+	ticks ticks_start, ticks_finish, totalticks_start, totalticks_finish, totaltickscum=0;
 	for (size_t i=0; i<numsteps; i++) {
-		if (profiling) totaltime_start = MPI_Wtime();
+		//if (profiling) totaltime_start = MPI_Wtime();
+		if (profiling) totalticks_start = getticks(); 
 
 		/* ---------- calculate time update ---------- */
 		FLOAT_T t = dt*i;
@@ -240,7 +268,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 
 		/* ---------- get delay outputs (neuron inputs) from buffer and put in inputs ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
@@ -252,73 +280,73 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		//}
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			gettinginputs += ((double)(t_finish - t_start));
+			ticks_finish = getticks(); 
+			gettinginputs += (ticks_finish - ticks_start);
 		}
 
 
 		/* ---------- update neuron state ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
 		//sk_mpi_updateneurons_cuda(m->neurons, neuroninputs, n_l, tp.fs);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			updatingneurons += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			updatingneurons += (ticks_finish - ticks_start);
 		}
 
 		/* ---------- calculate neuron outputs ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		numspikes += sk_mpi_checkspiking(m->neurons, neuronoutputs, n_l, t,
 											sr, m->dn->nodeoffset);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			spikechecking += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			spikechecking += (ticks_finish - ticks_start);
 		}
 
 
 		/* ---------- push the neuron output into the buffer ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks(); 
 
 		for (size_t k=0; k<n_l; k++)
 			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // node outputs into delnet 
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			pushingoutput += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			pushingoutput += (ticks_finish - ticks_start);
 		}
 
 
 		/* ---------- update synapse traces ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
-		//sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
-		sk_mpi_updatesynapsetraces_cuda(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
+		//sk_mpi_updatesynapsetraces_cuda(m->traces_syn, m->dn->outputs, m->dn, dt, m->p.tau_pre);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			updatingsyntraces += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			updatingsyntraces += (ticks_finish - ticks_start);
 		}
 
 
 
 		/* ---------- update neuron traces ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
 		//sk_mpi_updateneurontraces_cuda(m->traces_neu, neuronoutputs, n_l, dt, m->p.tau_post);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			updatingneutraces += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			updatingneutraces += (ticks_finish - ticks_start);
 		}
 
 
 		/* ---------- update synapses ---------- */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		//sk_mpi_updatesynapses(m->synapses, m->traces_syn, m->traces_neu, neuronoutputs,
 		//					m->dn, dt, &m->p);
@@ -326,21 +354,21 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 								   m->dn, dt, m->p.a_pre, m->p.a_post, m->p.synmax);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			updatingsynstrengths += ((double)(t_finish - t_start));
+			ticks_finish = getticks();
+			updatingsynstrengths += (ticks_finish - ticks_start);
 		}
 
 
 		/* advance the buffer */
-		if (profiling) t_start = MPI_Wtime();
+		if (profiling) ticks_start = getticks();
 
 		dn_mpi_advance(m->dn);
 
 		if (profiling) {
-			t_finish = MPI_Wtime();
-			advancingbuffer += ((double)(t_finish - t_start));
-			totaltime_finish = MPI_Wtime();
-			totalcum += (totaltime_finish - totaltime_start);
+			ticks_finish = getticks();
+			advancingbuffer += (ticks_finish - ticks_start);
+			totalticks_finish = getticks();
+			totaltickscum += (totalticks_finish - totalticks_start);
 		}
 	}
 
@@ -377,67 +405,67 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		else
 			MPI_Gather(&firingrate, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*gettinginputs/numsteps;
+		cycletime = 1000.0*(((long double) gettinginputs)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, gettinginputs_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*updatingsyntraces/numsteps;
+		cycletime = 1000.0*(((long double) updatingsyntraces)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingsyntraces_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*updatingneurons/numsteps;
+		cycletime = 1000.0*(((long double)updatingneurons)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingneurons_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*spikechecking/numsteps;
+		cycletime = 1000.0*(((long double)spikechecking)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, spikechecking_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*pushingoutput/numsteps;
+		cycletime = 1000.0*(((long double) pushingoutput)/((long double) CLOCKSPEED)) / numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, pushingoutput_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*updatingneutraces/numsteps;
+		cycletime = 1000.0*(((long double) updatingneutraces)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingneutraces_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*updatingsynstrengths/numsteps;
+		cycletime = 1000.0*(((long double) updatingsynstrengths)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, updatingsynstrengths_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		cycletime = 1000.0*advancingbuffer/numsteps;
+		cycletime = 1000.0*(((long double) advancingbuffer)/((long double) CLOCKSPEED))/numsteps;
 		cumtime += cycletime;
 		if (commrank==0) 
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, advancingbuffer_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-		totalcum = 1000.0 * totalcum/numsteps;
+		double totaltimecum = 1000.0 * (((long double) totaltickscum)/((long double) CLOCKSPEED))/numsteps;
 		if (commrank==0) 
-			MPI_Gather(&totalcum, 1, MPI_DOUBLE, totaltime_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+			MPI_Gather(&totaltimecum, 1, MPI_DOUBLE, totaltime_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
-			MPI_Gather(&totalcum, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+			MPI_Gather(&totaltimecum, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		if (commrank==0) {
 			FILE *f;

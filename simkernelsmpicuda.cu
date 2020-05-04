@@ -317,7 +317,7 @@ void sk_mpi_updatesynapses_cuker(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T
 								 FLOAT_T synmax)
 {
 	size_t i, j;
-	FLOAT_T *synapseoutputs = dn->outputs;
+	double *synapseoutputs = dn->outputs; // for clarity
 
 	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
 	unsigned int stride = blockDim.x * gridDim.x; 
@@ -329,10 +329,10 @@ void sk_mpi_updatesynapses_cuker(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T
 					dt * (a_post * traces_syn[dn->nodes[i].idx_outbuf+j] * neuronoutputs[i] -
 						  a_pre * traces_neu[i] * synapseoutputs[dn->nodes[i].idx_outbuf+j]);
 			/* clamp value	*/
-			synapses[dn->nodes[i].idx_outbuf+j] = synapses[dn->nodes[i].idx_outbuf+j] < 0.0 ? 
-										0.0 : synapses[dn->nodes[i].idx_outbuf+j];
-			synapses[dn->nodes[i].idx_outbuf+j] =
-				synapses[dn->nodes[i].idx_outbuf+j] > synmax ? synmax : synapses[dn->nodes[i].idx_outbuf+j];
+			//synapses[dn->nodes[i].idx_outbuf+j] = synapses[dn->nodes[i].idx_outbuf+j] < 0.0 ? 
+			//							0.0 : synapses[dn->nodes[i].idx_outbuf+j];
+			//synapses[dn->nodes[i].idx_outbuf+j] =
+			//	synapses[dn->nodes[i].idx_outbuf+j] > synmax ? synmax : synapses[dn->nodes[i].idx_outbuf+j];
 		}
 	}
 }

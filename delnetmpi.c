@@ -252,7 +252,8 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	dn_mpi_delaynet *dn;
 	dn_mpi_list_uint **nodes_in;
 
-	dn = malloc(sizeof(dn_mpi_delaynet));
+	//dn = malloc(sizeof(dn_mpi_delaynet));
+	cuAlloc((void **) &dn, 1, sizeof(dn_mpi_delaynet), commrank);
 	nodes_in = malloc(sizeof(dn_mpi_list_uint)*n);
 	for (i=0; i<n; i++)
 		nodes_in[i] = dn_mpi_list_uint_init();
@@ -479,7 +480,8 @@ void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->delaybuf);
 	//free(dn->nodes);
 	cuFree(dn->nodes);
-	free(dn);
+	//free(dn);
+	cuFree(dn);
 }
 
 
