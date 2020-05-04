@@ -303,7 +303,9 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	IDX_T *del_lens = malloc(sizeof(IDX_T)*numlines_g);
 	IDX_T *del_sources = malloc(sizeof(IDX_T)*numlines_g);
 	IDX_T *del_targets = malloc(sizeof(IDX_T)*numlines_g);
-	dn_mpi_node *nodes = malloc(sizeof(dn_mpi_node)*n);
+	//dn_mpi_node *nodes = malloc(sizeof(dn_mpi_node)*n);
+	dn_mpi_node *nodes;
+	cuAlloc((void **)&nodes, n, sizeof(dn_mpi_node), commrank);
 
 
 	/* init nodes -- should've just calloc-ed*/
