@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 	strcpy(modelfilename, outfilename);
 	strcat(modelfilename, rankstr);
 	strcat(modelfilename, "_model.bin");
-	su_mpi_savemodel_l(m, modelfilename);
+	//su_mpi_savemodel_l(m, modelfilename);
 
 	/* Clean up */
 	sr_close(sr);
