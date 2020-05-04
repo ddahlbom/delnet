@@ -5,7 +5,9 @@
 
 #ifdef __amd64__
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+char perfFileName[] = "performance_data.txt";
 #else
+char perfFileName[] = "/gpfs/u/home/PCP9/PCP9dhlb/barn/delnet/performance_data.txt";
 #include <mpi.h>
 #endif
 
@@ -439,7 +441,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 		if (commrank==0) {
 			FILE *f;
-			f = fopen("performance_data.txt", "a");
+			f = fopen(perfFileName, "a");
 			fprintf(f, "\n----------------------------------------\n");
 			fprintf(f, "Number of processes: %d\n", commsize);
 			fprintf(f, "----------------------------------------\n");
