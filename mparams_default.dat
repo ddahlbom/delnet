@@ -1,7 +1,7 @@
 fs 				1000.0
 p_contact 		0.1
 p_exc 			0.80
-num_neurons 	3000.0
+num_neurons 	1000.0
 tau_pre 		0.02
 tau_post 		0.02
 a_pre 			1.20

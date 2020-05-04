@@ -227,8 +227,9 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	inputlocal[0] = spikesize;
 
 
-	double t_start=MPI_Wtime(), t_finish;
+	double t_start=MPI_Wtime(), t_finish, totaltime_start, totaltime_finish, totalcum;
 	for (size_t i=0; i<numsteps; i++) {
+		if (profiling) totaltime_start = MPI_Wtime();
 
 		/* ---------- calculate time update ---------- */
 		FLOAT_T t = dt*i;
@@ -241,18 +242,18 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
-
-		if (profiling) {
-			t_finish = MPI_Wtime();
-			gettinginputs += ((double)(t_finish - t_start));
-		}
-
 		/* put in forced input */
 		//if (t < tp.dur - offdur) {
 		for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++) 	// (num forced inputs...)
 			//neuroninputs[k] += input[ i % inputlen ];
 			neuroninputs[k] += inputlocal[ i % stepspercycle ];
 		//}
+
+		if (profiling) {
+			t_finish = MPI_Wtime();
+			gettinginputs += ((double)(t_finish - t_start));
+		}
+
 
 		/* ---------- update neuron state ---------- */
 		if (profiling) t_start = MPI_Wtime();
@@ -336,6 +337,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) {
 			t_finish = MPI_Wtime();
 			advancingbuffer += ((double)(t_finish - t_start));
+			totaltime_finish = MPI_Wtime();
+			totalcum += (totaltime_finish - totaltime_start);
 		}
 	}
 
@@ -428,10 +431,11 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		else
 			MPI_Gather(&cycletime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
+		totalcum = 1000.0 * totalcum/numsteps;
 		if (commrank==0) 
-			MPI_Gather(&cumtime, 1, MPI_DOUBLE, totaltime_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+			MPI_Gather(&totalcum, 1, MPI_DOUBLE, totaltime_g, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 		else
-			MPI_Gather(&cumtime, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+			MPI_Gather(&totalcum, 1, MPI_DOUBLE, NULL, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 		if (commrank==0) {
 			FILE *f;
