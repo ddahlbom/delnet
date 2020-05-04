@@ -190,7 +190,7 @@ FLOAT_T *dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn) {
 
 void dn_mpi_advance(dn_mpi_delaynet *dn)
 {
-	IDX_T i, k, k_global;
+	IDX_T k, k_global;
 
 	/* load network inputs into buffers */
 	for(k=0; k < dn->numlinesout_l; k++) {
