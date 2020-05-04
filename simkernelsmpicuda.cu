@@ -214,22 +214,62 @@ void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 	}
 }
 
+/*
 __global__
 void sk_mpi_updatesynapsetraces_cuker(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 									 dn_mpi_delaynet *dn, FLOAT_T dt,
 									 FLOAT_T tau_pre) {
-	unsigned int i, j;
+	unsigned int i, j, idx_outbuf, n;
 	FLOAT_T *neuroninputs;
 	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
 	unsigned int stride = blockDim.x * gridDim.x; 
 
 	for (i=index; i<dn->num_nodes_l; i += stride) {
-		for (j=0; j < dn->nodes[i].num_in; j++) {
-			neuroninputs = &dn->outputs[dn->nodes[index].idx_outbuf]; 
-			spike_pre[dn->nodes[i].idx_outbuf +j] = neuroninputs[j];
-			traces_syn[dn->nodes[i].idx_outbuf +j] = traces_syn[dn->nodes[i].idx_outbuf +j]*(1.0 - (dt/tau_pre)) +
-				spike_pre[dn->nodes[i].idx_outbuf +j];
+
+		neuroninputs = &dn->outputs[dn->nodes[i].idx_outbuf]; 
+		idx_outbuf = dn->nodes[i].idx_outbuf;
+		n = dn->nodes[i].num_in;
+
+		for (j=0; j < n; j++) {
+			spike_pre[idx_outbuf +j] = neuroninputs[j];
+			traces_syn[idx_outbuf +j] = traces_syn[idx_outbuf +j]*(1.0 - (dt/tau_pre)) +
+				spike_pre[idx_outbuf +j];
 		}
+	}
+
+}
+
+extern "C"
+void sk_mpi_updatesynapsetraces_cuda(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
+									 dn_mpi_delaynet *dn, FLOAT_T dt,
+									 FLOAT_T tau_pre) {
+	unsigned int numblocks = (dn->num_nodes_l + TPB - 1) / TPB;		
+	cudaError_t cE;
+
+	sk_mpi_updatesynapsetraces_cuker<<<numblocks, TPB>>>(traces_syn,
+														 spike_pre,
+														 dn,
+														 dt,
+														 tau_pre);
+	cE = cudaDeviceSynchronize();
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
+}
+*/
+
+__global__
+void sk_mpi_updatesynapsetraces_cuker(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
+									 dn_mpi_delaynet *dn, FLOAT_T dt,
+									 FLOAT_T tau_pre) {
+	unsigned int i;
+	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
+	unsigned int stride = blockDim.x * gridDim.x; 
+	
+	for (i = index; i<dn->num_nodes_l; i+=stride) {
+		spike_pre[i] = dn->outputs[i];
+		traces_syn[i] = traces_syn[i]*(1.0 - (dt/tau_pre)) + spike_pre[i];
 	}
 
 }
@@ -310,6 +350,7 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 	}
 }
 
+/*
 __global__
 void sk_mpi_updatesynapses_cuker(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
 								 FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
@@ -318,21 +359,25 @@ void sk_mpi_updatesynapses_cuker(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T
 {
 	size_t i, j;
 	double *synapseoutputs = dn->outputs; // for clarity
+	unsigned int idx_outbuf=0;
+	unsigned int n=0;
 
 	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
 	unsigned int stride = blockDim.x * gridDim.x; 
 
-	for (i=index; i<dn->num_nodes_l; i += stride) 
-	for (j=0; j < dn->nodes[i].num_in; j++) {
-		if (synapses[dn->nodes[i].idx_outbuf+j] > 0) { 	// only update excitatory synapses
-			synapses[dn->nodes[i].idx_outbuf+j] = synapses[dn->nodes[i].idx_outbuf+j] +
-					dt * (a_post * traces_syn[dn->nodes[i].idx_outbuf+j] * neuronoutputs[i] -
-						  a_pre * traces_neu[i] * synapseoutputs[dn->nodes[i].idx_outbuf+j]);
-			/* clamp value	*/
-			//synapses[dn->nodes[i].idx_outbuf+j] = synapses[dn->nodes[i].idx_outbuf+j] < 0.0 ? 
-			//							0.0 : synapses[dn->nodes[i].idx_outbuf+j];
-			//synapses[dn->nodes[i].idx_outbuf+j] =
-			//	synapses[dn->nodes[i].idx_outbuf+j] > synmax ? synmax : synapses[dn->nodes[i].idx_outbuf+j];
+	for (i=index; i<dn->num_nodes_l; i += stride) {
+		idx_outbuf = dn->nodes[i].idx_outbuf;
+		n = dn->nodes[i].num_in;
+		for (j=0; j < n; j++) {
+			if (synapses[idx_outbuf+j] > 0) { 	// only update excitatory synapses
+				synapses[idx_outbuf+j] = synapses[idx_outbuf+j] +
+						dt * (a_post * traces_syn[idx_outbuf+j] * neuronoutputs[i] -
+							  a_pre * traces_neu[i] * synapseoutputs[idx_outbuf+j]);
+				// clamp value
+				synapses[idx_outbuf+j] = synapses[idx_outbuf+j] < 0.0 ? 0.0 : synapses[idx_outbuf+j];
+				synapses[idx_outbuf+j] =
+					synapses[idx_outbuf+j] > synmax ? synmax : synapses[idx_outbuf+j];
+			}
 		}
 	}
 }
@@ -355,3 +400,53 @@ void sk_mpi_updatesynapses_cuda(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T 
 		printf("%s\n", cudaGetErrorString(cE));
 	}
 }
+*/
+
+/*
+__global__
+void sk_mpi_updatesynapses_cuker(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
+								 FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn,
+								 IDX_T *neuronlookup,
+								 FLOAT_T dt, FLOAT_T a_pre, FLOAT_T a_post,
+								 FLOAT_T synmax)
+{
+	size_t i, nidx;
+	double *synapseoutputs = dn->outputs; // for clarity
+
+	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x; 
+	unsigned int stride = blockDim.x * gridDim.x; 
+
+	for (i=index; i<dn->numlinesin_l; i += stride) {
+		nidx = neuronlookup[i];
+		if (synapses[i] > 0) { 	// only update excitatory synapses
+			synapses[i] = synapses[i] +
+					dt * (a_post * traces_syn[i] * neuronoutputs[0] -
+						  a_pre * traces_neu[0] * synapseoutputs[i]);
+			clamp value
+			//synapses[i] = synapses[i] < 0.0 ? 0.0 : synapses[i];
+			//synapses[i] = synapses[i] > synmax ? synmax : synapses[i];
+		}
+	}
+}
+
+
+extern "C"
+void sk_mpi_updatesynapses_cuda(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
+								FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
+								IDX_T *neuronlookup,
+								FLOAT_T dt, FLOAT_T a_pre, FLOAT_T a_post,
+								FLOAT_T synmax) 
+{
+	cudaError_t cE;
+	unsigned int numblocks = (dn->numlinesin_l + TPB - 1)/TPB;
+
+	sk_mpi_updatesynapses_cuker<<<numblocks, TPB>>>(synapses, traces_syn,
+			traces_neu, neuronoutputs, dn, neuronlookup, dt, a_pre, a_post, synmax);
+
+	cE = cudaDeviceSynchronize();
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
+}
+*/

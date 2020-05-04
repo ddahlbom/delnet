@@ -33,7 +33,7 @@ EXTERNC void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT
 							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp);
 EXTERNC void sk_mpi_updatesynapses_cuda(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
-										FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
+										FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn,
 										FLOAT_T dt, FLOAT_T a_pre, FLOAT_T a_post,
 										FLOAT_T synmax);
 #endif

@@ -86,37 +86,37 @@ typedef struct dn_mpi_delaynet_s {
  */
 
 /* MPI utils */
-size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints);
-size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints);
-void dn_mpi_syncoutputs(dn_mpi_delaynet *dn);
+EXTERNC size_t dn_mpi_maxnode(int rank, int commsize, size_t numpoints);
+EXTERNC size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints);
+EXTERNC void dn_mpi_syncoutputs(dn_mpi_delaynet *dn);
 
 /* lists (simple LIFO, for unsigned ints) */
-dn_mpi_list_uint* 	dn_mpi_list_uint_init();
-void  			dn_mpi_list_uint_push(dn_mpi_list_uint *l, unsigned int val);
-unsigned int  	dn_mpi_list_uint_pop(dn_mpi_list_uint *l);
+EXTERNC dn_mpi_list_uint* 	dn_mpi_list_uint_init();
+EXTERNC void  			dn_mpi_list_uint_push(dn_mpi_list_uint *l, unsigned int val);
+EXTERNC unsigned int  	dn_mpi_list_uint_pop(dn_mpi_list_uint *l);
 
 /* vector (for floats) */
-void 			dn_mpi_list_uint_free(dn_mpi_list_uint *l);
-char* 			dn_mpi_vectostr(dn_mpi_vec_float input);
+EXTERNC void 			dn_mpi_list_uint_free(dn_mpi_list_uint *l);
+EXTERNC char* 			dn_mpi_vectostr(dn_mpi_vec_float input);
 
 /* make and manage a delaynet */
-unsigned int* 	dn_mpi_blobgraph(unsigned int n, float p, unsigned int maxdel);
-dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n, 
+EXTERNC unsigned int* 	dn_mpi_blobgraph(unsigned int n, float p, unsigned int maxdel);
+EXTERNC dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n, 
 											int commsize, int commrank);
-void 			dn_mpi_freedelnet(dn_mpi_delaynet *dn);
-dn_mpi_vec_float dn_mpi_orderbuf(IDX_T which, dn_mpi_delaynet *dn);
+EXTERNC void 			dn_mpi_freedelnet(dn_mpi_delaynet *dn);
+EXTERNC dn_mpi_vec_float dn_mpi_orderbuf(IDX_T which, dn_mpi_delaynet *dn);
 
 /* control and interact with a delaynet */
-void 			dn_mpi_pushoutput(FLOAT_T val, IDX_T idx, dn_mpi_delaynet *dn);
-dn_mpi_vec_float 	dn_mpi_getinputvec(dn_mpi_delaynet *dn);
+EXTERNC void 			dn_mpi_pushoutput(FLOAT_T val, IDX_T idx, dn_mpi_delaynet *dn);
+EXTERNC dn_mpi_vec_float 	dn_mpi_getinputvec(dn_mpi_delaynet *dn);
 EXTERNC FLOAT_T* 		dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn);
-void 			dn_mpi_advance(dn_mpi_delaynet *dn);
+EXTERNC void 			dn_mpi_advance(dn_mpi_delaynet *dn);
 
 /* save and load checkpoints (with buffers), network (no buffers)*/
-void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream);
-dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream);
-void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream);
-dn_mpi_delaynet *dn_mpi_load(FILE *stream);
+EXTERNC void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream);
+EXTERNC dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream);
+EXTERNC void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream);
+EXTERNC dn_mpi_delaynet *dn_mpi_load(FILE *stream);
 
 
 #endif

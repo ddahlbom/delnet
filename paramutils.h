@@ -9,6 +9,11 @@
 #define MAX_PARAM_NAME_LEN 100
 #define MAX_LINE 200
 
+#ifdef __cplusplus
+#define EXTERNC extern "C"
+#else
+#define EXTERNC
+#endif
 
 /* -------------------- Structures -------------------- */
 typedef struct paramnode_s {
@@ -25,13 +30,13 @@ typedef struct paramlist_s {
 
 /* -------------------- Function Declarations -------------------- */
 
-paramlist *pl_init();
-void pl_addparam(paramlist *pl, char *name, double val);
-paramnode *pl_popparam(paramlist *pl);
-int pl_lookup(paramlist *pl, char *name, double *outval);
-void pl_free(paramlist *pl);
-paramlist* pl_readparams(char * filename);
-double pl_getvalue(paramlist *pl, char *filename);
+EXTERNC paramlist *pl_init();
+EXTERNC void pl_addparam(paramlist *pl, char *name, double val);
+EXTERNC paramnode *pl_popparam(paramlist *pl);
+EXTERNC int pl_lookup(paramlist *pl, char *name, double *outval);
+EXTERNC void pl_free(paramlist *pl);
+EXTERNC paramlist* pl_readparams(char * filename);
+EXTERNC double pl_getvalue(paramlist *pl, char *filename);
 
 
 #endif
