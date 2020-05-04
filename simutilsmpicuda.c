@@ -3,9 +3,10 @@
 #include <stdbool.h>
 #include <time.h>
 
-#ifdef __amd64__
-
 typedef unsigned long long ticks;
+
+
+#ifdef __amd64__
 
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
 #define CLOCKSPEED 3200000000
