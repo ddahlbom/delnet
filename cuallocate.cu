@@ -23,7 +23,11 @@ void cuAlloc(void **block, size_t numelements, size_t typesize, int commRank)
 		exit(-1);
 	}
 
-	cudaMallocManaged(block, numelements*typesize);
+	cE = cudaMallocManaged(block, numelements*typesize);
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }
 
 extern "C" __host__
@@ -48,7 +52,13 @@ void cuAllocDouble(double **block, size_t numelements, int commRank)
 		exit(-1);
 	}
 
-	cudaMallocManaged(block, numelements*sizeof(double));
+	cE = cudaMallocManaged(block, numelements*sizeof(double));
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
+
+	/* initialize to 0 */
 	for (i=0; i<numelements; i++) (*block)[i] = 0.0;
 
 }
@@ -56,11 +66,23 @@ void cuAllocDouble(double **block, size_t numelements, int commRank)
 extern "C" __host__
 void cuFreeDouble(double *block)
 {
-	cudaFree(block);
+	cudaError_t cE;
+	
+	cE = cudaFree(block);
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }
 
 extern "C" __host__
 void cuFree(void *block)
 {
-	cudaFree(block);
+	cudaError_t cE;
+
+	cE = cudaFree(block);
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }

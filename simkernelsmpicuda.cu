@@ -166,9 +166,14 @@ extern "C"
 void sk_mpi_updateneurons_cuda(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
 							   double fs)
 {
+	cudaError_t cE;
 	unsigned int numblocks = (num_neurons + TPB - 1) / TPB;
 	sk_mpi_updateneurons_cuker<<<numblocks, TPB>>>(neurons, neuroninputs, num_neurons, fs);
-	cudaDeviceSynchronize();
+	cE = cudaDeviceSynchronize();
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }
 
 extern "C"
@@ -234,13 +239,18 @@ void sk_mpi_updatesynapsetraces_cuda(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 									 dn_mpi_delaynet *dn, FLOAT_T dt,
 									 FLOAT_T tau_pre) {
 	unsigned int numblocks = (dn->num_nodes_l + TPB - 1) / TPB;		
+	cudaError_t cE;
 
 	sk_mpi_updatesynapsetraces_cuker<<<numblocks, TPB>>>(traces_syn,
 														 spike_pre,
 														 dn,
 														 dt,
 														 tau_pre);
-	cudaDeviceSynchronize();
+	cE = cudaDeviceSynchronize();
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }
 
 
@@ -333,10 +343,15 @@ void sk_mpi_updatesynapses_cuda(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T 
 								FLOAT_T dt, FLOAT_T a_pre, FLOAT_T a_post,
 								FLOAT_T synmax) 
 {
+	cudaError_t cE;
 	unsigned int numblocks = (dn->num_nodes_l + TPB - 1)/TPB;
 
 	sk_mpi_updatesynapses_cuker<<<numblocks, TPB>>>(synapses, traces_syn,
 			traces_neu, neuronoutputs, dn, dt, a_pre, a_post, synmax);
 
-	cudaDeviceSynchronize();
+	cE = cudaDeviceSynchronize();
+	if (cE != cudaSuccess) {
+		printf("%s\n", cudaGetErrorName(cE));
+		printf("%s\n", cudaGetErrorString(cE));
+	}
 }
