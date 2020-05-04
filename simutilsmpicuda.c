@@ -21,6 +21,8 @@ static __inline__ ticks getticks(void)
 
 #else
 
+#include <mpi.h>
+#define CLOCKSPEED 512000000
 char perfFileName[] = "/gpfs/u/home/PCP9/PCP9dhlb/barn/delnet/performance_data.txt";
 char prefix[] = "/gpfs/u/home/PCP9/PCP9dhlb/scratch/";
 static __inline__ ticks getticks(void)
@@ -36,7 +38,6 @@ static __inline__ ticks getticks(void)
   return (((ticks)tbu0) << 32) | tbl;
 }
 
-#include <mpi.h>
 #endif
 
 #include "delnetmpi.h"
