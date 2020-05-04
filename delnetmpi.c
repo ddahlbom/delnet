@@ -453,7 +453,7 @@ dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n,
 	free(del_targets);
 	for (i=0; i<n; i++) dn_mpi_list_uint_free(nodes_in[i]);
 	free(nodes_in);
-	free(nodes);
+	cuFree(nodes);
 	free(num_outputs);
 	free(in_base_idcs);
 	free(num_inputs);
@@ -478,7 +478,7 @@ void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->sourceidx_g);
 	free(dn->delaybuf);
 	//free(dn->nodes);
-	cuFree((void *) dn->nodes);
+	cuFree(dn->nodes);
 	free(dn);
 }
 
