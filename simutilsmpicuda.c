@@ -227,7 +227,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	inputlocal[0] = spikesize;
 
 
-	double t_start=MPI_Wtime(), t_finish, totaltime_start, totaltime_finish, totalcum;
+	double t_start=MPI_Wtime(), t_finish, totaltime_start, totaltime_finish, totalcum=0;
 	for (size_t i=0; i<numsteps; i++) {
 		if (profiling) totaltime_start = MPI_Wtime();
 
