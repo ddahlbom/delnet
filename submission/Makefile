@@ -12,6 +12,7 @@ optlocal: OPTFLAG += -O3
 optlocal: local 
 optlocalnocuda: OPTFLAG += -O3
 optlocalnocuda: localnocuda
+nocuda: aimosnocuda
 optnocuda: OPTFLAG += -O3
 optnocuda: aimosnocuda
 
