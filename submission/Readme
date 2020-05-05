@@ -1,0 +1,69 @@
+TLDR: 
+________________________________________________________________________________
+
+Make the executable with the "opt" target:
+
+make opt
+
+Then execute as follows:
+
+mpirun -np N ./runtrial-mpicuda mparams_default.dat tparams_default.dat input_default.bin test
+
+
+
+
+Build and Execution Details:
+________________________________________________________________________________
+
+
+The build instructions are straightforward. To make a debugable (non-optimized)
+version of the program, simply type:
+
+make
+
+To make an optimized version (preferred for testing), using the "opt" target:
+
+make opt
+
+This will produce an executable called "runtrial-mpicuda".  It is also possible
+to build a non-CUDA enable version.  (Actually, memory is still allocated using
+CUDA in this version, but none of the CUDA kernels are used.) To do this, use
+one of the nocuda targets: "make nocuda" or "make optnocuda".  If CUDA is not
+used, an executable called "runtrial-mpi" will be created instead.
+
+The executable takes four command line arguments: (1) the model parameters,
+contained in a text file called mparams_default.dat; (2) the trial parameters,
+contained in a file called tparams_default.dat; (3) an input file, which is
+the network input, caled input_default.bin; and (4) a name for the output files,
+which may be whatever you like.
+
+Parameters may be altered (e.g. number of neurons). One simply needs to modify
+the parameters in mparams_default.dat and tparams_default.dat in a relatively
+obvious way.
+
+The executable will produce several text files.  One of these contains profiling
+information and is called performance_data.txt.  It will also prpoduce one
+textfile for each MPI rank containing a record of spike fired on that rank.
+
+
+
+Guide to Code:
+________________________________________________________________________________
+
+The code implementing the delay network is contained in delnetmpi.c. This
+involves much of the MPI communication.
+
+The code implementing the CUDA kernels is contained in simkernelsmpicuda.cu.
+
+The code containing the simulation loop is contained in simutilsmpi.c. This
+portion also includes some MPI code during the model building state.
+
+The main function is contained in delnetstdpinputmpi.c.
+
+spkrcd.c contains basic non-MPI IO which is used on each process to record spike
+timings to disk.  (The MPI IO assignment was submitted separately.)
+
+paramutils.c contains a simple parameter file parser and is used to read the
+mparams_default.dat and tparams_default.dat files.
+
+cuallocate.cu provides a C interface to CUDA's memory allocation.
