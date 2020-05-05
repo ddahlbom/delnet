@@ -220,7 +220,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	/* initialize random input states */
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 	FLOAT_T *inputlocal;
-	FLOAT_T f_input = 20.0;
+	FLOAT_T f_input = 10.0;
 	FLOAT_T dt_input = 1.0/f_input;
 	unsigned int stepspercycle = floor(dt_input*tp.fs);
 	inputlocal = calloc(stepspercycle, sizeof(FLOAT_T));

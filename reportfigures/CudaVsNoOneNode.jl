@@ -4,7 +4,7 @@ using Plots
 using Formatting
 
 numnodes = [800, 1131, 1600, 2263, 3200, 4525]
-numsyn   = [64000, 128000, 256000, 512000, 1024000, 4096000]
+numsyn   = [64000, 128000, 256000, 512000, 1024000, 2048000]
 
 totals_cu = [1075.963125, 2341.053178, 4465.354660, 8838.505402, 19679.607812, 38804.135236] ./ 1000.0
 t_inputs_cu = [0.104213, 0.217258, 0.445819, 0.878838, 1.779765, 3.553215]
@@ -26,18 +26,19 @@ t_neutraces_nc = [0.012881, 0.018174, 0.025817, 0.036633, 0.051760, 0.072932]
 t_syns_nc = [0.171770, 0.318452, 0.615326, 1.227327, 2.569688, 5.121966 ]
 t_advbuf_nc = [0.407702, 1.306762, 2.894587, 6.115827, 12.448801, 25.749351]
 
-
-
+################################################################################
+# Overall CUDA vs Non-CUDA
+################################################################################
 timetickvals = collect(2 .^ (range(0.0, 5.0, length=6)))
 timeticklabels = [format("{:.1f}", x) for x ∈ timetickvals]
-# timetickvals = collect(range(0.0, 60.0, length=5))
-
-
+syntickvals = numsyn
+synticklabels = [format("{}", x) for x ∈ syntickvals]
 p1 = plot(xlabel="Mean Number of Synapses",
 		  ylabel="Execution Time (s)",
-		  lw=2.0,
+		  xticks=(syntickvals, synticklabels),
 		  yticks=(timetickvals, timeticklabels),
 		  xtickfontsize=10,
+		  # xrotation=30,
 		  ytickfontsize=10,
 		  guidefontsize=11,
 		  xscale=:log2,
@@ -53,5 +54,63 @@ plot!(p1, numsyn, totals_nc,
 	  markershape=:circle,
 	  markersize=5.0)
 
+################################################################################
+# Synapse Trace Kernel 
+################################################################################
+timetickvals = collect(2 .^ (range(-2, 4.0, length=7)))
+timeticklabels = [format("{:.1f}", x) for x ∈ timetickvals]
+p2 = plot(xlabel="Mean Number of Synapses",
+		  ylabel="Kernel Execution Time (ms)",
+		  yticks=(timetickvals, timeticklabels),
+		  xticks=(syntickvals, synticklabels),
+		  xtickfontsize=10,
+		  ytickfontsize=10,
+		  guidefontsize=11,
+		  xscale=:log2,
+		  yscale=:log2)
+plot!(p2, numsyn, t_syntraces_cu,
+	  label="CUDA",
+	  markershape=:circle,
+	  markersize=5.0,
+	  lw=2.0)
+plot!(p2, numsyn, t_syntraces_nc,
+	  label="No CUDA",
+	  markershape=:circle,
+	  markersize=5.0,
+	  lw=2.0)
+
+################################################################################
+# Neural State vs Delay Net 
+################################################################################
+serial_neu = t_neurons_nc + t_neutraces_nc + t_spiked_nc
+serial_syn = t_syntraces_nc + t_syns_nc
+serial_del = t_inputs_nc + t_pushbuf_nc + t_advbuf_nc
+
+ptickvals = 0.0:0.1:0.7 
+pticklabels = [format("{:.1f}", x) for x ∈ ptickvals]
+p3 = plot(xscale=:log2,
+		  #yscale=:log2
+		  xlabel="Mean Number of Synapses",
+		  ylabel="Percentage of Execution Time",
+		  xtickfontsize=10,
+		  ytickfontsize=10,
+		  guidefontsize=11,
+		  )
+plot!(p3, numsyn, serial_neu./totals_nc,
+	  markershape=:circle,
+	  lw=2.0,
+	  yticks=(ptickvals, pticklabels),
+	  label="Neural State: Neurons"
+	  )
+plot!(p3, numsyn, serial_syn./totals_nc,
+	  markershape=:circle,
+	  lw=2.0,
+	  label="Neural State: Synapses"
+	  )
+plot!(p3, numsyn, serial_del./totals_nc,
+	  markershape=:circle,
+	  lw=2.0,
+	  label="Delay Network"
+	  )
 
 end
