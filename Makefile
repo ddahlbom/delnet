@@ -5,17 +5,17 @@ LDLIBS = -lm
 default: mpioptim
 debug: mpidebug
 
-mpidebug: delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o
-	mpicc -g -o runtrial-mpi delnetmpi.o delnetstdpinputmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o $(LDLIBS)
+mpidebug: delnetmain.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o
+	mpicc -g -o runtrial-mpi delnetmpi.o delnetmain.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o $(LDLIBS)
 
-mpioptim: delnetstdpinputmpi.o delnetmpi-opt.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o
-	mpicc -g -O3 -o runtrial-mpi delnetmpi-opt.o delnetstdpinputmpi.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o $(LDLIBS)
+mpioptim: delnetmain.o delnetmpi-opt.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o
+	mpicc -g -O3 -o runtrial-mpi delnetmpi-opt.o delnetmain.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o $(LDLIBS)
 
-delnetstdpinputmpi-opt.o: delnetstdpinputmpi.c delnetmpi.o
-	mpicc $(CFLAGS) -O3 $(LDLIBS) -c delnetstdpinputmpi.c -o delnetstdpinputmpi-opt.o
+delnetmain-opt.o: delnetmain.c delnetmpi.o
+	mpicc $(CFLAGS) -O3 $(LDLIBS) -c delnetmain.c -o delnetmain-opt.o
 
-delnetstdpinputmpi.o: delnetstdpinputmpi.c delnetmpi.o
-	mpicc $(CFLAGS) $(LDLIBS) -c delnetstdpinputmpi.c
+delnetmain.o: delnetmain.c delnetmpi.o
+	mpicc $(CFLAGS) $(LDLIBS) -c delnetmain.c
 
 delnetstdpinput.o: delnetstdpinput.c delnet.o
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnetstdpinput.c

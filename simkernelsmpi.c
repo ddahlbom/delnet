@@ -68,7 +68,6 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 	unsigned int num = 0, k;
 	for (k=0; k<num_neurons; k++) {
 		if (nextrand[k] < t) {
-			//neuroninputs[k] += p->randspikesize * (p->fs/1000); 
 			neuroninputs[k] += tp->randspikesize;
 			nextrand[k] += sk_mpi_expsampl(tp->lambda);
 			num += 1;
@@ -89,14 +88,16 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T n
 
 unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
 									unsigned int n, FLOAT_T t, spikerecord *sr,
-									unsigned int offset)
+									unsigned int offset, FLOAT_T recordstart,
+									FLOAT_T recordstop)
 {
 	size_t k;
 	unsigned int numspikes=0;
 	for (k=0; k<n; k++) {
 		neuronoutputs[k] = 0.0;
 		if (neurons[k].v >= 30.0) {
-			sr_save_spike(sr, k+offset, t);
+			if( recordstart <= t && t < recordstop)
+				sr_save_spike(sr, k+offset, t);
 			neuronoutputs[k] = 1.0;
 			neurons[k].v = -65.0;
 			neurons[k].u += neurons[k].d;

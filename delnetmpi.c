@@ -2,10 +2,13 @@
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
 #include <math.h>
-// #include <mpi.h> 
 
-//#include "/usr/include/mpich/mpi.h"
+#ifdef __amd64__
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#else
+#include <mpi.h>
+#endif
+
 #include "delnetmpi.h"
 
 #define DEBUG 0
@@ -33,6 +36,9 @@ size_t dn_mpi_nodeoffset(int rank, int commsize, size_t numpoints)
 	return offset;
 }
 
+/*
+ * Reconstructs the global outbuffer vector on every rank.
+ */
 void dn_mpi_syncoutputs(dn_mpi_delaynet *dn)
 {
 	unsigned int i;
@@ -79,6 +85,8 @@ void dn_mpi_syncoutputs(dn_mpi_delaynet *dn)
 		}
 	}
 }
+
+
 
 /*
  * -------------------- Util Functions --------------------
@@ -464,6 +472,8 @@ void dn_mpi_freedelnet(dn_mpi_delaynet *dn) {
 	free(dn->sourceidx_g);
 	free(dn->delaybuf);
 	free(dn->nodes);
+	free(dn->outblocksizes);
+	free(dn->outblockoffsets);
 	free(dn);
 }
 

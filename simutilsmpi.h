@@ -6,6 +6,9 @@
 #include "spkrcd.h"
 #include "delnet.h"
 
+#define INPUT_MODE_PERIODIC 1
+#define INPUT_MODE_POISSON 2
+
 /*************************************************************
  *  Structs
  *************************************************************/
@@ -39,7 +42,10 @@ typedef struct su_mpi_trialparams_s {
 	bool randinput;
 	bool inhibition;
 	IDX_T numinputs;
-	IDX_T *inputidcs;
+	IDX_T inputmode;
+	double recordstart;
+	double recordstop;
+	double lambdainput;
 } su_mpi_trialparams;
 
 typedef struct su_mpi_model_l_s {
@@ -49,7 +55,6 @@ typedef struct su_mpi_model_l_s {
 	size_t maxnode;
 	size_t nodeoffset;
 	IDX_T numsyn;
-	//IDX_T numsyn_exc;
 	su_mpi_modelparams p;
 	dn_mpi_delaynet *dn;
 	su_mpi_neuron  *neurons;
