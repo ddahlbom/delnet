@@ -2,19 +2,14 @@ CC= gcc
 CFLAGS= -g -Wall -I./ -L./
 LDLIBS = -lm 
 
-default: inputoptim
+default: mpioptim
+debug: mpidebug
 
 mpidebug: delnetstdpinputmpi.o delnetmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o
 	mpicc -g -o runtrial-mpi delnetmpi.o delnetstdpinputmpi.o spkrcd.o paramutils.o simkernelsmpi.o simutilsmpi.o $(LDLIBS)
 
 mpioptim: delnetstdpinputmpi.o delnetmpi-opt.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o
 	mpicc -g -O3 -o runtrial-mpi delnetmpi-opt.o delnetstdpinputmpi.o spkrcd.o paramutils.o simkernelsmpi-opt.o simutilsmpi-opt.o $(LDLIBS)
-
-inputdebug: delnetstdpinput.o delnet.o spkrcd.o paramutils.o simkernels.o simutils.o
-	$(CC) -o runtrial-exec delnet.o delnetstdpinput.o spkrcd.o paramutils.o simkernels.o simutils.o $(LDLIBS)
-
-inputoptim: delnetstdpinput-opt.o delnet-opt.o spkrcd.o paramutils.o simkernels-opt.o simutils-opt.o 
-	$(CC) -o runtrial-exec delnet-opt.o delnetstdpinput-opt.o spkrcd.o paramutils.o simkernels-opt.o simutils-opt.o $(LDLIBS)
 
 delnetstdpinputmpi-opt.o: delnetstdpinputmpi.c delnetmpi.o
 	mpicc $(CFLAGS) -O3 $(LDLIBS) -c delnetstdpinputmpi.c -o delnetstdpinputmpi-opt.o
