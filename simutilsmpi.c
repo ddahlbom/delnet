@@ -250,7 +250,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	sprintf(filename, "%s_instarttimes.txt", trialname);
 	size_t inputidx=0;
 	if (commrank == 0) {
-		inputtimesfile = fopen(filename, "a");
+		inputtimesfile = fopen(filename, "w");
 		fprintf(inputtimesfile, "----------------------------------------\n");
 	}
 
