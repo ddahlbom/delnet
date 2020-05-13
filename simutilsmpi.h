@@ -9,6 +9,8 @@
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
 
+#define MAX_NAME_LEN 512
+
 /*************************************************************
  *  Structs
  *************************************************************/
@@ -90,8 +92,10 @@ void su_mpi_freemodel_l(su_mpi_model_l *m);
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
 
 /* run simulations */
-void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
-					spikerecord *sr, int commrank, int commsize, bool profiling);
 
+void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
+							FLOAT_T *input, size_t inputlen,
+							spikerecord *sr, char *name,
+							int commrank, int commsize, bool profiling);
 
 #endif

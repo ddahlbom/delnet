@@ -206,8 +206,10 @@ static inline double maxtime(double *vals, int n)
 }
 
 /* Functions for running simulations */
-void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *input, size_t inputlen,
-					spikerecord *sr, int commrank, int commsize, bool profiling)
+void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
+							FLOAT_T *input, size_t inputlen,
+							spikerecord *sr, char *trialname,
+							int commrank, int commsize, bool profiling)
 {
 
 	ticks gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
@@ -241,6 +243,16 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	unsigned long int numspikes = 0, numrandspikes = 0;
+	FLOAT_T t;
+
+	FILE *inputtimesfile;
+	char filename[MAX_NAME_LEN];
+	sprintf(filename, "%s_instarttimes.txt", trialname);
+	size_t inputidx=0;
+	if (commrank == 0) {
+		inputtimesfile = fopen(filename, "a");
+		fprintf(inputtimesfile, "----------------------------------------\n");
+	}
 
 	/* initialize random input states */
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
@@ -249,7 +261,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		if (profiling) totalticks_start = getticks(); 
 
 		/* ---------- calculate time update ---------- */
-		FLOAT_T t = dt*i;
+		t = dt*i;
 		if (i%1000 == 0)
 			printf("Time: %f\n", t);
 
@@ -265,12 +277,19 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 		/* put in forced input */
 		if (tp.inputmode == INPUT_MODE_PERIODIC) {
+			inputidx = i % inputlen;
+			if (inputidx == 0 && commrank == 0) {
+				fprintf(inputtimesfile, "%f\n", t);
+			}
 			for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
 				neuroninputs[k] += input[ i % inputlen ];
 		}
 		else if (tp.inputmode == INPUT_MODE_POISSON) {
 			if (waiting) {
-				if (nextinputtime <= t) waiting = false;	
+				if (nextinputtime <= t) {
+					waiting = false;	
+					if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
+				}
 			}
 			if (!waiting) { 	// <- note -- can't use else
 				if (inputcounter < inputlen) {
@@ -783,6 +802,12 @@ su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commrank, int commsize)
 	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
 
 	fclose(f);
+
+	/* sanity check */
+	if (commrank != m->dn->commrank || commsize != m->dn->commsize) {
+		printf("MPI Size or Rank mismatch while loading data.\n");
+		exit(-1);
+	}
 
 	return m;
 }
