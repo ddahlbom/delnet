@@ -1,5 +1,6 @@
 module MPIExperiment
 
+using Random
 using Plots
 include("./julia/SpikePlot.jl")
 
@@ -37,16 +38,32 @@ TrialParams() = TrialParams(1.0, 3.0, 20.0, 1, 1, 100, 1, 0.0, 1.0, 0.5)
 ################################################################################
 # Functions
 ################################################################################
-function spiketrain(f, dur, fs)
+function periodicspiketrain(f, dur, fs; magnitude=20.0)
 	N_pat = Int(round(dur * fs))
 	dn_pat = Int(round(fs/f))
 	train = zeros(N_pat)
 	idx = 1
 	while idx <= N_pat
-		train[idx] = 1.0
+		train[idx] = magnitude 
 		idx += dn_pat
 	end
 	train
+end
+
+exponentialsample(λ) = -log(rand()) / λ
+
+function poissonfragment(λ, dur, fs; magnitude=20.0)
+	ts = Array{Float64, 1}(undef, 0)
+	t = 0.0
+	while t < dur
+		push!(ts, t)
+		t += exponentialsample(λ)
+	end
+	output = zeros(Int64(round(dur*fs))+1)
+	for t ∈ ts
+		output[Int64(round(t*fs))+1] = magnitude 
+	end
+	output
 end
 
 
@@ -58,8 +75,7 @@ function saveinput(input, trialname)
 end
 
 function writemparams(m::ModelParams, trialname)
-	open(trialname * "_mparams.dat", "w") do f
-		write(f, "fs\t\t\t$(m.fs)\n")
+	open(trialname * "_mparams.dat", "w") do f write(f, "fs\t\t\t$(m.fs)\n")
 		write(f, "num_neurons\t\t$(Float64(m.num_neurons))\n")
 		write(f, "p_contact\t\t$(m.p_contact)\n")
 		write(f, "p_exc\t\t\t$(m.p_exc)\n")
@@ -108,45 +124,43 @@ w_inh = -5.0
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post, synmax, w_exc, w_inh)
 
-dur = 1.0 
+dur = 4000.0 
 lambda = 3.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
-numinputs = 100
-inputmode = 1
-recordstart = 0.0
-recordstop = 1.0
-lambdainput = 0.5
+numinputs = 20
+inputmode = 2
+recordstart = dur - 10.0 
+recordstop  = dur 
+lambdainput = 0.25
 
 tp = TrialParams(dur, lambda, randspikesize, randinput, inhibition, numinputs,
 				 inputmode, recordstart, recordstop, lambdainput)
 
 
-# Override above for test
-mp = ModelParams()
-tp = TrialParams()
-
 # Input Parameters
-f_in = 5.0
-input = spiketrain(f_in, 1.0, mp.fs) .* 20.0
+#f_in = 5.0
+#input = periodicspiketrain(f_in, 1.0, mp.fs) .* 20.0
+Random.seed!(5)
+λ_in  = 30.0
+input = poissonfragment(λ_in, 0.100, fs)
 
 
 # Write Configuration Files
-trialname = "$(Int(round(f_in)))Hz_$(Int(round(tp.dur)))s_fs$(Int(round(mp.fs)))"
+trialname = "$(Int(round(λ_in)))Hz_$(Int(round(tp.dur)))s_fs$(Int(round(mp.fs)))"
 saveinput(input, trialname)
 writemparams(mp, trialname)
 writetparams(tp, trialname)
 
 # MPI Parameters
-numprocs = 4
+numprocs = 8
 
 # Run Simulation
 run(`mpirun -np $(numprocs) ./runtrial-mpi 0 $(trialname * "_mparams.dat") $(trialname * "_tparams.dat") $(trialname * "_input.bin") $(trialname)`)
 
-
 # Open spikes and plot
 spikes = SpikePlot.loadtrialspikesmpi(trialname)
-p = SpikePlot.inputraster(0, tp.dur, spikes, input, mp.fs)
+p = SpikePlot.inputraster(recordstart, recordstop, spikes, input, mp.fs)
 
 end
