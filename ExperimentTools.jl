@@ -1,4 +1,4 @@
-module MPIExperiment
+module ExperimentTools
 
 using Random
 using Plots
