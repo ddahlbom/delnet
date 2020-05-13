@@ -75,4 +75,4 @@ delnet.o: delnet.c delnet.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c delnet.c
 
 clean:
-	rm *.o stdpinput-exec
+	rm *.o runtrial-mpi 

@@ -8,7 +8,7 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 							size_t num_neurons, su_mpi_trialparams *tp);
 //void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, su_mpi_modelparams *mp, //						su_mpi_trialparams *tp);
 void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
-						su_mpi_trialparams *tp);
+						FLOAT_T fs);
 unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
 									unsigned int n, FLOAT_T t, spikerecord *sr,
 									unsigned int offset, FLOAT_T recordstart,

@@ -1,4 +1,4 @@
-fs 				1000.0
+fs 				5000.0
 p_contact 		0.1
 p_exc 			0.8
 num_neurons 	1000.0
@@ -7,6 +7,6 @@ tau_post 		0.02
 a_pre 			1.20
 a_post 			1.0
 synmax 			10.0
-w_exc 			3.0
-w_inh 			-4.0
-maxdelay 		20.0
+w_exc 			4.0
+w_inh 			-5.0
+maxdelay 		50.0

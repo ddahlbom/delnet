@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 
 #ifdef __amd64__
@@ -93,7 +94,6 @@ void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename)
 {
 	paramlist *pl = pl_readparams(filename);
 	
-	p->fs = pl_getvalue(pl, "fs");
 	p->dur = pl_getvalue(pl, "dur");
 	p->lambda = pl_getvalue(pl, "lambda");
 	p->randspikesize = pl_getvalue(pl, "randspikesize");
@@ -229,7 +229,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 
 	/* derived params -- trim later, maybe cruft */
 	IDX_T n_l = m->dn->num_nodes_l;
-	FLOAT_T dt = 1.0/tp.fs;
+	FLOAT_T dt = 1.0/m->p.fs;
 	IDX_T numsteps = tp.dur/dt;
 
 	/* local state for simulation */
@@ -295,7 +295,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp, FLOAT_T *inpu
 		/* ---------- update neuron state ---------- */
 		if (profiling) ticks_start = getticks();
 
-		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, &tp);
+		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, m->p.fs);
 
 		if (profiling) {
 			ticks_finish = getticks();
@@ -688,10 +688,21 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 /* loading and freeing models */
 
-void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
+void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
+						int commsize, int commrank)
 {
+	char filename[512];
+	char rankstr[64];
+
+	/* Make file name */
+	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
+	strcpy(filename, name);
+	strcat(filename, rankstr);
+
+	/* Open file */
 	FILE *f = fopen(filename, "wb");
-	
+
+	/* Write data */	
 	dn_mpi_save(m->dn, f);
 
 	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
@@ -706,15 +717,32 @@ void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename)
 	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
 	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
 
+	/* Close file */
 	fclose(f);
 }
 
-su_mpi_model_l *su_mpi_loadmodel_l(char *filename)
+su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commrank, int commsize)
 {
+	char filename[512];
+	char rankstr[64];
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 	size_t loadsize;
+
+	/* Prepare file name */
+	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
+	strcpy(filename, name);
+	strcat(filename, rankstr);
+
+	printf("On rank %d loading file: %s\n", commrank, filename);
+
 	FILE *f = fopen(filename, "rb");
-	
+	f = fopen(filename, "r");
+	if (f == NULL) {
+		perror(name);
+		printf("Failed here!\n");
+		exit(EXIT_FAILURE);
+	}
+
 	m->dn = dn_mpi_load(f);
 
 	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);

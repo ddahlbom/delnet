@@ -108,8 +108,8 @@ FLOAT_T* 		dn_mpi_getinputaddress(IDX_T idx, dn_mpi_delaynet *dn);
 void 			dn_mpi_advance(dn_mpi_delaynet *dn);
 
 /* save and load checkpoints (with buffers), network (no buffers)*/
-void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream);
-dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream);
+//void dn_mpi_savecheckpt(dn_mpi_delaynet *dn, FILE *stream);
+//dn_mpi_delaynet *dn_mpi_loadcheckpt(FILE *stream);
 void dn_mpi_save(dn_mpi_delaynet *dn, FILE *stream);
 dn_mpi_delaynet *dn_mpi_load(FILE *stream);
 

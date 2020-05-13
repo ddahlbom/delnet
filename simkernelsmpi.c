@@ -77,12 +77,12 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 }
 
 void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
-						su_mpi_trialparams *tp)
+						FLOAT_T fs)
 {
 	size_t k;
 	for (k=0; k<num_neurons; k++) {
 		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k],
-							neurons[k].a, 1000.0/tp->fs);
+							neurons[k].a, 1000.0/fs);
 	}
 }
 

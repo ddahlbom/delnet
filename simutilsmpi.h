@@ -35,7 +35,6 @@ typedef struct su_mpi_modelparams_s {
 } su_mpi_modelparams;
 
 typedef struct su_mpi_trialparams_s {
-	double fs; 				
 	double dur; 			
 	double lambda; 			
 	double randspikesize; 	
@@ -82,8 +81,9 @@ unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p);
 void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T d);
 
 /* save and load and free models */
-void su_mpi_savemodel_l(su_mpi_model_l *m, char *filename);
-su_mpi_model_l *su_mpi_loadmodel_l(char *filename);
+void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
+						int commsize, int commrank);
+su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commsize, int commrank);
 void su_mpi_freemodel_l(su_mpi_model_l *m);
 
 /* generate model */
