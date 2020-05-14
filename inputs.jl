@@ -81,7 +81,7 @@ end
 
 
 function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes, fs)
-	inputtimes = filter(x -> t1 < x < t2, inputtimes)
+	inputtimes = filter(x -> t1 <= x <= t2, inputtimes)
 
 	# Spike Raster
 	idx1 = searchsortedfirst(spikes[:,1], t1)
@@ -90,7 +90,7 @@ function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes
 	p1 = scatter(spikes[idx1:idx2,1], spikes[idx1:idx2,2],
 				markersize=3.0,
 				markeralpha=0.5,
-				markerstrokewidth=0.1,
+				markerstrokewidth=0.0,
 				markercolor=:blue,
 				legend=:none,
 			    xlims=(t1,t2),
@@ -104,9 +104,10 @@ function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes
 	# Show input
 	ts = range(t1, t2, step=1.0/fs);
 	for inputtime ∈ (inputtimes .- t1)
-		scatter!(p1, [s.t for s ∈ inputblock] .+ inputtime, [s.i for s ∈ inputblock],
-				 markersize=5.0,
-				 markeralpha=0.1,
+		scatter!(p1, [s.t for s ∈ inputblock] .+ inputtime .+ 5/fs, [s.i for s ∈ inputblock] .- 1,
+				 markersize=6.0,
+				 markeralpha=0.2,
+				 markerstrokewidth=0.0,
 				 markercolor=:red)
 	end
 
