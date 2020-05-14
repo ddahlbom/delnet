@@ -291,22 +291,17 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 			if (t_local > t_max) t_local = 0; 
 		}
 		else if (tp.inputmode == INPUT_MODE_POISSON) {
-
 			if (waiting) {
 				if (t >= nextinputtime) {
-					printf("Starting input at time %f\n", t);
 					waiting = false;
 					if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
 				}
 			}
-
 			if (!waiting) {
 				for (size_t k=0; k < inputlen; k++) {
 					if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
-						if (t_local <= input[k].t && input[k].t < t_local + dt) {
+						if (t_local <= input[k].t && input[k].t < t_local + dt) 
 							neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
-							printf("Just input at %f into %u\n", t, input[k].i-1);
-						}
 					}
 				}
 				t_local += dt;
@@ -316,36 +311,11 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 					if (commrank==0) {
 						nextinputtime = t + sk_mpi_expsampl(tp.lambdainput);
 						MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-						printf("Next input time (rank %d): %f\n", commrank, nextinputtime);
 					} else {
 						MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-						printf("Next input time (rankd %d): %f\n", commrank, nextinputtime);
 					}
-
-
 				}
 			}
-
-			/*
-			if (waiting) {
-				if (nextinputtime <= t) {
-					waiting = false;	
-					if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
-				}
-			}
-			if (!waiting) { 	// <- note -- can't use else
-				if (inputcounter < inputlen) {
-					for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
-						neuroninputs[k] += input[ inputcounter ];
-					inputcounter += 1;
-				}
-				else {
-					waiting = true;
-					inputcounter = 0;
-					nextinputtime = t + sk_mpi_expsampl(tp.lambdainput);
-				}
-			}
-			*/
 		}
 
 		if (profiling) {
