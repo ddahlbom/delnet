@@ -14,6 +14,11 @@
 /*************************************************************
  *  Structs
  *************************************************************/
+typedef struct su_mpi_spike_s {
+	unsigned int i;
+	double t;
+} su_mpi_spike;
+
 typedef struct su_mpi_neuron_s {
 	FLOAT_T v;
 	FLOAT_T u;
@@ -94,8 +99,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 /* run simulations */
 
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
-							FLOAT_T *input, size_t inputlen,
-							spikerecord *sr, char *name,
+							su_mpi_spike *input, size_t inputlen,
+							spikerecord *sr, char *trialname,
 							int commrank, int commsize, bool profiling);
-
 #endif

@@ -207,16 +207,15 @@ static inline double maxtime(double *vals, int n)
 
 /* Functions for running simulations */
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
-							FLOAT_T *input, size_t inputlen,
+							su_mpi_spike *input, size_t inputlen,
 							spikerecord *sr, char *trialname,
 							int commrank, int commsize, bool profiling)
 {
 
 	ticks gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
-			advancingbuffer;
-	ticks ticks_start=0, ticks_finish, totalticks_start,
-		  totalticks_finish, totaltickscum=0;
+			advancingbuffer, ticks_start=0, ticks_finish, totalticks_start,
+		  	totalticks_finish, totaltickscum=0;
 
 	/* timing info */
 	gettinginputs 		 = 0;
@@ -248,11 +247,15 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	FILE *inputtimesfile;
 	char filename[MAX_NAME_LEN];
 	sprintf(filename, "%s_instarttimes.txt", trialname);
-	size_t inputidx=0;
-	if (commrank == 0) {
+	size_t inputidx = 0;
+
+	double t_local = 0.0;
+	double t_max = 0.0;
+	for (int i=0; i<inputlen; i++)
+		if (input[i].t > t_max) t_max = input[i].t;
+
+	if (commrank == 0)
 		inputtimesfile = fopen(filename, "w");
-		fprintf(inputtimesfile, "----------------------------------------\n");
-	}
 
 	/* initialize random input states */
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
@@ -275,34 +278,51 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* put in random noise */
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
 
-		/* put in forced input */
+		/* put in forced input -- make this a function in kernels! */
 		if (tp.inputmode == INPUT_MODE_PERIODIC) {
-			inputidx = i % inputlen;
-			if (inputidx == 0 && commrank == 0) {
-				fprintf(inputtimesfile, "%f\n", t);
+			if ( t_local == 0.0 && commrank==0 ) fprintf(inputtimesfile, "%f\n", t);
+
+			for (size_t k=0; k < inputlen; k++) {
+				if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
+					if (t_local <= input[k].t && input[k].t < t_local + dt) {
+						neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
+						//printf("I'm inputting, baby! Right on neuron %lu\n", input[k].i);
+					}
+				}
 			}
-			for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
-				neuroninputs[k] += input[ i % inputlen ];
+
+			t_local += dt;
+			if (t_local > t_max) {
+				t_local = 0; 	// <-- check this for rounding errors at rollover
+			}
+
+			// inputidx = i % inputlen;
+			// if (inputidx == 0 && commrank == 0) {
+			// 	fprintf(inputtimesfile, "%f\n", t);
+			// }
+			// for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
+			// 	neuroninputs[k] += input[ i % inputlen ];
 		}
 		else if (tp.inputmode == INPUT_MODE_POISSON) {
-			if (waiting) {
-				if (nextinputtime <= t) {
-					waiting = false;	
-					if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
-				}
-			}
-			if (!waiting) { 	// <- note -- can't use else
-				if (inputcounter < inputlen) {
-					for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
-						neuroninputs[k] += input[ inputcounter ];
-					inputcounter += 1;
-				}
-				else {
-					waiting = true;
-					inputcounter = 0;
-					nextinputtime = t + sk_mpi_expsampl(tp.lambdainput);
-				}
-			}
+
+			// if (waiting) {
+			// 	if (nextinputtime <= t) {
+			// 		waiting = false;	
+			// 		if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
+			// 	}
+			// }
+			// if (!waiting) { 	// <- note -- can't use else
+			// 	if (inputcounter < inputlen) {
+			// 		for (size_t k=0; m->nodeoffset + k < tp.numinputs; k++)
+			// 			neuroninputs[k] += input[ inputcounter ];
+			// 		inputcounter += 1;
+			// 	}
+			// 	else {
+			// 		waiting = true;
+			// 		inputcounter = 0;
+			// 		nextinputtime = t + sk_mpi_expsampl(tp.lambdainput);
+			// 	}
+			// }
 		}
 
 		if (profiling) {
