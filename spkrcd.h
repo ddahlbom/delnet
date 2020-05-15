@@ -2,7 +2,7 @@
 #define SPKRCD_H
 
 #define SPIKE_BLOCK_SIZE 8192
-#define SR_FLOAT_T float
+#define SR_FLOAT_T double
 
 
 /*
@@ -31,6 +31,7 @@ typedef struct spikerecord_s {
 spikerecord *sr_init(char *filename, size_t spikes_in_block);
 void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time);
 void sr_close(spikerecord *sr);
+void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int commsize);
 
 
 #endif

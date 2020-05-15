@@ -1,7 +1,29 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <limits.h>
 
 #include "spkrcd.h"
+#ifdef __amd64__
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#else
+#include <mpi.h>
+#endif
+
+
+#if SIZE_MAX == UCHAR_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
+#elif SIZE_MAX == USHRT_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_SHORT
+#elif SIZE_MAX == UINT_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED
+#elif SIZE_MAX == ULONG_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG
+#elif SIZE_MAX == ULLONG_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG_LONG
+#else
+   #error "what is happening here?"
+#endif
 
 spikerecord *sr_init(char *filename, size_t spikes_in_block)
 {
@@ -44,7 +66,123 @@ void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time)
 	}
 }
 
+int *len_to_offsets(int *lens, int n)
+{
+	int *offsets = malloc(sizeof(int)*n);
+	offsets[0] = 0;
+	for (int i=1; i<n; i++) {
+		for (int j=1; j<i; j++) {
+			offsets[i] += lens[j-1];
+		}
+	}
+	return offsets;
+}
 
+int cmpfunc(const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
+static spike *s1 = 0;
+static spike *s2 = 0;
+static double diff = 0.0;
+
+int spkcomp(const void *spike1, const void * spike2) {
+	s1 = (spike *)spike1;
+	s2 = (spike *)spike2;
+	diff = s1->time - s2->time;
+
+	if (diff < 0)
+		return -1;
+	else if (diff > 0)
+		return 1;
+	else
+		return 0;
+}
+
+/*
+ * Read spikes written by each process into memory, sort by time,
+ * write into a unified file, delete individual files. 
+ *
+ * Very naive, essentially sequential approach, refine later.
+ */
+void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int commsize)
+{
+	/* Set up MPI Datatype for spikes */
+	const int 		nitems = 2;
+	int 			blocklengths[2] = {1, 1};
+	MPI_Datatype	types[2] = {MPI_INT, MPI_DOUBLE}; 	// <- think float is double -- check
+	MPI_Datatype	mpi_spike_type;
+	MPI_Aint  		offsets[2];
+
+	offsets[0] = offsetof(spike, neuron);
+	offsets[1] = offsetof(spike, time);
+	MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_spike_type);
+	MPI_Type_commit(&mpi_spike_type);
+
+	/* Each rank finishing writing its local file */		
+	FILE *spike_file;
+	spike_file = fopen(sr->filename, sr->writemode);
+	for (int i=0; i < sr-> numspikes % sr->blocksize; i++) {
+		fprintf(spike_file, "%f  %d\n", 
+				sr->spikes[i].time,
+				sr->spikes[i].neuron);	
+	}
+	fclose(spike_file);
+
+	/* Gather the numbers of neurons to read/write from each rank */
+	int *rankspikecount = malloc(sizeof(int)*commsize);
+	int *spikeoffsets = 0;
+	int numspikestotal = 0;
+	spike *allspikes = 0;
+	spike *localspikes = 0;
+
+	MPI_Gather(&sr->numspikes, 1, my_MPI_SIZE_T,
+			   rankspikecount, commsize, my_MPI_SIZE_T, 0, MPI_COMM_WORLD);
+	spikeoffsets = len_to_offsets(rankspikecount, commsize);
+	for (int i=0; i<commsize; i++)
+		numspikestotal += rankspikecount[i];
+	if (commrank == 0)
+		allspikes = malloc(sizeof(spike)*numspikestotal);
+	localspikes = malloc(sizeof(spike)*sr->numspikes);
+
+	/* Read spikes back into memory and delete process-local file*/
+	size_t i = 0;
+	fopen(sr->filename, "r");
+	while(fscanf(spike_file, "%lf  %d", &localspikes[i].time, &localspikes[i].neuron) != EOF)
+		i++;
+	if (i != sr->numspikes) {
+		printf("Read %lu spikes, but should have been %lu spikes. Exiting.\n", i, sr->numspikes);
+		exit(-1);
+	}
+	fclose(spike_file);
+	remove(sr->filename);
+
+	/* Gather all spikes on a single rank, sort and write (parallelize later) */
+	MPI_Gatherv(localspikes, sr->numspikes, mpi_spike_type, 
+				allspikes, rankspikecount, spikeoffsets,
+				mpi_spike_type, 0, MPI_COMM_WORLD);
+
+	if (commrank == 0) {
+		spike_file = fopen(finalfilename, "w");
+		qsort(allspikes, numspikestotal, sizeof(spike), spkcomp);
+		for (int j=0; j<numspikestotal; j++) 
+			fprintf(spike_file, "%lf  %d", allspikes[j].time, allspikes[j].neuron);
+
+		fclose(spike_file);
+	}
+
+	/* Clean up */
+	free(sr->spikes);
+	free(sr);
+	free(rankspikecount);
+	free(spikeoffsets);
+	free(allspikes);
+}
+
+
+/*
+ * TO BE DEPRECATED.  Allows all ranks to write their own spike file.
+ */
 void sr_close(spikerecord *sr)
 {
 	/* write any as-of-yet unsaved spikes */	

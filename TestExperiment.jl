@@ -31,7 +31,7 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 
 dur = 2.5 
 lambda = 3.0
-randspikesize = 00.0
+randspikesize = 20.0
 randinput = 1 	# <-- don't think this is doing anything anymore; check.
 inhibition = 1
 numinputs = 20
