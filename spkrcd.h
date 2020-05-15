@@ -2,7 +2,7 @@
 #define SPKRCD_H
 
 #define SPIKE_BLOCK_SIZE 8192
-#define SR_FLOAT_T double
+#define SR_FLOAT_T float
 
 
 /*
