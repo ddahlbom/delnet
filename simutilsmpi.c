@@ -236,20 +236,20 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	/* local state for simulation */
 	FLOAT_T *neuroninputs, *neuronoutputs; 
 	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
-	FLOAT_T nextinputtime = 0.0;
-	bool waiting = true;
+	//FLOAT_T nextinputtime = 0.0;
+	//bool waiting = true;
 	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	unsigned long int numspikes = 0, numrandspikes = 0;
 	FLOAT_T t;
 
-	FILE *inputtimesfile;
+	FILE *inputtimesfile = 0;
 	char filename[MAX_NAME_LEN];
 	sprintf(filename, "%s_instarttimes.txt", trialname);
 	// size_t inputidx = 0;
 	// unsigned int inputcounter = 0;
 
-	double t_local = 0.0;
+	//double t_local = 0.0;
 	double t_max = 0.0;
 	for (int i=0; i<inputlen; i++)
 		if (input[i].t > t_max) t_max = input[i].t;
@@ -279,44 +279,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
 
 		/* put in forced input -- make this a function in kernels! */
-		if (tp.inputmode == INPUT_MODE_PERIODIC) {
-			if ( t_local == 0.0 && commrank==0 ) fprintf(inputtimesfile, "%f\n", t);
-			for (size_t k=0; k < inputlen; k++) {
-				if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
-					if (t_local <= input[k].t && input[k].t < t_local + dt) 
-						neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
-				}
-			}
-			t_local += dt;
-			if (t_local > t_max) t_local = 0; 
-		}
-		else if (tp.inputmode == INPUT_MODE_POISSON) {
-			if (waiting) {
-				if (t >= nextinputtime) {
-					waiting = false;
-					if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
-				}
-			}
-			if (!waiting) {
-				for (size_t k=0; k < inputlen; k++) {
-					if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
-						if (t_local <= input[k].t && input[k].t < t_local + dt) 
-							neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
-					}
-				}
-				t_local += dt;
-				if (t_local > t_max) {
-					waiting = true;
-					t_local = 0.0;
-					if (commrank==0) {
-						nextinputtime = t + sk_mpi_expsampl(tp.lambdainput);
-						MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-					} else {
-						MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-					}
-				}
-			}
-		}
+		sk_mpi_forcedinput( m, input, inputlen, neuroninputs, t, dt, t_max,
+							&tp, commrank, commsize, inputtimesfile ); 
 
 		if (profiling) {
 			ticks_finish = getticks(); 

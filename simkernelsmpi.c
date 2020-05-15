@@ -5,6 +5,11 @@
 #include "simutilsmpi.h"
 #include "simkernelsmpi.h"
 
+#ifdef __amd64__
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#else
+#include <mpi.h>
+#endif
 
 /* -------------------- Random Sampling -------------------- */
 double sk_mpi_expsampl(double lambda)
@@ -57,6 +62,55 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synap
 		delayoutputs = dn_mpi_getinputaddress(k,dn); //dn->outputs
 		for (j=0; j < dn->nodes[k].num_in; j++) {
 			neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_outbuf+j ];
+		}
+	}
+}
+
+void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
+						 FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
+						 double t_max, su_mpi_trialparams *tp,
+						 int commrank, int commsize, FILE *inputtimesfile )
+{
+	static double t_local = 0.0;
+	static double nextinputtime = 0.0;
+	static bool waiting = true;
+
+	if (tp->inputmode == INPUT_MODE_PERIODIC) {
+		if ( t_local == 0.0 && commrank==0 ) fprintf(inputtimesfile, "%f\n", t);
+		for (size_t k=0; k < ninput; k++) {
+			if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
+				if (t_local <= input[k].t && input[k].t < t_local + dt) 
+					neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
+			}
+		}
+		t_local += dt;
+		if (t_local > t_max) t_local = 0; 
+	}
+	else if (tp->inputmode == INPUT_MODE_POISSON) {
+		if (waiting) {
+			if (t >= nextinputtime) {
+				waiting = false;
+				if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
+			}
+		}
+		if (!waiting) {
+			for (size_t k=0; k < ninput; k++) {
+				if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
+					if (t_local <= input[k].t && input[k].t < t_local + dt) 
+						neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
+				}
+			}
+			t_local += dt;
+			if (t_local > t_max) {
+				waiting = true;
+				t_local = 0.0;
+				if (commrank==0) {
+					nextinputtime = t + sk_mpi_expsampl(tp->lambdainput);
+					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+				} else {
+					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+				}
+			}
 		}
 	}
 }

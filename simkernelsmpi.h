@@ -4,6 +4,10 @@
 double sk_mpi_expsampl(double lambda);
 
 void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synapses);
+void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
+						 FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
+						 double t_max, su_mpi_trialparams *tp,
+						 int commrank, int commsize, FILE *inputtimesfile );
 unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T t, 
 							size_t num_neurons, su_mpi_trialparams *tp);
 //void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, su_mpi_modelparams *mp, //						su_mpi_trialparams *tp);
