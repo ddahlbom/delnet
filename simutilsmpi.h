@@ -93,6 +93,11 @@ void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
 su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commsize, int commrank);
 void su_mpi_freemodel_l(su_mpi_model_l *m);
 
+void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f);
+su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
+void su_mpi_globalsave(su_mpi_model_l *m_l, char *name, int commrank, int commsize);
+su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f);
+
 /* generate model */
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
 

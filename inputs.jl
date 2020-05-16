@@ -1,5 +1,3 @@
-#export periodicspiketrain, sparsepoisson, densepoisson, channelscatter, saveinput, loadinput, show
-
 struct Spike
 	i::UInt64
 	t::Float64
@@ -79,6 +77,14 @@ function loadinput(trialname)
 	end
 end
 
+function loadspikes(trialname)
+	open(trialname * "_spikes.txt", "r") do f
+		lines = readlines(f)
+		ts = [parse(Float64, split(line, "  ")[1]) for line ∈ lines]
+		ns = [parse(Int64, split(line, "  ")[2]) for line ∈ lines]
+		return [ts ns]
+	end
+end
 
 function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes, fs)
 	inputtimes = filter(x -> t1 <= x <= t2, inputtimes)
@@ -106,7 +112,7 @@ function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes
 	for inputtime ∈ (inputtimes .- t1)
 		scatter!(p1, [s.t for s ∈ inputblock] .+ inputtime .+ 5/fs, [s.i for s ∈ inputblock] .- 1,
 				 markersize=6.0,
-				 markeralpha=0.2,
+				 markeralpha=0.3,
 				 markerstrokewidth=0.0,
 				 markercolor=:red)
 	end

@@ -63,10 +63,10 @@ writetparams(tp, trialname)
 numprocs = 8
 
 # Run Simulation
-run(`mpirun -np $(numprocs) ./runtrial-mpi 0 $(trialname * "_mparams.dat") $(trialname * "_tparams.dat") $(trialname * "_input.bin") $(trialname)`)
+run(`mpirun -np $(numprocs) ./runtrial-mpi 0 $(trialname * "_mparams.txt") $(trialname * "_tparams.txt") $(trialname * "_input.bin") $(trialname)`)
 
 # Open spikes and plot
-spikes = SpikePlot.loadtrialspikesmpi(trialname)
+spikes = loadspikes(trialname)
 inputstarttimes = SpikePlot.loadvector(trialname * "_instarttimes.txt")
 p = inputrasterlines(recordstart, recordstop, spikes, inspikes, inputstarttimes, mp.fs)
 

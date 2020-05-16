@@ -44,7 +44,7 @@ TrialParams() = TrialParams(1.0, 3.0, 20.0, 1, 1, 100, 1, 0.0, 1.0, 0.5)
 # Functions
 ################################################################################
 function writemparams(m::ModelParams, trialname)
-	open(trialname * "_mparams.dat", "w") do f write(f, "fs\t\t\t$(m.fs)\n")
+	open(trialname * "_mparams.txt", "w") do f write(f, "fs\t\t\t$(m.fs)\n")
 		write(f, "num_neurons\t\t$(Float64(m.num_neurons))\n")
 		write(f, "p_contact\t\t$(m.p_contact)\n")
 		write(f, "p_exc\t\t\t$(m.p_exc)\n")
@@ -60,7 +60,7 @@ function writemparams(m::ModelParams, trialname)
 end
 
 function writetparams(t::TrialParams, trialname)
-	open(trialname * "_tparams.dat", "w") do f
+	open(trialname * "_tparams.txt", "w") do f
 		write(f, "dur\t\t\t$(t.dur)\n")
 		write(f, "lambda\t\t\t$(t.lambda)\n")
 		write(f, "randspikesize\t\t$(t.randspikesize)\n")

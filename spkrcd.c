@@ -168,11 +168,10 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int 
 				mpi_spike_type, 0, MPI_COMM_WORLD);
 
 	if (commrank == 0) {
-		spike_file = fopen(finalfilename, "w");
 		qsort(allspikes, numspikestotal, sizeof(spike), spkcomp);
+		spike_file = fopen(finalfilename, "w");
 		for (int j=0; j<numspikestotal; j++) 
 			fprintf(spike_file, "%lf  %d\n", allspikes[j].time, allspikes[j].neuron);
-
 		fclose(spike_file);
 	}
 
