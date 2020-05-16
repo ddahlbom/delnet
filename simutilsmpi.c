@@ -684,6 +684,25 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 /* loading and freeing models */
 
+void checkfileload(FILE *f, char*name)
+{
+	if (f == NULL) {
+		perror(name);
+		printf("Failed here!\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)
+{
+	if (commrank != m->dn->commrank || commsize != m->dn->commsize) {
+		printf("MPI Size or Rank mismatch while loading data.\n");
+		printf("Current size: %d, Loaded size: %d\n", commsize, m->dn->commsize);
+		printf("Current rank: %d, Loaded rank: %d\n", commrank, m->dn->commrank);
+		exit(-1);
+	}
+}
+
 void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 {
 	/* Write data */	
@@ -733,7 +752,7 @@ void su_mpi_globalsave(su_mpi_model_l *m_l, char *name, int commrank, int commsi
 			MPI_Send(&msg, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
 		} else if (commrank < commsize-1) {
 			int msg;
-			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_SELF, MPI_STATUS_IGNORE);
+			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 			f = fopen(filename, "ab");
 			su_mpi_savelocalmodel(m_l, f);
 			fclose(f);
@@ -794,8 +813,6 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
 	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
 
-	fclose(f);
-
 	return m;
 }
 
@@ -806,14 +823,17 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 	su_mpi_model_l *m_l; 
 	size_t loadsize;
 	int readcommsize;
+	long int position = 0;
 
 	char filename[512];
 	strcpy(filename, name);
 	strcat(filename, "_model.bin");
 
-	FILE *f = fopen(filename, "rb");
+	FILE *f; 
 
 	if (commrank == 0) {
+		f = fopen(filename, "rb");
+		checkfileload(f, filename);
 		loadsize = fread(&readcommsize, sizeof(int), 1, f);
 		if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); };
 		if (readcommsize != commsize) {
@@ -822,151 +842,166 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 			fclose(f);
 			exit(-1);
 		}
+		position = ftell(f);
+		fclose(f);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (commsize == 1) {
+		f = fopen(filename, "rb");
+		checkfileload(f, filename);
+		fseek(f, position, SEEK_SET);
 		m_l = su_mpi_loadlocalmodel(f);
+		fclose(f);
 	} else {
 		if (commrank == 0) {
-			int msg = 1;
+			printf("Rank %d is loading...\n", commrank);
+			f = fopen(filename, "rb");
+			checkfileload(f, filename);
+			fseek(f, position, SEEK_SET);
 			m_l = su_mpi_loadlocalmodel(f);
-			if (commrank != m_l->dn->commrank || commsize != m_l->dn->commsize) {
-				printf("MPI Size or Rank mismatch while loading data.\n");
-				exit(-1);
-			}
-			MPI_Send(&msg, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+			checksizeandrank(m_l, commrank, commsize);
+			position = ftell(f);
+			printf("Rank %d loaded, at %ld...\n", commrank, position);
+			fclose(f);
+			MPI_Send(&position, 1, MPI_LONG, 1, 0, MPI_COMM_WORLD);
 		} else if (commrank < commsize-1) {
-			int msg;
-			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_SELF, MPI_STATUS_IGNORE);
+			MPI_Recv(&position, 1, MPI_LONG, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			printf("Rank %d is loading...\n", commrank);
+			f = fopen(filename, "rb");
+			checkfileload(f, filename);
+			fseek(f, position, SEEK_SET);
 			m_l = su_mpi_loadlocalmodel(f);
-			if (commrank != m_l->dn->commrank || commsize != m_l->dn->commsize) {
-				printf("MPI Size or Rank mismatch while loading data.\n");
-				exit(-1);
-			}
-			MPI_Send(&msg, 1, MPI_INT, commrank+1, 0, MPI_COMM_WORLD);
+			checksizeandrank(m_l, commrank, commsize);
+			position = ftell(f);
+			printf("Rank %d loaded, at %ld...\n", commrank, position);
+			fclose(f);
+			MPI_Send(&position, 1, MPI_LONG, commrank+1, 0, MPI_COMM_WORLD);
 		} else {
-			int msg;
-			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			MPI_Recv(&position, 1, MPI_LONG, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			printf("Rank %d is loading...\n", commrank);
+			f = fopen(filename, "rb");
+			checkfileload(f, filename);
+			fseek(f, position, SEEK_SET);
 			m_l = su_mpi_loadlocalmodel(f);
-			if (commrank != m_l->dn->commrank || commsize != m_l->dn->commsize) {
-				printf("MPI Size or Rank mismatch while loading data.\n");
-				exit(-1);
-			}
+			checksizeandrank(m_l, commrank, commsize);
+			position = ftell(f);
+			printf("Rank %d loaded, at %ld...\n", commrank, position);
+			fclose(f);
 		}
 	}
-
-	fclose(f);
 
 	return m_l;
 }
 
-void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
-						int commsize, int commrank)
-{
-	char filename[512];
-	char rankstr[64];
-
-	/* Make file name */
-	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
-	strcpy(filename, name);
-	strcat(filename, rankstr);
-
-	/* Open file */
-	FILE *f = fopen(filename, "wb");
-
-	/* Write data */	
-	dn_mpi_save(m->dn, f);
-
-	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
-	fwrite(&m->commrank, sizeof(int), 1, f);
-	fwrite(&m->commsize, sizeof(int), 1, f);
-	fwrite(&m->maxnode, sizeof(size_t), 1, f);
-	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
-	fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
-	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
-	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
-	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
-	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-
-	/* Close file */
-	fclose(f);
-}
 
 
-su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commrank, int commsize)
-{
-	char filename[512];
-	char rankstr[64];
-	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
-	size_t loadsize;
-
-	/* Prepare file name */
-	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
-	strcpy(filename, name);
-	strcat(filename, rankstr);
-
-	printf("On rank %d loading file: %s\n", commrank, filename);
-
-	FILE *f = fopen(filename, "rb");
-	f = fopen(filename, "r");
-	if (f == NULL) {
-		perror(name);
-		printf("Failed here!\n");
-		exit(EXIT_FAILURE);
-	}
-
-	m->dn = dn_mpi_load(f);
-
-	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->commrank, sizeof(int), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->commsize, sizeof(int), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->maxnode, sizeof(size_t), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->nodeoffset, sizeof(size_t), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->numsyn, sizeof(IDX_T), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
-
-	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->num_nodes_l);
-	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
-	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
-
-	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes_l);
-	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
-	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
-
-	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
-	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
-
-	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
-	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
-
-	fclose(f);
-
-	/* sanity check */
-	if (commrank != m->dn->commrank || commsize != m->dn->commsize) {
-		printf("MPI Size or Rank mismatch while loading data.\n");
-		exit(-1);
-	}
-
-	return m;
-}
+// void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
+// 						int commsize, int commrank)
+// {
+// 	char filename[512];
+// 	char rankstr[64];
+// 
+// 	/* Make file name */
+// 	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
+// 	strcpy(filename, name);
+// 	strcat(filename, rankstr);
+// 
+// 	/* Open file */
+// 	FILE *f = fopen(filename, "wb");
+// 
+// 	/* Write data */	
+// 	dn_mpi_save(m->dn, f);
+// 
+// 	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
+// 	fwrite(&m->commrank, sizeof(int), 1, f);
+// 	fwrite(&m->commsize, sizeof(int), 1, f);
+// 	fwrite(&m->maxnode, sizeof(size_t), 1, f);
+// 	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
+// 	fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
+// 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
+// 	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
+// 	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
+// 	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+// 	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+// 
+// 	/* Close file */
+// 	fclose(f);
+// }
+// 
+// 
+// su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commrank, int commsize)
+// {
+// 	char filename[512];
+// 	char rankstr[64];
+// 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
+// 	size_t loadsize;
+// 
+// 	/* Prepare file name */
+// 	sprintf(rankstr, "_%d_%d_model.bin", commsize, commrank);
+// 	strcpy(filename, name);
+// 	strcat(filename, rankstr);
+// 
+// 	printf("On rank %d loading file: %s\n", commrank, filename);
+// 
+// 	FILE *f = fopen(filename, "rb");
+// 	f = fopen(filename, "r");
+// 	if (f == NULL) {
+// 		perror(name);
+// 		printf("Failed here!\n");
+// 		exit(EXIT_FAILURE);
+// 	}
+// 
+// 	m->dn = dn_mpi_load(f);
+// 
+// 	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->commrank, sizeof(int), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->commsize, sizeof(int), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->maxnode, sizeof(size_t), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->nodeoffset, sizeof(size_t), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->numsyn, sizeof(IDX_T), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
+// 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->num_nodes_l);
+// 	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
+// 	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes_l);
+// 	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
+// 	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
+// 	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+// 	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
+// 	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+// 	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
+// 
+// 	fclose(f);
+// 
+// 	/* sanity check */
+// 	if (commrank != m->dn->commrank || commsize != m->dn->commsize) {
+// 		printf("MPI Size or Rank mismatch while loading data.\n");
+// 		exit(-1);
+// 	}
+// 
+// 	return m;
+// }
 
 void su_mpi_freemodel_l(su_mpi_model_l *m) {
 	dn_mpi_freedelnet(m->dn);
