@@ -88,15 +88,9 @@ unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p);
 void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T d);
 
 /* save and load and free models */
-void su_mpi_savemodel_l(su_mpi_model_l *m, char *name,
-						int commsize, int commrank);
-su_mpi_model_l *su_mpi_loadmodel_l(char *name, int commsize, int commrank);
 void su_mpi_freemodel_l(su_mpi_model_l *m);
-
-void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f);
-su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
 void su_mpi_globalsave(su_mpi_model_l *m_l, char *name, int commrank, int commsize);
-su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f);
+su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
 
 /* generate model */
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
