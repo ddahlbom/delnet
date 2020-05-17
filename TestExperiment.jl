@@ -29,7 +29,7 @@ w_inh = -5.0
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post, synmax, w_exc, w_inh)
 
-dur = 2.5 
+dur = 5.0 
 lambda = 3.0
 randspikesize = 20.0
 randinput = 1 	# <-- don't think this is doing anything anymore; check.
@@ -54,7 +54,8 @@ inspikes = channelscatter(intimes, 1:Int(round(num_neurons*p_exc)))
 
 
 # Write Configuration Files
-trialname = "$(Int(round(λ_in)))Hz_$(Int(round(tp.dur)))s_fs$(Int(round(mp.fs)))"
+# trialname = "$(Int(round(λ_in)))Hz_$(Int(round(tp.dur)))s_fs$(Int(round(mp.fs)))"
+trialname = "TestTrial"
 saveinput(inspikes, trialname)
 writemparams(mp, trialname)
 writetparams(tp, trialname)
@@ -63,11 +64,15 @@ writetparams(tp, trialname)
 numprocs = 8
 
 # Run Simulation
-run(`mpirun -np $(numprocs) ./runtrial-mpi 0 $(trialname * "_mparams.txt") $(trialname * "_tparams.txt") $(trialname * "_input.bin") $(trialname)`)
+#run(`mpirun -np $(numprocs) ./runtrial-mpi 0 $(trialname * "_mparams.txt") $(trialname * "_tparams.txt") $(trialname * "_input.bin") $(trialname)`)
+
+run(`mpirun -np $(numprocs) ./runtrial-mpi 1 $(trialname) $(trialname * "_tparams.txt") $(trialname * "_input.bin") $(trialname*"1")`)
 
 # Open spikes and plot
-spikes = loadspikes(trialname)
-inputstarttimes = SpikePlot.loadvector(trialname * "_instarttimes.txt")
+#spikes = loadspikes(trialname)
+spikes = loadspikes(trialname*"1")
+#inputstarttimes = SpikePlot.loadvector(trialname * "_instarttimes.txt")
+inputstarttimes = SpikePlot.loadvector(trialname * "1_instarttimes.txt")
 p = inputrasterlines(recordstart, recordstop, spikes, inspikes, inputstarttimes, mp.fs)
 
 end

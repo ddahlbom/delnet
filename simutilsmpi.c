@@ -724,9 +724,9 @@ void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
 }
 
+
 su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 {
-
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 	size_t loadsize;
 

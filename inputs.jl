@@ -89,26 +89,9 @@ end
 function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes, fs)
 	inputtimes = filter(x -> t1 <= x <= t2, inputtimes)
 
-	# Spike Raster
-	idx1 = searchsortedfirst(spikes[:,1], t1)
-	idx2 = searchsortedlast(spikes[:,1], t2)
-	numneurons = maximum(spikes[idx1:idx2,2])
-	p1 = scatter(spikes[idx1:idx2,1], spikes[idx1:idx2,2],
-				markersize=3.0,
-				markeralpha=0.5,
-				markerstrokewidth=0.0,
-				markercolor=:blue,
-				legend=:none,
-			    xlims=(t1,t2),
-				reuse=false)
-
-	# Lines on raster
-	for t ∈ inputtimes 
-		plot!(p1, [t,t], [0,numneurons], lc=:red, ls=:dash, lw=1.25)
-	end
-
 	# Show input
 	ts = range(t1, t2, step=1.0/fs);
+	p1 = plot()
 	for inputtime ∈ (inputtimes .- t1)
 		scatter!(p1, [s.t for s ∈ inputblock] .+ inputtime .+ 5/fs, [s.i for s ∈ inputblock] .- 1,
 				 markersize=6.0,
@@ -116,6 +99,25 @@ function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes
 				 markerstrokewidth=0.0,
 				 markercolor=:red)
 	end
+
+	# Spikes 
+	idx1 = searchsortedfirst(spikes[:,1], t1)
+	idx2 = searchsortedlast(spikes[:,1], t2)
+	numneurons = maximum(spikes[idx1:idx2,2])
+	scatter!(p1, spikes[idx1:idx2,1], spikes[idx1:idx2,2],
+				 markersize=3.0,
+				 markeralpha=0.7,
+				 markerstrokewidth=0.0,
+				 markercolor=:blue,
+				 legend=:none,
+			     xlims=(t1,t2),
+				 reuse=false)
+
+	# Vertical Lines 
+	for t ∈ inputtimes 
+		plot!(p1, [t,t], [0,numneurons], lc=:red, ls=:dash, lw=1.25)
+	end
+
 
 	return p1
 end
