@@ -49,6 +49,7 @@ typedef struct su_mpi_trialparams_s {
 	bool inhibition;
 	IDX_T numinputs;
 	IDX_T inputmode;
+	double inputweight;
 	double recordstart;
 	double recordstop;
 	double lambdainput;

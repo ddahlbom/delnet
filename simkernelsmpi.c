@@ -80,7 +80,7 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		for (size_t k=0; k < ninput; k++) {
 			if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
 				if (t_local <= input[k].t && input[k].t < t_local + dt) 
-					neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
+					neuroninputs[input[k].i - 1 - m->nodeoffset] += tp->inputweight; 
 			}
 		}
 		t_local += dt;
@@ -97,7 +97,7 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 			for (size_t k=0; k < ninput; k++) {
 				if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
 					if (t_local <= input[k].t && input[k].t < t_local + dt) 
-						neuroninputs[input[k].i - 1 - m->nodeoffset] += 20.0; 
+						neuroninputs[input[k].i - 1 - m->nodeoffset] += tp->inputweight; 
 				}
 			}
 			t_local += dt;

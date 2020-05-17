@@ -34,6 +34,7 @@ struct TrialParams
 	inhibition::Bool
 	numinputs::UInt64
 	inputmode::UInt64
+	inputweight::Float64
 	recordstart::Float64
 	recordstop::Float64
 	lambdainput::Float64
@@ -68,6 +69,7 @@ function writetparams(t::TrialParams, trialname)
 		write(f, "inhibition\t\t$(Float64(t.inhibition))\n")
 		write(f, "numinputs\t\t$(t.numinputs)\n")
 		write(f, "inputmode\t\t$(t.inputmode)\n")
+		write(f, "inputweight\t\t$(t.inputweight)\n")
 		write(f, "recordstart\t\t$(t.recordstart)\n")
 		write(f, "recordstop\t\t$(t.recordstop)\n")
 		write(f, "lambdainput\t\t$(t.lambdainput)\n")

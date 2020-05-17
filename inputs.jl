@@ -80,7 +80,6 @@ end
 function loadbinvector(filename; datatype=Float64)
 	open(filename, "r") do f
 		len = read(f, UInt32)
-		println("len: $len")
 		input = Array{datatype, 1}(undef, Int64(len))
 		read!(f, input)
 		return input
@@ -102,7 +101,6 @@ function inputrasterlines(t1, t2, spikes, inputblock::Array{Spike,1}, inputtimes
 	inputtimes = filter(x -> t1 <= x <= t2, inputtimes)
 
 	# Show input
-	ts = range(t1, t2, step=1.0/fs);
 	p1 = plot()
 	for inputtime ∈ (inputtimes .- t1)
 		scatter!(p1, [s.t for s ∈ inputblock] .+ inputtime .+ 5/fs, [s.i for s ∈ inputblock] .- 1,

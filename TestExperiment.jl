@@ -29,28 +29,30 @@ w_inh = -5.0
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post, synmax, w_exc, w_inh)
 
-dur = 1.0 
+dur = 600.0 
 lambda = 3.0
 randspikesize = 20.0
 randinput = 1 	# <-- don't think this is doing anything anymore; check.
 inhibition = 1
 numinputs = 20
 inputmode = 2
-recordstart = 0 
+inputweight = 20.0
+recordstart = max(dur-10.0, 0.0) 
 recordstop  = dur 
 lambdainput = 4 
 
 tp = TrialParams(dur, lambda, randspikesize, randinput, inhibition, numinputs,
-				 inputmode, recordstart, recordstop, lambdainput)
+				 inputmode, inputweight, recordstart, recordstop, lambdainput)
 
 
 # Input Parameters
 #f_in = 5.0
 #input = periodicspiketrain(f_in, 1.0, mp.fs) .* 20.0
+numexc = Int(round(num_neurons*p_exc))
 Random.seed!(5)
 λ_in  = 35.0
 intimes = sparsepoisson(λ_in, 0.100)
-inspikes = channelscatter(intimes, 1:Int(round(num_neurons*p_exc)))
+inspikes = channelscatter(intimes, 1:numexc)
 
 
 # Write Configuration Files
@@ -75,6 +77,6 @@ inputstarttimes = SpikePlot.loadvector(trialname * "_instarttimes.txt")
 #inputstarttimes = SpikePlot.loadvector(trialname * "1_instarttimes.txt")
 p1 = inputrasterlines(recordstart, recordstop, spikes, inspikes, inputstarttimes, mp.fs)
 synapses = loadsynapses(trialname)
-p2 = plot(synapses)
+p2 = plot(synapses[1:numexc], ylims=(3,5))
 
 end

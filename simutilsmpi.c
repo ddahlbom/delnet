@@ -101,6 +101,7 @@ void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename)
 	p->inhibition = (bool) pl_getvalue(pl, "inhibition");
 	p->numinputs = (unsigned int) pl_getvalue(pl, "numinputs");
 	p->inputmode = (unsigned int) pl_getvalue(pl, "inputmode");
+	p->inputweight = pl_getvalue(pl, "inputweight");
 	p->recordstart = pl_getvalue(pl, "recordstart");
 	p->recordstop = pl_getvalue(pl, "recordstop");
 	p->lambdainput = pl_getvalue(pl, "lambdainput");
@@ -732,11 +733,9 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 	if (commrank == 0) synlens = malloc(sizeof(IDX_T)*commsize);
 
 	MPI_Gather(&m->dn->numlinesin_l, 1, MPI_UNSIGNED, synlens, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-	if (commrank == 0) for (int i=0; i<commsize; i++) printf("Len: %d\n", synlens[i]);
 
 	if (commrank == 0) {
 		for (int i=0; i<commsize; i++) totallen += synlens[i];
-		printf("Total length: %d\n", totallen);
 		synapses_g = malloc(sizeof(FLOAT_T)*totallen);
 		synlens_i = malloc(sizeof(IDX_T)*commsize);
 
@@ -767,42 +766,6 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 		free(synapses_g);
 		free(synapses_sorted);
 	}
-
-
-	
-	/* Now write the data in rank order */
-	/*
-	if (commsize == 1) {
-		f = fopen(filename, "ab");
-		checkfileload(f, filename);
-		fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-		fclose(f);
-	} else {
-		if (commrank == 0) {
-			int msg = 1;
-			f = fopen(filename, "ab");
-			checkfileload(f, filename);
-			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-			fclose(f);
-			MPI_Send(&msg, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
-		} else if (commrank < commsize-1) {
-			int msg;
-			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			f = fopen(filename, "ab");
-			checkfileload(f, filename);
-			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-			fclose(f);
-			MPI_Send(&msg, 1, MPI_INT, commrank+1, 0, MPI_COMM_WORLD);
-		} else {
-			int msg;
-			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-			f = fopen(filename, "ab");
-			checkfileload(f, filename);
-			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-			fclose(f);
-		}
-	}
-	*/
 }
 
 
