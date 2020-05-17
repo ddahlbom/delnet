@@ -32,6 +32,7 @@ spikerecord *sr_init(char *filename, size_t spikes_in_block);
 void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time);
 void sr_close(spikerecord *sr);
 void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int commsize);
+int *len_to_offsets(int *lens, int n);
 
 
 #endif

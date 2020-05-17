@@ -684,6 +684,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 /* --------------- loading and freeing models --------------- */
 
+
 /* ----- Local Helper Functions ----- */
 void checkfileload(FILE *f, char*name)
 {
@@ -694,6 +695,7 @@ void checkfileload(FILE *f, char*name)
 	}
 }
 
+
 void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)
 {
 	if (commrank != m->dn->commrank || commsize != m->dn->commsize) {
@@ -702,6 +704,105 @@ void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)
 		printf("Current rank: %d, Loaded rank: %d\n", commrank, m->dn->commrank);
 		exit(-1);
 	}
+}
+
+
+/* ----- Save synapse weights ----- */
+
+
+/*
+ * This one could be easily parallelized with MPI read and write...
+ */
+void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsize)
+{
+	FILE *f;
+	char filename[512];
+	IDX_T *synlens = 0;
+	int *synlens_i = 0;
+	int *offsets = 0;
+	FLOAT_T *synapses_g = 0;
+	FLOAT_T *synapses_sorted = 0;
+	IDX_T totallen = 0;
+
+
+	strcpy(filename, name);
+	strcat(filename, "_synweights.bin");
+
+	/* Write length at head for parsing */
+	if (commrank == 0) synlens = malloc(sizeof(IDX_T)*commsize);
+
+	MPI_Gather(&m->dn->numlinesin_l, 1, MPI_UNSIGNED, synlens, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+	if (commrank == 0) for (int i=0; i<commsize; i++) printf("Len: %d\n", synlens[i]);
+
+	if (commrank == 0) {
+		for (int i=0; i<commsize; i++) totallen += synlens[i];
+		printf("Total length: %d\n", totallen);
+		synapses_g = malloc(sizeof(FLOAT_T)*totallen);
+		synlens_i = malloc(sizeof(IDX_T)*commsize);
+
+		f = fopen(filename, "wb");
+		checkfileload(f, filename);
+		fwrite(&totallen, sizeof(IDX_T), 1, f);	
+		fclose(f);
+
+		for (int i=0; i<commsize; i++) synlens_i[i] = (int) synlens[i];
+		offsets = len_to_offsets(synlens_i, commsize);
+	}
+
+	MPI_Gatherv(m->synapses, m->dn->numlinesin_l, MPI_DOUBLE,
+				synapses_g, synlens_i, offsets, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+	if (commrank == 0) {
+		synapses_sorted = malloc(sizeof(FLOAT_T)*totallen);
+		for (int i=0; i<totallen; i++) 
+			synapses_sorted[i] = synapses_g[ m->dn->destidx_g[i] ];
+
+		f = fopen(filename, "ab");
+		checkfileload(f, filename);
+		fwrite(synapses_sorted, sizeof(FLOAT_T), totallen, f);	
+		fclose(f);
+
+		free(synlens);
+		free(synlens_i);
+		free(synapses_g);
+		free(synapses_sorted);
+	}
+
+
+	
+	/* Now write the data in rank order */
+	/*
+	if (commsize == 1) {
+		f = fopen(filename, "ab");
+		checkfileload(f, filename);
+		fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+		fclose(f);
+	} else {
+		if (commrank == 0) {
+			int msg = 1;
+			f = fopen(filename, "ab");
+			checkfileload(f, filename);
+			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+			fclose(f);
+			MPI_Send(&msg, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+		} else if (commrank < commsize-1) {
+			int msg;
+			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			f = fopen(filename, "ab");
+			checkfileload(f, filename);
+			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+			fclose(f);
+			MPI_Send(&msg, 1, MPI_INT, commrank+1, 0, MPI_COMM_WORLD);
+		} else {
+			int msg;
+			MPI_Recv(&msg, 1, MPI_INT, commrank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+			f = fopen(filename, "ab");
+			checkfileload(f, filename);
+			fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+			fclose(f);
+		}
+	}
+	*/
 }
 
 

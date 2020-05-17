@@ -77,6 +77,18 @@ function loadinput(trialname)
 	end
 end
 
+function loadbinvector(filename; datatype=Float64)
+	open(filename, "r") do f
+		len = read(f, UInt32)
+		println("len: $len")
+		input = Array{datatype, 1}(undef, Int64(len))
+		read!(f, input)
+		return input
+	end
+end
+
+loadsynapses(trialname) = loadbinvector(trialname*"_synweights.bin")
+
 function loadspikes(trialname)
 	open(trialname * "_spikes.txt", "r") do f
 		lines = readlines(f)
