@@ -47,7 +47,6 @@ typedef struct su_mpi_trialparams_s {
 	double randspikesize; 	
 	bool randinput;
 	bool inhibition;
-	IDX_T numinputs;
 	IDX_T inputmode;
 	double inputweight;
 	double recordstart;
@@ -56,7 +55,6 @@ typedef struct su_mpi_trialparams_s {
 } su_mpi_trialparams;
 
 typedef struct su_mpi_model_l_s {
-	IDX_T numinputneurons;
 	int commrank;
 	int commsize;
 	size_t maxnode;

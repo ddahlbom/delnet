@@ -90,7 +90,8 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		if (waiting) {
 			if (t >= nextinputtime) {
 				waiting = false;
-				if (commrank == 0) fprintf(inputtimesfile, "%f\n", t);
+				if (commrank == 0  && tp->recordstart <= t && t < tp->recordstop)
+					fprintf(inputtimesfile, "%f\n", t);
 			}
 		}
 		if (!waiting) {

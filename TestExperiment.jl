@@ -29,7 +29,7 @@ w_inh = -5.0
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post, synmax, w_exc, w_inh)
 
-dur = 600.0 
+dur = 1.0 
 lambda = 3.0
 randspikesize = 20.0
 randinput = 1 	# <-- don't think this is doing anything anymore; check.

@@ -99,7 +99,6 @@ void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename)
 	p->randspikesize = pl_getvalue(pl, "randspikesize");
 	p->randinput = (bool) pl_getvalue(pl, "randinput");
 	p->inhibition = (bool) pl_getvalue(pl, "inhibition");
-	p->numinputs = (unsigned int) pl_getvalue(pl, "numinputs");
 	p->inputmode = (unsigned int) pl_getvalue(pl, "inputmode");
 	p->inputweight = pl_getvalue(pl, "inputweight");
 	p->recordstart = pl_getvalue(pl, "recordstart");
@@ -266,7 +265,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 		/* ---------- calculate time update ---------- */
 		t = dt*i;
-		if (i%1000 == 0)
+		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
 
@@ -669,7 +668,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
 	}
 	
-	m->numinputneurons = 100; 	// <- refactor out -- now in trial params
 	m->neurons = neurons;
 	m->traces_neu = traces_neu;
 	m->traces_syn = traces_syn;
@@ -775,7 +773,6 @@ void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 	/* Write data */	
 	dn_mpi_save(m->dn, f);
 
-	fwrite(&m->numinputneurons, sizeof(IDX_T), 1, f);
 	fwrite(&m->commrank, sizeof(int), 1, f);
 	fwrite(&m->commsize, sizeof(int), 1, f);
 	fwrite(&m->maxnode, sizeof(size_t), 1, f);
@@ -795,9 +792,6 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	size_t loadsize;
 
 	m->dn = dn_mpi_load(f);
-
-	loadsize = fread(&m->numinputneurons, sizeof(IDX_T), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
 	loadsize = fread(&m->commrank, sizeof(int), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
