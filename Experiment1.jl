@@ -4,7 +4,7 @@ module Experiment1
 using DelNetExperiment
 using Plots
 
-experimentname = "quicktest"
+experimentname = "12hours"
 
 # Model Parameters
 fs = 2000.0
@@ -29,25 +29,25 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 w_exc, w_inh)
 
 # Trial Parameters
-dur = 60.0
+dur = 12.0*60.0*60.0
 λ_noise = 3.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
 inputmode = 2
 inputweight = 20.0
-recorddur = 30.0
+recorddur = 5.0*60.0 
 recordstart = max(dur-recorddur, 0.0)
 recordstop = dur
-λ_instarttimes = 0.9
+λ_instarttimes = 0.65
 
 tp = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 				 inputmode, inputweight, recordstart, recordstop, λ_instarttimes)
 
 
 # Input parameters
-λ_input = 50.0
-inputdur = 0.1
+λ_input = 500.0
+inputdur = 0.050
 
 input = genrandinput(λ_input, inputdur, 800)
 
@@ -58,13 +58,21 @@ spikes, inputtimes = runnewexperiment(mp, tp, input, experimentname;
 									  numprocs=numprocs)
 
 # Quick analysis
-p_spikes = spikeanalysisplot(spikes, input, inputtimes, recordstart, recordstop, mp.fs)
+plotdur = 5.0
+tp1 = recordstop - plotdur
+tp2 = recordstop
+p_spikes = spikeanalysisplot(filter(s -> tp1 <= s.t < tp2, spikes),
+							 input,
+							 filter(t -> tp1 <= t < tp2, inputtimes),
+							 tp1,
+							 tp2,
+							 mp.fs)
 
 synapses = loadsynapses(experimentname);
 p_syn = plot(synapses[1:800]; xlabel="Synapse Number", ylabel="Strength",
 			 legend=:none)
 
-p_img = pstplot(spikes, inputtimes, 2.0*inputdur, 1, Int(num_neurons), fs;
+p_img = pstplot(spikes, inputtimes, inputdur+5*maxdelay/1000.0, 1, Int(num_neurons), fs;
 				xlabel="Time (s)", ylabel="Neuron Number")
 
 spikeraster(p_img, input;
