@@ -2,6 +2,7 @@
 #include <stdio.h> 	//for profiling/debugging
 #include <time.h> 	//for profiling/debugging
 #include <math.h>
+#include <omp.h>
 
 #ifdef __amd64__
 #include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"

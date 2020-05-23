@@ -1,6 +1,6 @@
 CC= gcc
 CFLAGS= -g -Wall -I./ -L./
-LDLIBS = -lm 
+LDLIBS = -lm -fopenmp
 
 default: mpioptim
 debug: mpidebug
@@ -63,10 +63,10 @@ spkrcd.o: spkrcd.c spkrcd.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c spkrcd.c
 
 delnetmpi-opt.o: delnetmpi.c delnetmpi.h
-	mpicc $(CFLAGS) -O3 $(LDLIBS) -c delnetmpi.c -o delnetmpi-opt.o
+	mpicc $(CFLAGS) -O3 $(LDLIBS) -fopenmp -c delnetmpi.c -o delnetmpi-opt.o
 
 delnetmpi.o: delnetmpi.c delnetmpi.h
-	mpicc $(CFLAGS) $(LDLIBS) -c delnetmpi.c
+	mpicc $(CFLAGS) $(LDLIBS) -fopenmp -c delnetmpi.c
 
 delnet-opt.o: delnet.c delnet.h
 	$(CC) $(CFLAGS) -O3 $(LDLIBS) -o delnet-opt.o -c delnet.c
