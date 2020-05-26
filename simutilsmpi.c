@@ -887,7 +887,7 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 	char filename[512];
 
 	strcpy(filename, name);
-	strcat(filename, "_model.bin");
+	// strcat(filename, "_model.bin");
 
 	/* Read the number of processes at the head and check if matches commsize */
 	if (commrank == 0) {
