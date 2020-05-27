@@ -6,7 +6,8 @@
 #include <stddef.h>
 
 #ifdef __amd64__
-#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#include <mpi.h>
 #else
 #include <mpi.h>
 #endif
@@ -16,7 +17,7 @@
 #include "spkrcd.h"
 
 #define PROFILING 1
-#define DEBUG 0
+#define DEBUG 1
 
 /*************************************************************
  *  Main
@@ -47,21 +48,21 @@ int main(int argc, char *argv[])
 	MPI_Type_commit(&mpi_spike_type);
 	
 	/* set parameters from (dumb) CLI */
-	if (argc < 6) {
+	if (argc < 7) {
 		printf("Need trial type (0 - new model, 1 - loadmodel), model\
-				filename (parameter file or existing model), trial\
+				filename (parameter file or existing model), graph filename, trial\
 				parameter file,\
-				input file, and a file name.  Exiting.\n");
+				input file, and a file name.  (Graph name ommited to resumed trial). Exiting.\n");
 		exit(-1);
 	}
 
 
 	/* model create or load */
 	if (atoi(argv[1]) == 0) {
-		m = su_mpi_izhiblobstdpmodel(argv[2], commrank, commsize);
+		//m = su_mpi_izhiblobstdpmodel(argv[2], commrank, commsize);
+		m = su_mpi_izhimodelfromgraph(argv[2], argv[3], commrank, commsize);
 		if (DEBUG) printf("Made model on process %d\n", commrank);
 	} else if (atoi(argv[1]) == 1) {
-		//m = su_mpi_loadmodel_l(argv[2], commrank, commsize);
 		m = su_mpi_globalload(argv[2], commrank, commsize);
 		if (DEBUG) printf("Loaded model on process %d\n", commrank);
 	} else {
@@ -71,7 +72,7 @@ int main(int argc, char *argv[])
 
 	/* process trial parameters */
 	if (commrank == 0) {
-		su_mpi_readtparameters(&tp, argv[3]);
+		su_mpi_readtparameters(&tp, argv[4]);
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	} else {
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -79,12 +80,11 @@ int main(int argc, char *argv[])
 	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
 
 	/* set up file names */
-	char *trialname = argv[5];
-	infilename = argv[4];
+	char *trialname = argv[6];
+	infilename = argv[5];
 	strcpy(outfilename, trialname);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	//m = su_mpi_loadmodel_l(mpifilename); 	/* everyone loads the same model */
 
 	/* set up spike recorder on each rank */
 	char srname[256];

@@ -6,8 +6,10 @@
 
 
 #ifdef __amd64__
-#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#define CLOCKSPEED 3200000000
+//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#include <mpi.h>
+//#define CLOCKSPEED 1512000000
+#define CLOCKSPEED 2600000000
 typedef unsigned long long ticks;
 char perfFileName[] = "performance_data.txt";
 static __inline__ ticks getticks(void)
@@ -44,11 +46,20 @@ static __inline__ ticks getticks(void)
 #include "paramutils.h"
 #include "spkrcd.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /*************************************************************
  *  Functions
  *************************************************************/
+/* ----- Local Helper Functions ----- */
+void checkfileload(FILE *f, char*name)
+{
+	if (f == NULL) {
+		perror(name);
+		printf("Failed here!\n");
+		exit(EXIT_FAILURE);
+	}
+}
 
 
 /* -------------------- Parameter Setting -------------------- */
@@ -275,12 +286,14 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* get inputs from delay net */
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
 
-		/* put in random noise */
-		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
-
 		/* put in forced input -- make this a function in kernels! */
 		sk_mpi_forcedinput( m, input, inputlen, neuroninputs, t, dt, t_max,
-							&tp, commrank, commsize, inputtimesfile ); 
+							&tp, commrank, commsize, inputtimesfile, nextrand ); 
+
+		/* ---------- put in random noise ---------- */
+
+		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
+
 
 		if (profiling) {
 			ticks_finish = getticks(); 
@@ -545,6 +558,155 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	free(nextrand);
 }
 
+unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
+{
+	long int *graph, n;
+
+	if (commrank == 0) {
+		FILE *f;
+		size_t loadsize;
+
+		f = fopen(name, "rb");
+		checkfileload(f, name);
+		loadsize = fread(&n, sizeof(long int), 1, f);
+		if (loadsize != 1) { printf("Failed to load graph.\n"); exit(-1); }
+		graph = malloc(sizeof(long int)*n*n);
+		loadsize = fread(graph, sizeof(long int), n*n, f);
+		if (loadsize != n*n) { printf("Failed to load graph.\n"); exit(-1); }
+		fclose(f);
+
+		MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		m->p.num_neurons = n;
+		MPI_Bcast(graph, n*n, MPI_LONG, 0, MPI_COMM_WORLD);
+	} else {
+		MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		m->p.num_neurons = n;
+		graph = malloc(sizeof(long int)*n*n);
+		MPI_Bcast(graph, n*n, MPI_LONG, 0, MPI_COMM_WORLD);
+	}
+
+	unsigned int *ugraph = malloc(sizeof(unsigned int)*n*n);
+	for (size_t i=0; i<n*n; i++)
+		ugraph[i] = (unsigned int) graph[i];
+
+	free(graph);
+
+	return ugraph;
+}
+
+
+/* make models */
+su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilename,
+									      int commrank, int commsize)
+{
+	unsigned int n, n_exc, i;
+	unsigned int *graph;
+	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
+
+	/* Give each rank a different seed */
+	srand(commrank+1);
+
+	/* default neuron params (Izhikevich RS and FS) */
+	FLOAT_T g_v_default = -65.0;
+	FLOAT_T g_u_default = -13.0;
+
+	FLOAT_T g_a_exc  = 0.02;
+	FLOAT_T g_d_exc  = 8.0;
+
+	FLOAT_T g_a_inh  = 0.1;
+	FLOAT_T g_d_inh  = 2.0;
+
+	/* set up delnet framework -- MAYBE BCAST THIS*/
+	su_mpi_readmparameters(&m->p, mparamfilename);
+
+	n = m->p.num_neurons;
+	n_exc = (unsigned int) ((double) n * m->p.p_exc);
+	size_t maxnode = dn_mpi_maxnode(commrank, commsize, n);
+	size_t nodeoffset =  dn_mpi_nodeoffset(commrank, commsize, n);
+	m->commrank = commrank;
+	m->commsize = commsize;
+	m->maxnode = maxnode;
+	m->nodeoffset = nodeoffset;
+
+	/* load graph on all ranks (uses bcast) */ 
+	graph = su_mpi_loadgraph(graphfilename, m, commrank);
+	printf("Made it this far, ma! Got the graph!\n");
+
+	if (DEBUG) printf("Making delnet on process %d\n", commrank);
+	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
+	if (DEBUG) printf("Made delnet on process %d\n", commrank);
+	printf("Made it this far, ma! Made the graph!\n");
+
+
+	/* set up state for simulation */
+	if (DEBUG) printf("Allocating state on rank %d\n", commrank);
+	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
+	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
+	FLOAT_T *traces_syn; 	
+
+	for (i=0; i<maxnode; i++) {
+		if (nodeoffset + i < n_exc)
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
+		else
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
+	}
+
+	/* initialize synapse weights */
+	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
+	unsigned int numsyn_exc = 0;
+
+	// Find out number of excitatory synapses
+	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
+		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
+		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
+						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
+		for (int q=0; q < commsize; q++) {
+			if (q != commrank) {
+				MPI_Send(&numsyn_exc,
+						sizeof(unsigned int),
+						MPI_UNSIGNED, 
+						q, 
+						101,
+						MPI_COMM_WORLD);
+			}
+		}
+	} else {
+		MPI_Recv(&numsyn_exc,
+				sizeof(unsigned int),
+				MPI_UNSIGNED,
+				MPI_ANY_SOURCE,
+				101,
+				MPI_COMM_WORLD,
+				MPI_STATUS_IGNORE);
+
+	}
+
+	if (DEBUG) {
+		printf("On rank %d we think there are %d excitatory synapses.\n",
+				commrank, numsyn_exc);
+	}
+
+	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
+	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+
+	unsigned int i_g;
+	for (i=0; i< m->dn->numlinesin_l; i++) {
+		i_g = i + m->dn->lineoffset_out;
+		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
+	}
+	
+	m->neurons = neurons;
+	m->traces_neu = traces_neu;
+	m->traces_syn = traces_syn;
+	m->synapses = synapses_local;
+
+	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
+	free(graph);
+	if (DEBUG) printf("Freed graph on rank %d\n", commrank);
+	//free(synapses);
+
+	return m;
+}
 
 /* make models */
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
@@ -683,16 +845,6 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 /* --------------- loading and freeing models --------------- */
 
-
-/* ----- Local Helper Functions ----- */
-void checkfileload(FILE *f, char*name)
-{
-	if (f == NULL) {
-		perror(name);
-		printf("Failed here!\n");
-		exit(EXIT_FAILURE);
-	}
-}
 
 
 void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)

@@ -8,6 +8,7 @@
 
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
+#define INPUT_MODE_POISSON_EXCLUSIVE 3
 
 #define MAX_NAME_LEN 512
 
@@ -68,6 +69,7 @@ typedef struct su_mpi_model_l_s {
 	FLOAT_T *synapses;
 } su_mpi_model_l;
 
+
 /*************************************************************
  *  Function Declarations
  *************************************************************/
@@ -92,8 +94,11 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 void su_mpi_globalsave(su_mpi_model_l *m_l, char *name, int commrank, int commsize);
 su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
 
-/* generate model */
+/* graphs and models */
+unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank);
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
+su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilename,
+									      int commrank, int commsize);
 
 /* run simulations */
 

@@ -6,7 +6,8 @@
 #include "simkernelsmpi.h"
 
 #ifdef __amd64__
-#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+#include <mpi.h>
 #else
 #include <mpi.h>
 #endif
@@ -69,7 +70,8 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synap
 void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
 						 FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
 						 double t_max, su_mpi_trialparams *tp,
-						 int commrank, int commsize, FILE *inputtimesfile )
+						 int commrank, int commsize, FILE *inputtimesfile,
+						 FLOAT_T *nextrand)
 {
 	static double t_local = 0.0;
 	static double nextinputtime = 0.0;
@@ -86,12 +88,14 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		t_local += dt;
 		if (t_local > t_max) t_local = 0; 
 	}
-	else if (tp->inputmode == INPUT_MODE_POISSON) {
+	else if (tp->inputmode == INPUT_MODE_POISSON || INPUT_MODE_POISSON_EXCLUSIVE) {
 		if (waiting) {
 			if (t >= nextinputtime) {
 				waiting = false;
 				if (commrank == 0  && tp->recordstart <= t && t < tp->recordstop)
 					fprintf(inputtimesfile, "%f\n", t);
+				if (tp->inputmode == INPUT_MODE_POISSON_EXCLUSIVE) 
+					for (size_t j=0; j<m->dn->num_nodes_l; j++) nextrand[j] += t_max;
 			}
 		}
 		if (!waiting) {
