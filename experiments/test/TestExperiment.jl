@@ -30,15 +30,15 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 w_exc, w_inh)
 
 # Training trial Parameters
-dur = 10.0
+dur = 1.0
 λ_noise = 3.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
 inputmode = 3
 inputweight = 20.0
-recordstart = dur+1.0
-recordstop = dur+1.0 
+recordstart = 0 
+recordstop = dur 
 λ_instarttimes = 0.75
 
 tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
@@ -76,7 +76,7 @@ end
 graph[801:end,801:end] .= 0
 
 # Run the training
-numprocs=2
+numprocs=8
 results_training = runexperiment("new", modelname, mp, graph, tp1, input;
 								 numprocs=numprocs,
 								 execloc="/home/dahlbom/research/delnet/")

@@ -46,7 +46,7 @@ static __inline__ ticks getticks(void)
 #include "paramutils.h"
 #include "spkrcd.h"
 
-#define DEBUG 1
+#define SU_DEBUG 1
 
 /*************************************************************
  *  Functions
@@ -647,21 +647,21 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	graph = su_mpi_loadgraph(graphfilename, m, commrank);
 
 	printf("Made it this far, ma! Got the graph!\n");
-	if (DEBUG) printf("Making delnet on process %d\n", commrank);
+	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
 
 	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
 
-	if (DEBUG) printf("Made delnet on process %d\n", commrank);
+	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
 	printf("Made it this far, ma! Made the graph!\n");
-	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
+	if (SU_DEBUG) printf("About to free graph on rank %d\n", commrank);
 
 	free(graph);
 
-	if (DEBUG) printf("Freed graph on rank %d\n", commrank);
+	if (SU_DEBUG) printf("Freed graph on rank %d\n", commrank);
 
 
 	/* set up state for simulation */
-	if (DEBUG) printf("Allocating state on rank %d\n", commrank);
+	if (SU_DEBUG) printf("Allocating state on rank %d\n", commrank);
 	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
@@ -676,7 +676,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	}
 
 	/* initialize synapse weights */
-	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
+	if (SU_DEBUG) printf("Initializing synapses on rank %d\n", commrank);
 	unsigned int numsyn_exc = 0;
 
 	// Find out number of excitatory synapses
@@ -705,7 +705,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 	}
 
-	if (DEBUG) {
+	if (SU_DEBUG) {
 		printf("On rank %d we think there are %d excitatory synapses.\n",
 				commrank, numsyn_exc);
 	}
@@ -773,9 +773,9 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 			/* send graph to other processes */
 			for (int k=1; k<commsize; k++) {
 				//MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD, &sendReq[k-1] );
-				if (DEBUG) printf("Sending graph from rank 0 to rank %d\n", k);
+				if (SU_DEBUG) printf("Sending graph from rank 0 to rank %d\n", k);
 				MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD);
-				if (DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
+				if (SU_DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
 			}
 
 			//free(sendReq);
@@ -785,13 +785,13 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	} else {
 		MPI_Status recvStatus;
 		graph = malloc(sizeof(unsigned int)*n*n);
-		if (DEBUG) printf("Waiting for graph on rank %d from rank 0\n", commrank);
+		if (SU_DEBUG) printf("Waiting for graph on rank %d from rank 0\n", commrank);
 		MPI_Recv(graph, n*n, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &recvStatus);
 		if (recvStatus.MPI_ERROR != MPI_SUCCESS) {
 			printf("Houston, we have a problem!\n");
 			exit(-1);
 		}
-		if (DEBUG) printf("Received graph on rank %d from rank 0\n", commrank);
+		if (SU_DEBUG) printf("Received graph on rank %d from rank 0\n", commrank);
 	}
 	
 	// Crashes with -O3 for some reason...
@@ -805,13 +805,13 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	}
 	*/
 
-	if (DEBUG) printf("Making delnet on process %d\n", commrank);
+	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
 	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
-	if (DEBUG) printf("Made delnet on process %d\n", commrank);
+	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
 
 
 	/* set up state for simulation */
-	if (DEBUG) printf("Allocating state on rank %d\n", commrank);
+	if (SU_DEBUG) printf("Allocating state on rank %d\n", commrank);
 	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
@@ -824,7 +824,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	}
 
 	/* initialize synapse weights */
-	if (DEBUG) printf("Initializing synapses on rank %d\n", commrank);
+	if (SU_DEBUG) printf("Initializing synapses on rank %d\n", commrank);
 	unsigned int numsyn_exc = 0;
 
 	// Find out number of excitatory synapses
@@ -853,7 +853,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 
 	}
 
-	if (DEBUG) {
+	if (SU_DEBUG) {
 		printf("On rank %d we think there are %d excitatory synapses.\n",
 				commrank, numsyn_exc);
 	}
@@ -873,7 +873,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	m->traces_syn = traces_syn;
 	m->synapses = synapses_local;
 
-	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
+	if (SU_DEBUG) printf("About to free graph on rank %d\n", commrank);
 	free(graph);
 	//free(synapses);
 

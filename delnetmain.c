@@ -17,7 +17,7 @@
 #include "spkrcd.h"
 
 #define PROFILING 1
-#define DEBUG 1
+#define DN_MAIN_DEBUG 1
 
 #define DN_TRIALTYPE_NEW 0
 #define DN_TRIALTYPE_RESUME 1
@@ -39,18 +39,9 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 
 	/* Set up MPI Datatype for spikes */
-	const int 		nitems = 2;
-	int 			blocklengths[2] = {1, 1};
-	MPI_Datatype	types[2] = {MPI_UNSIGNED, MPI_DOUBLE};
-	MPI_Datatype	mpi_spike_type;
-	MPI_Aint  		offsets[2];
+	MPI_Datatype mpi_spike_type = sr_commitmpispiketype();
 
-	offsets[0] = offsetof(su_mpi_spike, i);
-	offsets[1] = offsetof(su_mpi_spike, t);
-	MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_spike_type);
-	MPI_Type_commit(&mpi_spike_type);
-	
-	/* set parameters from (dumb) CLI */
+	/* Check number of inputs (needs three) */
 	if (argc != 4) {
 		printf("Input: Trial type (0 or 1), input name, output name.\n");
 		exit(-1);
@@ -74,11 +65,11 @@ int main(int argc, char *argv[])
 		strcat(graph_name, "_graph.bin");
 		m = su_mpi_izhiblobstdpmodel(model_name, commrank, commsize);
 		//m = su_mpi_izhimodelfromgraph(model_name, graph_name, commrank, commsize);
-		if (DEBUG) printf("Made model on process %d\n", commrank);
+		if (DN_MAIN_DEBUG) printf("Made model on process %d\n", commrank);
 	} else if (trialtype == DN_TRIALTYPE_RESUME) {
 		strcat(model_name, "_model.bin");
 		m = su_mpi_globalload(model_name, commrank, commsize);
-		if (DEBUG) printf("Loaded model on process %d\n", commrank);
+		if (DN_MAIN_DEBUG) printf("Loaded model on process %d\n", commrank);
 	} else {
 		printf("First argument must be 0 or 1. Exiting.\n");
 		exit(-1);
@@ -92,7 +83,7 @@ int main(int argc, char *argv[])
 	} else {
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	}
-	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
+	if (DN_MAIN_DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
 
 	/* set up file names */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -111,7 +102,7 @@ int main(int argc, char *argv[])
 	su_mpi_spike *input_forced;
 	long int ninput;
 	size_t loadsize;
-	if (DEBUG) printf("Loading input on process %d\n", commrank);
+	if (DN_MAIN_DEBUG) printf("Loading input on process %d\n", commrank);
 	if (commrank == 0) {
 		/* Read the input file data */
 		char infilename[MAX_NAME_LEN];
@@ -134,7 +125,7 @@ int main(int argc, char *argv[])
 		input_forced = malloc(sizeof(su_mpi_spike)*ninput);
 		MPI_Bcast( input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
 	}
-	if (DEBUG) printf("Loaded input on process %d\n", commrank);
+	if (DN_MAIN_DEBUG) printf("Loaded input on process %d\n", commrank);
 
 
 	/* run simulation */
@@ -153,7 +144,7 @@ int main(int argc, char *argv[])
 	strcpy(srfinalname, out_name);
 	strcat(srfinalname, "_spikes.txt");
 
-	sr_collateandclose(sr, srfinalname, commrank, commsize);
+	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
 
 	su_mpi_freemodel_l(m);
 	free(input_forced);

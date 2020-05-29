@@ -1,15 +1,5 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <limits.h>
 
 #include "spkrcd.h"
-#ifdef __amd64__
-#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-//#include <mpi.h>
-#else
-#include <mpi.h>
-#endif
 
 
 #if SIZE_MAX == UCHAR_MAX
@@ -35,13 +25,13 @@ spikerecord *sr_init(char *filename, size_t spikes_in_block)
 	sr->numspikes = 0;
 	sr->blockcount = 0;
 	sr->filename = filename;
-	sr->writemode = "w";
+	sr->writemode = "w"; 	// so initial write destroys previous
 	sr->spikes = malloc(sizeof(spike)*spikes_in_block);
 
 	return sr;
 }
 
-void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time)
+void sr_save_spike(spikerecord *sr, unsigned long neuron, double time)
 {
 	if (sr->blockcount < sr->blocksize) {
 		sr->spikes[sr->blockcount].neuron = neuron;
@@ -53,13 +43,13 @@ void sr_save_spike(spikerecord *sr, int neuron, SR_FLOAT_T time)
 		FILE *spike_file;
 		spike_file = fopen(sr->filename, sr->writemode);
 		for (int i=0; i < sr->blocksize; i++) {
-			fprintf(spike_file, "%f  %d\n", 
+			fprintf(spike_file, "%f  %lu\n", 
 					sr->spikes[i].time,
 					sr->spikes[i].neuron);	
 		}
 		fclose(spike_file);
 
-		sr->writemode = "a";
+		sr->writemode = "a"; 	// always append after first write
 		sr->spikes[0].neuron = neuron;
 		sr->spikes[0].time = time;
 		sr->blockcount = 1;
@@ -80,35 +70,28 @@ int *len_to_offsets(int *lens, int n)
 }
 
 
-static spike *s1 = 0;
-static spike *s2 = 0;
-static float diff = 0.0;
+static spike *scmp1 = 0;
+static spike *scmp2 = 0;
+static double diff = 0.0;
 
 int spkcomp(const void *spike1, const void * spike2) {
-	s1 = (spike *)spike1;
-	s2 = (spike *)spike2;
-	diff = s1->time - s2->time;
+	scmp1 = (spike *)spike1;
+	scmp2 = (spike *)spike2;
+	diff = scmp1->time - scmp2->time;
 
 	if (diff < 0)
 		return -1;
 	else if (diff > 0)
 		return 1;
 	else 
-		return s1->neuron - s2->neuron;
+		return scmp1->neuron - scmp2->neuron;
 }
 
-/*
- * Read spikes written by each process into memory, sort by time,
- * write into a unified file, delete individual files. 
- *
- * Very naive, essentially sequential approach, refine later.
- */
-void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int commsize)
+MPI_Datatype sr_commitmpispiketype()
 {
-	/* Set up MPI Datatype for spikes */
 	const int 		nitems = 2;
 	int 			blocklengths[2] = {1, 1};
-	MPI_Datatype	types[2] = {MPI_INT, MPI_FLOAT}; 	// <- think float is double -- check
+	MPI_Datatype	types[2] = {MPI_UNSIGNED_LONG, MPI_DOUBLE};
 	MPI_Datatype	mpi_spike_type;
 	MPI_Aint  		offsets[2];
 
@@ -120,11 +103,25 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int 
 		exit(-1);
 	}
 
+	return mpi_spike_type;
+}
+
+/*
+ * Read spikes written by each process into memory, sort by time,
+ * write into a unified file, delete individual files. 
+ *
+ * Very naive, essentially sequential approach, refine later.
+ */
+void sr_collateandclose(spikerecord *sr, char *finalfilename,
+						int commrank, int commsize,
+						MPI_Datatype mpi_spike_type)
+{
+	/* Set up MPI Datatype for spikes */
 	/* Each rank finishing writing its local file */		
 	FILE *spike_file;
 	spike_file = fopen(sr->filename, sr->writemode);
 	for (int i=0; i < sr-> numspikes % sr->blocksize; i++) {
-		fprintf(spike_file, "%f  %d\n", 
+		fprintf(spike_file, "%lf  %lu\n", 
 				sr->spikes[i].time,
 				sr->spikes[i].neuron);	
 	}
@@ -153,8 +150,8 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int 
 
 	/* Read spikes back into memory and delete process-local file*/
 	size_t i = 0;
-	fopen(sr->filename, "r");
-	while(fscanf(spike_file, "%f  %d", &localspikes[i].time, &localspikes[i].neuron) != EOF)
+	spike_file = fopen(sr->filename, "r");
+	while(fscanf(spike_file, "%lf  %lu", &localspikes[i].time, &localspikes[i].neuron) != EOF)
 		i++;
 	if (i != sr->numspikes) {
 		printf("Read %lu spikes, but should have been %lu spikes. Exiting.\n", i, sr->numspikes);
@@ -172,7 +169,7 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename, int commrank, int 
 		qsort(allspikes, numspikestotal, sizeof(spike), spkcomp);
 		spike_file = fopen(finalfilename, "w");
 		for (int j=0; j<numspikestotal; j++) 
-			fprintf(spike_file, "%lf  %d\n", allspikes[j].time, allspikes[j].neuron);
+			fprintf(spike_file, "%lf  %lu\n", allspikes[j].time, allspikes[j].neuron);
 		fclose(spike_file);
 	}
 
@@ -197,7 +194,7 @@ void sr_close(spikerecord *sr)
 	FILE *spike_file;
 	spike_file = fopen(sr->filename, sr->writemode);
 	for (int i=0; i < sr-> numspikes % sr->blocksize; i++) {
-		fprintf(spike_file, "%f  %d\n", 
+		fprintf(spike_file, "%f  %lu\n", 
 				sr->spikes[i].time,
 				sr->spikes[i].neuron);	
 	}
