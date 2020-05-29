@@ -60,7 +60,7 @@ paramutils.o: paramutils.c paramutils.h
 	$(CC) $(CFLAGS) $(LDLIBS) -c paramutils.c
 
 spkrcd.o: spkrcd.c spkrcd.h
-	$(CC) $(CFLAGS) $(LDLIBS) -c spkrcd.c
+	mpicc $(CFLAGS) $(LDLIBS) -c spkrcd.c
 
 delnetmpi-opt.o: delnetmpi.c delnetmpi.h
 	mpicc $(CFLAGS) -O3 $(LDLIBS) -c delnetmpi.c -o delnetmpi-opt.o
