@@ -967,7 +967,7 @@ void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 	fwrite(&m->commsize, sizeof(int), 1, f);
 	fwrite(&m->maxnode, sizeof(size_t), 1, f);
 	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
-	fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
+	//fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
 	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
@@ -995,8 +995,8 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	loadsize = fread(&m->nodeoffset, sizeof(size_t), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
-	loadsize = fread(&m->numsyn, sizeof(IDX_T), 1, f);
-	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
+	//loadsize = fread(&m->numsyn, sizeof(IDX_T), 1, f);
+	//if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
 	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }

@@ -60,7 +60,7 @@ typedef struct su_mpi_model_l_s {
 	int commsize;
 	size_t maxnode;
 	size_t nodeoffset;
-	IDX_T numsyn;
+	//IDX_T numsyn;
 	su_mpi_modelparams p;
 	dn_mpi_delaynet *dn;
 	su_mpi_neuron  *neurons;

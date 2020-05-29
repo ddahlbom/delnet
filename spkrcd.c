@@ -151,8 +151,9 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 	/* Read spikes back into memory and delete process-local file*/
 	size_t i = 0;
 	spike_file = fopen(sr->filename, "r");
-	while(fscanf(spike_file, "%lf  %lu", &localspikes[i].time, &localspikes[i].neuron) != EOF)
-		i++;
+	while(fscanf(spike_file, "%lf  %lu",
+					&localspikes[i].time,
+					&localspikes[i].neuron) != EOF) i++;
 	if (i != sr->numspikes) {
 		printf("Read %lu spikes, but should have been %lu spikes. Exiting.\n", i, sr->numspikes);
 		exit(-1);
