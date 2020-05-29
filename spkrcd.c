@@ -5,8 +5,8 @@
 
 #include "spkrcd.h"
 #ifdef __amd64__
-//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#include <mpi.h>
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include <mpi.h>
 #else
 #include <mpi.h>
 #endif

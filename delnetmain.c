@@ -6,8 +6,8 @@
 #include <stddef.h>
 
 #ifdef __amd64__
-//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#include <mpi.h>
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include <mpi.h>
 #else
 #include <mpi.h>
 #endif
@@ -19,6 +19,11 @@
 #define PROFILING 1
 #define DEBUG 1
 
+#define DN_TRIALTYPE_NEW 0
+#define DN_TRIALTYPE_RESUME 1
+
+#define MAX_NAME_LEN 512
+
 /*************************************************************
  *  Main
  *************************************************************/
@@ -26,8 +31,6 @@ int main(int argc, char *argv[])
 {
 	su_mpi_model_l *m;
 	su_mpi_trialparams tp;
-	char *infilename;
-	char outfilename[256];
 	int commsize, commrank;
 
 	/* Init MPI */
@@ -48,22 +51,33 @@ int main(int argc, char *argv[])
 	MPI_Type_commit(&mpi_spike_type);
 	
 	/* set parameters from (dumb) CLI */
-	if (argc < 7) {
-		printf("Need trial type (0 - new model, 1 - loadmodel), model\
-				filename (parameter file or existing model), graph filename, trial\
-				parameter file,\
-				input file, and a file name.  (Graph name ommited to resumed trial). Exiting.\n");
+	if (argc != 4) {
+		printf("Input: Trial type (0 or 1), input name, output name.\n");
 		exit(-1);
 	}
 
+	char *in_name = argv[2];
+	char *out_name = argv[3];
+
+	char model_name[MAX_NAME_LEN];
+	char graph_name[MAX_NAME_LEN];
+	char tparams_name[MAX_NAME_LEN];
+	strcpy(model_name, in_name);
+	strcpy(graph_name, in_name);
+	strcpy(tparams_name, in_name);
+
+	int trialtype = atoi(argv[1]);
 
 	/* model create or load */
-	if (atoi(argv[1]) == 0) {
-		//m = su_mpi_izhiblobstdpmodel(argv[2], commrank, commsize);
-		m = su_mpi_izhimodelfromgraph(argv[2], argv[3], commrank, commsize);
+	if (trialtype == DN_TRIALTYPE_NEW) {
+		strcat(model_name, "_mparams.txt");
+		strcat(graph_name, "_graph.bin");
+		m = su_mpi_izhiblobstdpmodel(model_name, commrank, commsize);
+		//m = su_mpi_izhimodelfromgraph(model_name, graph_name, commrank, commsize);
 		if (DEBUG) printf("Made model on process %d\n", commrank);
-	} else if (atoi(argv[1]) == 1) {
-		m = su_mpi_globalload(argv[2], commrank, commsize);
+	} else if (trialtype == DN_TRIALTYPE_RESUME) {
+		strcat(model_name, "_model.bin");
+		m = su_mpi_globalload(model_name, commrank, commsize);
 		if (DEBUG) printf("Loaded model on process %d\n", commrank);
 	} else {
 		printf("First argument must be 0 or 1. Exiting.\n");
@@ -72,7 +86,8 @@ int main(int argc, char *argv[])
 
 	/* process trial parameters */
 	if (commrank == 0) {
-		su_mpi_readtparameters(&tp, argv[4]);
+		strcat(tparams_name, "_tparams.txt");
+		su_mpi_readtparameters(&tp, tparams_name);
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	} else {
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -80,17 +95,13 @@ int main(int argc, char *argv[])
 	if (DEBUG) printf("Loaded trial parameters on process %d\n", commrank);
 
 	/* set up file names */
-	char *trialname = argv[6];
-	infilename = argv[5];
-	strcpy(outfilename, trialname);
-
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/* set up spike recorder on each rank */
-	char srname[256];
-	char rankstr[256];
+	char srname[MAX_NAME_LEN];
+	char rankstr[MAX_NAME_LEN];
 	sprintf(rankstr, "_%d_%d", commsize, commrank);
-	strcpy(srname, outfilename);
+	strcpy(srname, out_name);
 	strcat(srname, rankstr);
 	strcat(srname, "_spikes.txt");
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
@@ -103,6 +114,9 @@ int main(int argc, char *argv[])
 	if (DEBUG) printf("Loading input on process %d\n", commrank);
 	if (commrank == 0) {
 		/* Read the input file data */
+		char infilename[MAX_NAME_LEN];
+		strcpy(infilename, in_name);
+		strcat(infilename, "_input.bin");
 		infile = fopen(infilename, "rb");
 		loadsize = fread(&ninput, sizeof(long int), 1, infile);
 		if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
@@ -125,18 +139,18 @@ int main(int argc, char *argv[])
 
 	/* run simulation */
 	su_mpi_runstdpmodel(m, tp, input_forced, ninput,
-						sr, trialname, commrank, commsize, PROFILING);
+						sr, out_name, commrank, commsize, PROFILING);
 
 
 	/* save resulting model state */
 	//su_mpi_savemodel_l(m, outfilename, commsize, commrank);
-	su_mpi_savesynapses(m, trialname, commrank, commsize);
-	su_mpi_globalsave(m, trialname, commrank, commsize);
+	su_mpi_savesynapses(m, out_name, commrank, commsize);
+	su_mpi_globalsave(m, out_name, commrank, commsize);
 
 	/* Clean up */
 	//sr_close(sr);
 	char srfinalname[256];
-	strcpy(srfinalname, trialname);
+	strcpy(srfinalname, out_name);
 	strcat(srfinalname, "_spikes.txt");
 
 	sr_collateandclose(sr, srfinalname, commrank, commsize);

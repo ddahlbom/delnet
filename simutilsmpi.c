@@ -6,10 +6,10 @@
 
 
 #ifdef __amd64__
-//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#include <mpi.h>
-//#define CLOCKSPEED 1512000000
-#define CLOCKSPEED 2600000000
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include <mpi.h>
+#define CLOCKSPEED 1512000000
+//#define CLOCKSPEED 2600000000
 typedef unsigned long long ticks;
 char perfFileName[] = "performance_data.txt";
 static __inline__ ticks getticks(void)
@@ -558,38 +558,53 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	free(nextrand);
 }
 
+
 unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 {
-	long int *graph, n;
+	long int *graph=0, n;
+	unsigned int *ugraph = 0;
 
 	if (commrank == 0) {
 		FILE *f;
 		size_t loadsize;
 
 		f = fopen(name, "rb");
+
 		checkfileload(f, name);
 		loadsize = fread(&n, sizeof(long int), 1, f);
 		if (loadsize != 1) { printf("Failed to load graph.\n"); exit(-1); }
 		graph = malloc(sizeof(long int)*n*n);
 		loadsize = fread(graph, sizeof(long int), n*n, f);
 		if (loadsize != n*n) { printf("Failed to load graph.\n"); exit(-1); }
+
 		fclose(f);
 
-		MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		m->p.num_neurons = n;
-		MPI_Bcast(graph, n*n, MPI_LONG, 0, MPI_COMM_WORLD);
+		ugraph = malloc(sizeof(unsigned int)*n*n);
+		for (size_t i=0; i<n*n; i++)
+			ugraph[i] = (unsigned int) graph[i];
+		free(graph);
+
+
+		if (MPI_SUCCESS != MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+
 	} else {
-		MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		m->p.num_neurons = n;
-		graph = malloc(sizeof(long int)*n*n);
-		MPI_Bcast(graph, n*n, MPI_LONG, 0, MPI_COMM_WORLD);
+		if (MPI_SUCCESS != MPI_Bcast(&n, 1, MPI_LONG, 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+		ugraph = malloc(sizeof(unsigned int)*n*n);
+		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
 	}
-
-	unsigned int *ugraph = malloc(sizeof(unsigned int)*n*n);
-	for (size_t i=0; i<n*n; i++)
-		ugraph[i] = (unsigned int) graph[i];
-
-	free(graph);
 
 	return ugraph;
 }
@@ -600,7 +615,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 									      int commrank, int commsize)
 {
 	unsigned int n, n_exc, i;
-	unsigned int *graph;
+	unsigned int *graph = 0;
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 
 	/* Give each rank a different seed */
@@ -630,12 +645,19 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 	/* load graph on all ranks (uses bcast) */ 
 	graph = su_mpi_loadgraph(graphfilename, m, commrank);
-	printf("Made it this far, ma! Got the graph!\n");
 
+	printf("Made it this far, ma! Got the graph!\n");
 	if (DEBUG) printf("Making delnet on process %d\n", commrank);
+
 	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
+
 	if (DEBUG) printf("Made delnet on process %d\n", commrank);
 	printf("Made it this far, ma! Made the graph!\n");
+	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
+
+	free(graph);
+
+	if (DEBUG) printf("Freed graph on rank %d\n", commrank);
 
 
 	/* set up state for simulation */
@@ -646,9 +668,11 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 	for (i=0; i<maxnode; i++) {
 		if (nodeoffset + i < n_exc)
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default,
+										  g_a_exc, g_d_exc);
 		else
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
+			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default,
+										  g_a_inh, g_d_inh);
 	}
 
 	/* initialize synapse weights */
@@ -700,13 +724,12 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	m->traces_syn = traces_syn;
 	m->synapses = synapses_local;
 
-	if (DEBUG) printf("About to free graph on rank %d\n", commrank);
-	free(graph);
-	if (DEBUG) printf("Freed graph on rank %d\n", commrank);
 	//free(synapses);
+	printf("On rank %d: %g\n", commrank, m->p.num_neurons);
 
 	return m;
 }
+
 
 /* make models */
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
@@ -739,13 +762,13 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 	m->maxnode = maxnode;
 	m->nodeoffset = nodeoffset;
 
-	/* make sure all using the same graph -- CHANGE THIS TO BCAST! */
+	/* make sure all using the same graph -- note Bcast version below */
 	if (commrank == 0) {
 		graph = su_mpi_iblobgraph(&m->p);
 		if (commsize > 1) {
-			MPI_Request *sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			MPI_Request *recvReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			MPI_Status *recvStatus = malloc(sizeof(MPI_Status) * (commsize-1));
+			//MPI_Request *sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
+			//MPI_Request *recvReq = malloc(sizeof(MPI_Request) * (commsize-1));
+			//MPI_Status *recvStatus = malloc(sizeof(MPI_Status) * (commsize-1));
 
 			/* send graph to other processes */
 			for (int k=1; k<commsize; k++) {
@@ -755,17 +778,32 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 				if (DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
 			}
 
-			free(sendReq);
-			free(recvReq);
-			free(recvStatus);
+			//free(sendReq);
+			//free(recvReq);
+			//free(recvStatus);
 		}
 	} else {
 		MPI_Status recvStatus;
 		graph = malloc(sizeof(unsigned int)*n*n);
 		if (DEBUG) printf("Waiting for graph on rank %d from rank 0\n", commrank);
 		MPI_Recv(graph, n*n, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &recvStatus);
+		if (recvStatus.MPI_ERROR != MPI_SUCCESS) {
+			printf("Houston, we have a problem!\n");
+			exit(-1);
+		}
 		if (DEBUG) printf("Received graph on rank %d from rank 0\n", commrank);
 	}
+	
+	// Crashes with -O3 for some reason...
+	/*
+	if (commrank == 0) {
+		graph = su_mpi_iblobgraph(&m->p);
+		MPI_Bcast(graph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+	} else {
+		graph = malloc(sizeof(unsigned int)*n*n);
+		MPI_Bcast(graph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+	}
+	*/
 
 	if (DEBUG) printf("Making delnet on process %d\n", commrank);
 	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);

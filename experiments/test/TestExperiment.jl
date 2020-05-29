@@ -23,14 +23,14 @@ a_post = 1.0
 # a_pre = 0.0337 * 10.0
 synmax = 10.0
 w_exc = 4.0
-w_inh = -6.0
+w_inh = -5.0
 
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post, synmax,
 				 w_exc, w_inh)
 
 # Training trial Parameters
-dur = 1.0
+dur = 10.0
 λ_noise = 3.0
 randspikesize = 20.0
 randinput = 1
