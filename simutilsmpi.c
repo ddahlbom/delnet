@@ -687,7 +687,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 		for (int q=0; q < commsize; q++) {
 			if (q != commrank) {
 				MPI_Send(&numsyn_exc,
-						sizeof(unsigned int),
+						1,
 						MPI_UNSIGNED, 
 						q, 
 						101,
@@ -696,7 +696,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 		}
 	} else {
 		MPI_Recv(&numsyn_exc,
-				sizeof(unsigned int),
+				1,
 				MPI_UNSIGNED,
 				MPI_ANY_SOURCE,
 				101,
@@ -835,7 +835,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 		for (int q=0; q < commsize; q++) {
 			if (q != commrank) {
 				MPI_Send(&numsyn_exc,
-						sizeof(unsigned int),
+						1,
 						MPI_UNSIGNED, 
 						q, 
 						101,
@@ -844,7 +844,7 @@ su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int
 		}
 	} else {
 		MPI_Recv(&numsyn_exc,
-				sizeof(unsigned int),
+				1,
 				MPI_UNSIGNED,
 				MPI_ANY_SOURCE,
 				101,
@@ -949,6 +949,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 		fwrite(synapses_sorted, sizeof(FLOAT_T), totallen, f);	
 		fclose(f);
 
+		free(offsets);
 		free(synlens);
 		free(synlens_i);
 		free(synapses_g);

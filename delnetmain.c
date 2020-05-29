@@ -63,8 +63,8 @@ int main(int argc, char *argv[])
 	if (trialtype == DN_TRIALTYPE_NEW) {
 		strcat(model_name, "_mparams.txt");
 		strcat(graph_name, "_graph.bin");
-		m = su_mpi_izhiblobstdpmodel(model_name, commrank, commsize);
-		//m = su_mpi_izhimodelfromgraph(model_name, graph_name, commrank, commsize);
+		//m = su_mpi_izhiblobstdpmodel(model_name, commrank, commsize);
+		m = su_mpi_izhimodelfromgraph(model_name, graph_name, commrank, commsize);
 		if (DN_MAIN_DEBUG) printf("Made model on process %d\n", commrank);
 	} else if (trialtype == DN_TRIALTYPE_RESUME) {
 		strcat(model_name, "_model.bin");
