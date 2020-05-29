@@ -6,8 +6,8 @@
 #include "simkernelsmpi.h"
 
 #ifdef __amd64__
-//#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-#include <mpi.h>
+#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
+//#include <mpi.h>
 #else
 #include <mpi.h>
 #endif
@@ -88,7 +88,8 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		t_local += dt;
 		if (t_local > t_max) t_local = 0; 
 	}
-	else if (tp->inputmode == INPUT_MODE_POISSON || INPUT_MODE_POISSON_EXCLUSIVE) {
+	else if (tp->inputmode == INPUT_MODE_POISSON ||
+			 tp->inputmode == INPUT_MODE_POISSON_EXCLUSIVE) {
 		if (waiting) {
 			if (t >= nextinputtime) {
 				waiting = false;
