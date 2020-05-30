@@ -20,8 +20,7 @@
 /*************************************************************
  *  Helper Functions
  *************************************************************/
-
-long int loadinput(char *in_name, su_mpi_spike *input_forced, MPI_Datatype mpi_spike_type, int commrank)
+long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type, int commrank)
 {
 	FILE *infile;
 	long int ninput;
@@ -33,20 +32,21 @@ long int loadinput(char *in_name, su_mpi_spike *input_forced, MPI_Datatype mpi_s
 		strcpy(infilename, in_name);
 		strcat(infilename, "_input.bin");
 		infile = fopen(infilename, "rb");
+		checkfileload(infile, infilename);
 		loadsize = fread(&ninput, sizeof(long int), 1, infile);
 		if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
-		input_forced = malloc(sizeof(su_mpi_spike)*ninput);
-		loadsize = fread(input_forced, sizeof(su_mpi_spike), ninput, infile);
+		*input_forced = malloc(sizeof(su_mpi_spike)*ninput);
+		loadsize = fread(*input_forced, sizeof(su_mpi_spike), ninput, infile);
 		if (loadsize != ninput) {printf("Failed to load input\n"); exit(-1); }
 		fclose(infile);
 		/* Broadcast to all ranks */
 		MPI_Bcast( &ninput, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		MPI_Bcast( input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
+		MPI_Bcast( *input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
 	} else {
 		/* Recieve input from rank 0 */
 		MPI_Bcast( &ninput, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		input_forced = malloc(sizeof(su_mpi_spike)*ninput);
-		MPI_Bcast( input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
+		*input_forced = malloc(sizeof(su_mpi_spike)*ninput);
+		MPI_Bcast( *input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
 	}
 	if (DN_MAIN_DEBUG) printf("Loaded input on process %d\n", commrank);
 
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 
 	/* load input sequence on each rank */
 	su_mpi_spike *input_forced = 0;
-	long int ninput = loadinput(in_name, input_forced, mpi_spike_type, commrank);
+	long int ninput = loadinput(in_name, &input_forced, mpi_spike_type, commrank);
 
 
 	/* run simulation */

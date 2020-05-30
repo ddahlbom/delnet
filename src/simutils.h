@@ -15,8 +15,6 @@
 /*************************************************************
  *  Structs
  *************************************************************/
-
-// make only one spike struct -- this mirrors spkrcd.h 
 typedef struct su_mpi_spike_s {
 	unsigned long i;
 	double t;
@@ -75,6 +73,8 @@ typedef struct su_mpi_model_l_s {
 /*************************************************************
  *  Function Declarations
  *************************************************************/
+/* Helper functions */
+void checkfileload(FILE *f, char *name);
 
 /* parameter bookkeeping */
 void su_mpi_readmparameters(su_mpi_modelparams *p, char *filename);
