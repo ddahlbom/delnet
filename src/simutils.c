@@ -51,7 +51,7 @@ static __inline__ ticks getticks(void)
  *  Functions
  *************************************************************/
 /* ----- Local Helper Functions ----- */
-void checkfileload(FILE *f, char*name)
+void checkfileload(FILE *f, char *name)
 {
 	if (f == NULL) {
 		perror(name);
@@ -62,23 +62,6 @@ void checkfileload(FILE *f, char*name)
 
 
 /* -------------------- Parameter Setting -------------------- */
-void su_mpi_setdefaultmparams(su_mpi_modelparams *p)
-{
-	p->fs = 1000.0;
-	p->num_neurons = 1000;
-	p->p_contact = 0.1;
-	p->p_exc = 0.8;
-	p->maxdelay = 20.0;
-	p->tau_pre = 0.02;
-	p->tau_post = 0.02;
-	p->a_pre = 0.12;
-	p->a_post = 0.1;
-	p->synmax = 10.0;
-	p->w_exc  = 6.0;
-	p->w_inh = -5.0;
-}
-
-
 void su_mpi_readmparameters(su_mpi_modelparams *p, char *filename)
 {
 	paramlist *pl = pl_readparams(filename);	
