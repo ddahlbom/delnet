@@ -131,8 +131,8 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 	return num;
 }
 
-void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs, IDX_T num_neurons,
-						FLOAT_T fs)
+void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
+						  IDX_T num_neurons, FLOAT_T fs)
 {
 	size_t k;
 	for (k=0; k<num_neurons; k++) {
