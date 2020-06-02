@@ -333,12 +333,17 @@ void dfn_synctargetinfo(idx_t **destoffsets, idx_t **dests,
 
 
 /*
- * Highly un-optimized delnet initialization function
+ * Un-optimized delnet initialization function
  */
 dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 									int commrank, int commsize)
 {
 	dnf_delaynet *dn = malloc(sizeof(dnf_delaynet));
+
+	if (n > commsize) {
+		printf("Must have fewer processes than nodes!\n Exiting.\n");
+		exit(-1);
+	}
 
 	/* Establish node parititioning across cranks */
 	idx_t *startidcs;
@@ -395,6 +400,13 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 		}
 	}
 
+	// ASSERTION -- Delete later -- just for logic testing
+	if (counter != numinputstotal) {
+		printf("counter: %lu, total inputs: %lu\n", counter, numinputstotal);
+		exit(-1);
+	}
+
+
 	/* ---------- global node to process-local target bookkeeping ---------- */
 
 	/* Initialize lists of output destinations for each node */
@@ -418,6 +430,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 		i1 = startidcs[sd];
 		i2 = sd < commsize - 1 ? startidcs[sd+1] : n;
 		numnodes_l = i2-i1;
+		if (numnodes_l != nodesperrank[sd]) {printf("Nooo...\n"); exit(-1);}
 		destslists[sd] = malloc(sizeof(idx_t*)*numnodes_l);
 		destlens[sd] = malloc(sizeof(idx_t)*numnodes_l);
 		destoffsets[sd] = malloc(sizeof(idx_t)*numnodes_l);
@@ -450,7 +463,14 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 				dests[sd][c] = destslists[sd][i-i1][j];
 				c++;
 			}
-			free(destslists[sd][i-i1]);
+			if (destlens[sd][i-i1] > 0)
+				free(destslists[sd][i-i1]);
+		}
+		//ASSERTION -- logic test only
+		if (c != destlenstot[sd]) {
+			printf("Bad transfer of desintation array\n");
+			printf("c: %lu, destlenstot: %lu\n", c, destlenstot[sd]);
+			exit(-1);
 		}
 		free(destslists[sd]);
 	}
