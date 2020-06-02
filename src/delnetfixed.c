@@ -13,7 +13,8 @@
 
 typedef enum dnf_error {
 	DNF_SUCCESS,
-	DNF_BUFFER_OVERFLOW
+	DNF_BUFFER_OVERFLOW,
+	DNF_GRAPHINIT_FAIL
 } dnf_error;
 
 /* --------------------	Structures -------------------- */
@@ -394,13 +395,6 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 		}
 	}
 
-	// ASSERTION -- Delete later -- just for logic testing
-	if (counter != numinputstotal) {
-		printf("counter: %lu, total inputs: %lu\n", counter, numinputstotal);
-		exit(-1);
-	}
-
-
 	/* ---------- global node to process-local target bookkeeping ---------- */
 
 	/* Initialize lists of output destinations for each node */
@@ -424,7 +418,6 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 		i1 = startidcs[sd];
 		i2 = sd < commsize - 1 ? startidcs[sd+1] : n;
 		numnodes_l = i2-i1;
-		if (numnodes_l != nodesperrank[sd]) {printf("Nooo...\n"); exit(-1);}
 		destslists[sd] = malloc(sizeof(idx_t*)*numnodes_l);
 		destlens[sd] = malloc(sizeof(idx_t)*numnodes_l);
 		destoffsets[sd] = malloc(sizeof(idx_t)*numnodes_l);
@@ -457,14 +450,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 				dests[sd][c] = destslists[sd][i-i1][j];
 				c++;
 			}
-			if (destlens[sd][i-i1] > 0)
-				free(destslists[sd][i-i1]);
-		}
-		//ASSERTION -- logic test only
-		if (c != destlenstot[sd]) {
-			printf("Bad transfer of desintation array\n");
-			printf("c: %lu, destlenstot: %lu\n", c, destlenstot[sd]);
-			exit(-1);
+			free(destslists[sd][i-i1]);
 		}
 		free(destslists[sd]);
 	}
@@ -480,6 +466,21 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 }
 
 
+void dnf_freedelaynet(dnf_delaynet *dn, int commsize)
+{
+	free(dn->nodeinputbuf);
+	free(dn->nodebufferoffsets);
+	free(dn->numbuffers);
+	free(dn->buffers);
+
+	for (idx_t i=0; i<commsize; i++) {
+		free(dn->dests[i]);
+		free(dn->destoffsets[i]);
+		free(dn->destlens[i]);
+	}
+
+	free(dn->destlenstot);
+}
 
 
 
@@ -504,29 +505,29 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 
-	/*
-	dnf_delaybuf buf;
-	dnf_bufinit(&buf, 6);
-	data_t output = 0.0;
+	if (commrank == 0) {
+		dnf_delaybuf buf;
+		dnf_bufinit(&buf, 6);
+		data_t output = 0.0;
 
-	idx_t eventtimes[] = {3, 11, 18, 54, 76, 92};
-	idx_t n = 6;
+		idx_t eventtimes[] = {3, 11, 18, 54, 76, 92};
+		idx_t n = 6;
 
-	for (idx_t i=0; i<100; i++) {
-		printf("Step %lu: %lf\n", i, output);
-		if (in(i, eventtimes, n))
-			dnf_recordevent(&buf);
-		dnf_bufadvance(&buf, &output);
+		for (idx_t i=0; i<100; i++) {
+			printf("Step %lu: %lf\n", i, output);
+			if (in(i, eventtimes, n))
+				dnf_recordevent(&buf);
+			dnf_bufadvance(&buf, &output);
+		}
+
+		// test partitioning 
+		idx_t numpoints = 1000;
+		idx_t numranks = 7;
+		idx_t *startidcs = dnf_getstartidcs(numranks, numpoints);
+		for (int i=0; i<numranks; i++)
+			printf("Start index on rank %d: %lu\n", i, startidcs[i]);
+		free(startidcs);
 	}
-
-	// test partitioning 
-	idx_t numpoints = 1000;
-	idx_t numranks = 7;
-	idx_t *startidcs = dnf_getstartidcs(numranks, numpoints);
-	for (int i=0; i<numranks; i++)
-		printf("Start index on rank %d: %lu\n", i, startidcs[i]);
-	free(startidcs);
-	*/
 
 
 	/* test delnet from graph */
@@ -536,6 +537,8 @@ int main(int argc, char *argv[])
 								[12]= 5, [13]= 0, [14]= 0, [15]= 0 };
 
 	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
+
+	dnf_freedelaynet(dn, commsize);
 
 	MPI_Finalize();
 
