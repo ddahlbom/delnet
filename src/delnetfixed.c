@@ -114,6 +114,14 @@ idx_t dnf_nodeoffset(int commrank, int commsize, idx_t numpoints)
 	return offset;
 }
 
+idx_t *dnf_getlens(int commsize, idx_t numpoints)
+{
+	idx_t *lens = malloc(sizeof(idx_t)*commsize);
+	for (idx_t i=0; i<commsize; i++)
+		lens[i] = dnf_maxnode(i, commsize, numpoints);
+	return lens;
+}
+
 idx_t *dnf_getstartidcs(int commsize, idx_t numpoints)
 {
 	idx_t *startidcs = malloc(sizeof(idx_t)*commsize);
@@ -124,22 +132,6 @@ idx_t *dnf_getstartidcs(int commsize, idx_t numpoints)
 	return startidcs;
 }
 
-rankidx globaltolocal(idx_t idx_g, idx_t *startidcs)
-{
-	rankidx idx_l;
-
-
-
-	return idx_l;
-}
-
-
-idx_t localtoglobal(rankidx idx_l, idx_t *startidcs)
-{
-	idx_t idx_g;
-
-	return idx_g;
-}
 
 
 typedef struct dnf_listnode_uint_s { 	
@@ -148,22 +140,22 @@ typedef struct dnf_listnode_uint_s {
 } dnf_listnode_uint;
 
 
-typedef struct dnf_list_uint_s {
+typedef struct dnf_idxlist_s {
 	unsigned long count;
 	struct dnf_listnode_uint_s *head;
-} dnf_list_uint;
+} dnf_idxlist;
 
 
-dnf_list_uint *dnf_list_uint_init() {
-	dnf_list_uint *newlist;
-	newlist = malloc(sizeof(dnf_list_uint));
+dnf_idxlist *dnf_idxlist_init() {
+	dnf_idxlist *newlist;
+	newlist = malloc(sizeof(dnf_idxlist));
 	newlist->count = 0;
 	newlist->head = NULL; 
 	return newlist;
 }
 
 
-void dnf_list_uint_push(dnf_list_uint *l, unsigned long val) {
+void dnf_idxlist_push(dnf_idxlist *l, unsigned long val) {
 	dnf_listnode_uint *newnode;
 	newnode = malloc(sizeof(dnf_listnode_uint));
 	newnode->val = val;
@@ -173,7 +165,7 @@ void dnf_list_uint_push(dnf_list_uint *l, unsigned long val) {
 }
 
 
-unsigned long dnf_list_uint_pop(dnf_list_uint *l) {
+unsigned long dnf_idxlist_pop(dnf_idxlist *l) {
 	unsigned long val;
 	dnf_listnode_uint *temp;
 	if (l->head != NULL) {
@@ -190,9 +182,9 @@ unsigned long dnf_list_uint_pop(dnf_list_uint *l) {
 	return val;
 }
 
-void dnf_list_uint_free(dnf_list_uint *l) {
+void dnf_idxlist_free(dnf_idxlist *l) {
 	while (l->head != NULL) {
-		dnf_list_uint_pop(l);
+		dnf_idxlist_pop(l);
 	}
 	free(l);
 }
@@ -219,6 +211,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 
 	/* Build process-local delnet infrastructure */
 	idx_t n1, n2;
+	idx_t *nodesperrank = dnf_getlens(commsize, n);
 	n1 = startidcs[commrank];
 	n2 = commrank < commsize - 1 ? startidcs[commrank+1] : n;
 	dn->numnodes = n2-n1;
@@ -229,11 +222,11 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	numinputs = calloc(n2-n1, sizeof(idx_t));
 	for (idx_t c=n1; c<n2; c++) {
 		for (idx_t r=0; r<n; r++) 
-			if (graph[r*n+c] != 0) numinputs[c] += 1;
+			if (graph[r*n+c] != 0) numinputs[c-n1] += 1;
 	}
 	
 
-	/* initialize delaylines and record their origin */
+	/* ----- Initialize delaylines and record their origin ----- */
 	idx_t *bufferinputnodes = 0;
 	idx_t *bufferoffsets = 0;
 	idx_t numinputstotal = 0;
@@ -252,7 +245,6 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 
 	bufferinputnodes = malloc(sizeof(idx_t)*numinputstotal);
 	idx_t counter = 0;
-	idx_t counter_old = 0;
 	for (idx_t c=n1; c<n2; c++) {
 		for (idx_t r=0; r<n; r++) {
 			if(graph[r*n+c] != 0) {
@@ -262,6 +254,194 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 			}
 		}
 	}
+
+	// ASSERTION -- Delete later -- just for logic testing
+	if (counter != numinputstotal) {
+		printf("counter: %lu, total inputs: %lu\n", counter, numinputstotal);
+		exit(-1);
+	}
+
+
+	/* ---------- global node to process-local target bookkeeping ---------- */
+
+	/* Initialize lists of output destinations for each node */
+	dnf_idxlist **nodedestinations = malloc(sizeof(dnf_idxlist *)*n); 
+	for (idx_t i=0; i<n; i++)
+		nodedestinations[i] = dnf_idxlist_init();
+
+	/* populate output destinations */
+	for (idx_t i=0; i<numinputstotal; i++)
+		dnf_idxlist_push(nodedestinations[bufferinputnodes[i]], i);
+
+	
+	/* consolidate output destinations into arrays */
+	idx_t **destoffsets = malloc(sizeof(idx_t*)*commsize);
+	idx_t **destlens = malloc(sizeof(idx_t*)*commsize);
+	idx_t ***destslists = malloc(sizeof(idx_t**)*commsize);
+	idx_t *destlenstot = malloc(sizeof(idx_t)*commsize);
+
+	for (idx_t sd=0; sd<commsize; sd++) {
+		idx_t i1, i2, numnodes_l;
+		i1 = startidcs[commrank];
+		i2 = commrank < commsize - 1 ? startidcs[commrank+1] : n;
+		numnodes_l = i2-i1;
+		if (numnodes_l != nodesperrank[sd]) {printf("Nooo...\n"); exit(-1);}
+		destslists[sd] = malloc(sizeof(idx_t*)*numnodes_l);
+		destlens[sd] = malloc(sizeof(idx_t)*numnodes_l);
+		destoffsets[sd] = malloc(sizeof(idx_t)*numnodes_l);
+		idx_t runningoffset = 0;
+		for (idx_t i=i1; i<i2; i++) {
+			destoffsets[sd][i] = runningoffset;
+			destlens[sd][i] = nodedestinations[i]->count;
+			destslists[sd][i] = malloc(sizeof(idx_t)*destlens[sd][i]);
+			for (idx_t j=0; j<destlens[sd][i]; j++)
+				/* note - i1 -- so in process local indexing */
+				destslists[sd][i][j] = dnf_idxlist_pop(nodedestinations[i]) - i1; 
+			dnf_idxlist_free(nodedestinations[i]);
+			runningoffset += destlens[sd][i];
+		}
+		destlenstot[sd] = runningoffset;
+	}
+	free(nodedestinations);
+
+	/* Consolidate list of destinations into master array */
+	idx_t **dests = malloc(sizeof(idx_t*)*commsize);
+	for (idx_t sd = 0; sd<commsize; sd++) {
+		dests[sd] = malloc(sizeof(idx_t)*destlenstot[sd]);
+		idx_t i1, i2, numnodes_l;
+		i1 = startidcs[commrank];
+		i2 = commrank < commsize-1 ? startidcs[commrank+1] : n;
+		numnodes_l = i2-i1;
+		idx_t c = 0;
+		for (idx_t i=i1; i<i2; i++) {
+			for (idx_t j=0; j<destlens[sd][i]; j++) {
+				dests[sd][c] = destslists[sd][i][j];
+				c++;
+			}
+			free(destslists[sd][i]);
+		}
+		//ASSERTION -- logic test only
+		if (c != destlenstot[sd]) {
+			printf("Bad transfer of desintation array\n");
+			printf("c: %lu, destlenstot: %lu\n", c, destlenstot[sd]);
+			exit(-1);
+		}
+		free(destslists[sd]);
+	}
+	free(destslists);
+
+
+	/* Set up data for receiving target info */
+	idx_t **destoffsets_l = malloc(sizeof(idx_t*)*commsize);
+	idx_t **destlens_l = malloc(sizeof(idx_t*)*commsize);
+	idx_t **dests_l = malloc(sizeof(idx_t*)*commsize);
+	idx_t *destlenstot_l = malloc(sizeof(idx_t)*commsize);
+
+	for (idx_t r=0; r<commsize; r++) {
+		destoffsets_l[r] = malloc(sizeof(idx_t)*nodesperrank[r]);
+		destlens_l[r] = malloc(sizeof(idx_t)*nodesperrank[r]);
+	}
+
+	MPI_Request *sendreqoffsets = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *sendreqlens = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *sendreqlentot = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *sendreqdests = malloc(sizeof(MPI_Request)*commsize);
+
+	MPI_Request *recvreqoffsets = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *recvreqlens = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *recvreqlentot = malloc(sizeof(MPI_Request)*commsize);
+	MPI_Request *recvreqdests = malloc(sizeof(MPI_Request)*commsize);
+
+	/* Send node destinations metadata to this rank to all other ranks */
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Isend(destoffsets[r],
+				  nodesperrank[r],
+				  mpi_idx_t,
+				  r,
+				  0,
+				  MPI_COMM_WORLD,
+				  &sendreqoffsets[r]);
+		MPI_Isend(destlens[r],
+				  nodesperrank[r],
+				  mpi_idx_t,
+				  r,
+				  1,
+				  MPI_COMM_WORLD,
+				  &sendreqlens[r]);
+		MPI_Isend(&destlenstot[r],
+				  1,
+				  mpi_idx_t,
+				  r,
+				  2,
+				  MPI_COMM_WORLD,
+				  &sendreqlentot[r]);
+	}
+
+	/* Recieve destinations metadata from other processes */
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Irecv(destoffsets_l[r],
+				  nodesperrank[r],
+				  mpi_idx_t,
+				  r,
+				  0,
+				  MPI_COMM_WORLD,
+				  &recvreqoffsets[r]);
+		MPI_Irecv(destlens_l[r],
+				  nodesperrank[r],
+				  mpi_idx_t,
+				  r,
+				  1,
+				  MPI_COMM_WORLD,
+				  &recvreqlens[r]);
+		MPI_Irecv(&destlenstot_l[r],
+				  1,
+				  mpi_idx_t,
+				  r,
+				  2,
+				  MPI_COMM_WORLD,
+				  &recvreqlentot[r]);
+	}
+
+	/* Wait for transactions to complete */
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Wait(&recvreqoffsets[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&recvreqlens[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&recvreqlentot[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&sendreqoffsets[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&sendreqlens[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&sendreqlentot[r], MPI_STATUS_IGNORE);
+	}
+
+	for (idx_t r=0; r<commsize; r++) 
+		dests_l[r] = malloc(sizeof(idx_t)*destlenstot_l[r]);
+
+	/* Send node destinations to this rank to all other ranks */
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Isend(dests[r],
+				  destlenstot[r],
+				  mpi_idx_t,
+				  r,
+				  3,
+				  MPI_COMM_WORLD,
+				  &sendreqdests[r]);
+	}
+
+	/* Recieve destinations from other processes */
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Irecv(dests_l[r],
+				  destlenstot_l[r],
+				  mpi_idx_t,
+				  r,
+				  3,
+				  MPI_COMM_WORLD,
+				  &recvreqdests[r]);
+	}
+
+	for (idx_t r=0; r<commsize; r++) {
+		MPI_Wait(&recvreqdests[r], MPI_STATUS_IGNORE);
+		MPI_Wait(&sendreqdests[r], MPI_STATUS_IGNORE);
+	}
+
 
 	return dn;
 }
@@ -291,6 +471,7 @@ int main(int argc, char *argv[])
 	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 
+	/*
 	dnf_delaybuf buf;
 	dnf_bufinit(&buf, 6);
 	data_t output = 0.0;
@@ -305,18 +486,19 @@ int main(int argc, char *argv[])
 		dnf_bufadvance(&buf, &output);
 	}
 
-	/* test partitioning */
+	// test partitioning 
 	idx_t numpoints = 1000;
 	idx_t numranks = 7;
 	idx_t *startidcs = dnf_getstartidcs(numranks, numpoints);
 	for (int i=0; i<numranks; i++)
 		printf("Start index on rank %d: %lu\n", i, startidcs[i]);
+	*/
 
 
 	/* test delnet from graph */
 	unsigned long graph[16] = { [0] = 0, [1] = 2, [2] = 5, [3] = 0,
 								[4] = 0, [5] = 0, [6] = 3, [7] = 3,
-								[8] = 0, [9] = 0, [10]= 4, [11]= 4,
+								[8] = 0, [9] = 0, [10]= 0, [11]= 4,
 								[12]= 5, [13]= 0, [14]= 0, [15]= 0 };
 
 	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
