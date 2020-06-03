@@ -340,7 +340,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 {
 	dnf_delaynet *dn = malloc(sizeof(dnf_delaynet));
 
-	if (n > commsize) {
+	if (n < commsize) {
 		printf("Must have fewer processes than nodes!\n Exiting.\n");
 		exit(-1);
 	}
@@ -476,11 +476,20 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	}
 	free(destslists);
 
-
 	/* Set up data for receiving target info */
 	dfn_synctargetinfo(destoffsets, dests, destlens, destlenstot,
 					   dn, nodesperrank, commsize);
 
+
+	/* Clean up remaining unused allocations */
+	free(startidcs);
+	free(bufferinputnodes);
+	free(destoffsets);
+	free(destlens);
+	free(destlenstot);
+	for (idx_t r=0; r<commsize; r++)
+		free(dests[r]);
+	free(dests);
 
 	return dn;
 }
