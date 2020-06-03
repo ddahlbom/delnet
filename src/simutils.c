@@ -5,7 +5,8 @@
 #include <string.h>
 #include <mpi.h>
 
-#include "delnet.h"
+//#include "delnet.h"
+#include "delnetfixed.h"
 #include "simutils.h"
 #include "simkernels.h"
 #include "paramutils.h"
