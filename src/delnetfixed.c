@@ -3,8 +3,11 @@
 #include <mpi.h>
 #include <math.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "delnetfixed.h"
+
+#define DEBUG 0
 
 
 
@@ -140,58 +143,89 @@ void dnf_idxlist_free(dnf_idxlist *l) {
 
 
 /* --------------------	Primary Delaynet Functions -------------------- */
+static MPI_Request *sr_counts;
+static MPI_Request *sr;
+static MPI_Request *rr_counts;
+static MPI_Request *rr;
+static idx_t *outcounts;
+static idx_t *incounts;
+
+
 void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
-					int commsize)
+					int commrank, int commsize)
 {
+	for (idx_t i=0; i<commsize; i++)
+		outcounts[i] = 0;
+
+	if (DEBUG) printf("Rank %d: Loading send blocks\n", commrank);
 	/* load send blocks */
-	idx_t *counts = calloc(commsize, sizeof(idx_t)); // remove this allocation
 	for (idx_t n=0; n<numevents; n++) {
 		for (idx_t r=0; r<commsize; r++) {
-			counts[r] += dn->destlens[r][eventnodes[n]];
 			for (idx_t i=0; i<dn->destlens[r][eventnodes[n]]; i++) {
-				dn->sendblocks[r][counts[r]+i] = dn->dests[r][eventnodes[n]];
+				dn->sendblocks[r][outcounts[r]] =
+					dn->dests[r][dn->destoffsets[r][eventnodes[n]]+i];
+				outcounts[r]++;
 			}
 		}
 	}
 
-	// remove these allocations
-	MPI_Request *sr_counts = malloc(sizeof(MPI_Request)*commsize);
-	MPI_Request *sr = malloc(sizeof(MPI_Request)*commsize);
-	MPI_Request *rr_counts = malloc(sizeof(MPI_Request)*commsize);
-	MPI_Request *rr = malloc(sizeof(MPI_Request)*commsize);
-
+	if (DEBUG) printf("Rank %d: Loaded send blocks. Sending targets.\n", commrank);
 	/* non-blocking send */
 	for (idx_t r=0; r<commsize; r++) {
-		MPI_Isend(&counts[r], 1, mpi_idx_t, r, 0, MPI_COMM_WORLD, &sr_counts[r]);
-		MPI_Isend(dn->sendblocks[r], counts[r], mpi_idx_t, r, 1, MPI_COMM_WORLD,
-				  &sr[r]);
+		MPI_Isend(&outcounts[r], 1, mpi_idx_t, r,
+					0, MPI_COMM_WORLD, &sr_counts[r]);
+		MPI_Isend(dn->sendblocks[r], outcounts[r], mpi_idx_t, r,
+					1, MPI_COMM_WORLD, &sr[r]);
 	}
 
+	if (DEBUG) printf("Rank %d: Sent targets. Receiving counts and targets.\n", commrank);
 	/* Receives */
 	for (idx_t r=0; r<commsize; r++) 
-		MPI_Irecv(&counts[r], 1, mpi_idx_t, r, 0, MPI_COMM_WORLD, &rr_counts[r]);
+		MPI_Irecv(&incounts[r], 1, mpi_idx_t, r,
+					0, MPI_COMM_WORLD, &rr_counts[r]);
 
 	for (idx_t r=0; r<commsize; r++) 
 		MPI_Wait(&rr_counts[r], MPI_STATUS_IGNORE);
 
 	for (idx_t r=0; r<commsize; r++)
-		MPI_Irecv(&dn->recvblocks[r], counts[r], mpi_idx_t, r, 1, MPI_COMM_WORLD,
-				  &rr[r]);
+		MPI_Irecv(dn->recvblocks[r], incounts[r], mpi_idx_t, r,
+					1, MPI_COMM_WORLD, &rr[r]);
 
 	for (idx_t r=0; r<commsize; r++) 
 		MPI_Wait(&rr[r], MPI_STATUS_IGNORE);
 
-	/* record events */
-	for (idx_t r=0; r<commsize; r++) {
-		for (idx_t n=0; n<counts[r]; n++)
-			dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
+	if (DEBUG) {
+		for (idx_t r=0; r<commsize; r++) {
+			printf("%d: In count %lu: %lu\n", commrank, r, incounts[r]);
+			printf("\t");
+			for (idx_t i=0; i<incounts[r]; i++) {
+				printf("%lu ", dn->recvblocks[r][i]);
+			}
+			printf("\n");
+		}
+
 	}
 
+	if (DEBUG) printf("Rank %d: Received counts and targets. Recording buffer events.\n", commrank);
+	/* record events */
+	for (idx_t r=0; r<commsize; r++) {
+		for (idx_t n=0; n<incounts[r]; n++) {
+			if (dn->recvblocks[r][n] > dn->numbufferstotal) {
+				//Assert
+				printf("Bad buffer index. Got %lu, but max is %lu\nIncounts was %lu\n", dn->recvblocks[r][n], dn->numbufferstotal, incounts[r]);
+			}
+			dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
+		}
+	}
+
+	if (DEBUG) printf("Rank %d: Recorded buffer events. Ensuring sends complete.\n", commrank);
 	/* wait for sends to finish */
 	for (idx_t r=0; r<commsize; r++) {
 		MPI_Wait(&sr[r], MPI_STATUS_IGNORE);
 		MPI_Wait(&sr_counts[r], MPI_STATUS_IGNORE);
 	}
+
+	if (DEBUG) printf("Rank %d: Sends complete. Finishing.\n", commrank);
 }
 
 
@@ -209,7 +243,8 @@ data_t *dnf_getinputaddress(dnf_delaynet *dn, idx_t node)
 
 
 
-int cmp(const void * a, const void * b) {
+int cmp(const void * a, const void * b)
+{
    return ( *(int*)a - *(int*)b );
 }
 
@@ -513,6 +548,14 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 		dn->sendblocks[r] = malloc(sizeof(idx_t)*destlenstot[r]);
 
 	// Gather receive size information
+	/* initialize static pointers */
+
+	sr_counts = malloc(sizeof(MPI_Request)*commsize);
+	sr = malloc(sizeof(MPI_Request)*commsize);
+	rr_counts = malloc(sizeof(MPI_Request)*commsize);
+	rr = malloc(sizeof(MPI_Request)*commsize);
+	outcounts = calloc(commsize, sizeof(idx_t)); // remove this allocation
+	incounts = calloc(commsize, sizeof(idx_t)); // remove this allocation
 
 
 	/* Clean up remaining unused allocations */
@@ -551,6 +594,13 @@ void dnf_freedelaynet(dnf_delaynet *dn, int commsize)
 	free(dn->recvblocks);
 	free(dn->destlenstot);
 	free(dn);
+	/* free static pointers */
+	free(outcounts);
+	free(incounts);
+	free(sr_counts);
+	free(sr);
+	free(rr_counts);
+	free(rr);
 }
 
 
@@ -625,6 +675,35 @@ int main(int argc, char *argv[])
 	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
 
 	/* take the delnet for a spin */
+	dnf_recordevent(&dn->buffers[0]); // give it an initial kick
+	idx_t events[100] = {0};
+	idx_t numevents = 0;
+	data_t *input;
+
+	for (idx_t i=0; i<10; i++) {
+		printf("Iteration %lu\n", i);
+		dnf_advance(dn);
+		for (idx_t n=0; n<dn->numnodes; n++) {
+			input = dnf_getinputaddress(dn, n);
+			for (idx_t j=0; j<dn->numbuffers[n]; j++) {
+				if (input[j] != 0) {
+					events[numevents] = n;
+					numevents += 1;
+					break;
+				}
+			}
+		}
+
+		printf("%d: Num events: %lu\n", commrank, numevents);
+		printf("\t");
+		for (idx_t i=0; i<numevents; i++)
+			printf("%lu ", events[i]);
+		printf("\n");
+
+		dnf_pushevents(dn, events, numevents, commrank, commsize);
+		numevents=0;
+	}
+
 
 	/* clean up */
 	dnf_freedelaynet(dn, commsize);

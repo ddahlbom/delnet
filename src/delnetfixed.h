@@ -55,7 +55,7 @@ static inline dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out);
 
 /* delaynet interaction */
 void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
-					int commsize);
+					int commrank, int commsize);
 void dnf_advance(dnf_delaynet *dn);
 data_t *dnf_getinputaddress(dnf_delaynet *dn, idx_t node);
 
