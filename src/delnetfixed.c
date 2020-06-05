@@ -9,6 +9,14 @@
 
 #define DEBUG 0
 
+/*
+   TO DO
+   ----
+   - [ ] Make it so each process communicates *only* with processes
+   		 to which it is connected instead of all no matter what.
+   - [ ] Remove self-communication, profile results
+
+*/
 
 
 /* --------------- Buffer Functions  ---------------*/
@@ -157,8 +165,8 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	for (idx_t i=0; i<commsize; i++)
 		outcounts[i] = 0;
 
-	if (DEBUG) printf("Rank %d: Loading send blocks\n", commrank);
 	/* load send blocks */
+	if (DEBUG) printf("Rank %d: Loading send blocks\n", commrank);
 	for (idx_t n=0; n<numevents; n++) {
 		for (idx_t r=0; r<commsize; r++) {
 			for (idx_t i=0; i<dn->destlens[r][eventnodes[n]]; i++) {
@@ -169,8 +177,8 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		}
 	}
 
-	if (DEBUG) printf("Rank %d: Loaded send blocks. Sending targets.\n", commrank);
 	/* non-blocking send */
+	if (DEBUG) printf("Rank %d: Loaded send blocks. Sending targets.\n", commrank);
 	for (idx_t r=0; r<commsize; r++) {
 		MPI_Isend(&outcounts[r], 1, mpi_idx_t, r,
 					0, MPI_COMM_WORLD, &sr_counts[r]);
@@ -178,8 +186,11 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 					1, MPI_COMM_WORLD, &sr[r]);
 	}
 
-	if (DEBUG) printf("Rank %d: Sent targets. Receiving counts and targets.\n", commrank);
 	/* Receives */
+	if (DEBUG) {
+		printf("Rank %d: Sent targets. ", commrank);
+		printf("Receiving counts and targets.\n");
+	}
 	for (idx_t r=0; r<commsize; r++) 
 		MPI_Irecv(&incounts[r], 1, mpi_idx_t, r,
 					0, MPI_COMM_WORLD, &rr_counts[r]);
@@ -194,32 +205,22 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	for (idx_t r=0; r<commsize; r++) 
 		MPI_Wait(&rr[r], MPI_STATUS_IGNORE);
 
-	if (DEBUG) {
-		for (idx_t r=0; r<commsize; r++) {
-			printf("%d: In count %lu: %lu\n", commrank, r, incounts[r]);
-			printf("\t");
-			for (idx_t i=0; i<incounts[r]; i++) {
-				printf("%lu ", dn->recvblocks[r][i]);
-			}
-			printf("\n");
-		}
-
-	}
-
-	if (DEBUG) printf("Rank %d: Received counts and targets. Recording buffer events.\n", commrank);
 	/* record events */
+	if (DEBUG) {
+		printf("Rank %d: Received counts and targets.", commrank);
+		printf("Recording buffer events.\n");
+	}
 	for (idx_t r=0; r<commsize; r++) {
 		for (idx_t n=0; n<incounts[r]; n++) {
-			if (dn->recvblocks[r][n] > dn->numbufferstotal) {
-				//Assert
-				printf("Bad buffer index. Got %lu, but max is %lu\nIncounts was %lu\n", dn->recvblocks[r][n], dn->numbufferstotal, incounts[r]);
-			}
 			dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
 		}
 	}
 
-	if (DEBUG) printf("Rank %d: Recorded buffer events. Ensuring sends complete.\n", commrank);
 	/* wait for sends to finish */
+	if (DEBUG) {
+		printf("Rank %d: Recorded buffer events.", commrank);
+		printf("Ensuring sends complete.\n");
+	}
 	for (idx_t r=0; r<commsize; r++) {
 		MPI_Wait(&sr[r], MPI_STATUS_IGNORE);
 		MPI_Wait(&sr_counts[r], MPI_STATUS_IGNORE);
@@ -675,13 +676,16 @@ int main(int argc, char *argv[])
 	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
 
 	/* take the delnet for a spin */
-	dnf_recordevent(&dn->buffers[0]); // give it an initial kick
+	char display[1024];
 	idx_t events[100] = {0};
 	idx_t numevents = 0;
 	data_t *input;
 
+	dnf_recordevent(&dn->buffers[0]); // give it an initial kick
 	for (idx_t i=0; i<10; i++) {
-		printf("Iteration %lu\n", i);
+		MPI_Barrier(MPI_COMM_WORLD);
+		display[0] = '\0';
+		if (commrank == 0) printf("\nIteration %lu\n", i);
 		dnf_advance(dn);
 		for (idx_t n=0; n<dn->numnodes; n++) {
 			input = dnf_getinputaddress(dn, n);
@@ -694,11 +698,12 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		printf("%d: Num events: %lu\n", commrank, numevents);
-		printf("\t");
+		sprintf(display, "(Rank %d) Num events: %lu\n", commrank, numevents);
+		strcat(display, "\t");
 		for (idx_t i=0; i<numevents; i++)
-			printf("%lu ", events[i]);
-		printf("\n");
+			sprintf(display + strlen(display), "%lu ", events[i]);
+		strcat(display, "\n");
+		printf("%s", display);
 
 		dnf_pushevents(dn, events, numevents, commrank, commsize);
 		numevents=0;
