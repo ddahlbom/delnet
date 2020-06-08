@@ -1,8 +1,10 @@
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <mpi.h>
 
-#include "delnet.h"
+//#include "delnet.h"
+#include "delnetfixed.h"
 #include "simutils.h"
 #include "simkernels.h"
 
@@ -48,16 +50,17 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T 
 
 
 /*-------------------- Kernels -------------------- */
-void sk_mpi_getinputs(FLOAT_T *neuroninputs, dn_mpi_delaynet *dn, FLOAT_T *synapses)
+void sk_mpi_getinputs(FLOAT_T *neuroninputs, dnf_delaynet *dn, FLOAT_T *synapses)
 {
 	size_t k,j;
 	FLOAT_T *delayoutputs;
-	for (k=0; k<dn->num_nodes_l; k++) {
+	for (k=0; k<dn->numnodes; k++) {
 		// get inputs to neuron (outputs of delaylines)
 		neuroninputs[k] = 0.0;
-		delayoutputs = dn_mpi_getinputaddress(k,dn); //dn->outputs
-		for (j=0; j < dn->nodes[k].num_in; j++) {
-			neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_outbuf+j ];
+		delayoutputs = dnf_getinputaddress(dn,k);
+		for (j=0; j < dn->numbuffers[k]; j++) {
+			// neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_outbuf+j ];
+			neuroninputs[k] += delayoutputs[j] * synapses[dn->nodebufferoffsets[k]+j];
 		}
 	}
 }
@@ -91,7 +94,7 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 				if (commrank == 0  && tp->recordstart <= t && t < tp->recordstop)
 					fprintf(inputtimesfile, "%f\n", t);
 				if (tp->inputmode == INPUT_MODE_POISSON_EXCLUSIVE) 
-					for (size_t j=0; j<m->dn->num_nodes_l; j++) nextrand[j] += t_max;
+					for (size_t j=0; j<m->dn->numnodes; j++) nextrand[j] += t_max;
 			}
 		}
 		if (!waiting) {
@@ -141,6 +144,7 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
 	}
 }
 
+/*
 unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
 									unsigned int n, FLOAT_T t, spikerecord *sr,
 									unsigned int offset, FLOAT_T recordstart,
@@ -161,20 +165,48 @@ unsigned int sk_mpi_checkspiking(su_mpi_neuron *neurons, FLOAT_T *neuronoutputs,
 	}
 	return numspikes;
 }
+*/
+
+unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
+								  FLOAT_T *neuronoutputs,
+								  idx_t *eventlist,
+								  unsigned int n, FLOAT_T t, spikerecord *sr,
+								  unsigned int offset, FLOAT_T recordstart,
+								  FLOAT_T recordstop)
+{
+	size_t k;
+	unsigned long numspikes=0;
+	for (k=0; k<n; k++) {
+		neuronoutputs[k] = 0.0;
+		if (neurons[k].v >= 30.0) {
+			if( recordstart <= t && t < recordstop) {
+				sr_save_spike(sr, k+offset, t);
+			}
+			neuronoutputs[k] = 1.0;
+			neurons[k].v = -65.0;
+			neurons[k].u += neurons[k].d;
+			eventlist[numspikes] = k;
+			numspikes += 1;
+		}
+	}
+	return numspikes;
+}
+
 
 void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
-								dn_mpi_delaynet *dn, FLOAT_T dt,
+								dnf_delaynet *dn, FLOAT_T dt,
 								su_mpi_modelparams *mp)
 {
 	size_t k, j;
 	FLOAT_T *neuroninputs;
 
-	for (k=0; k<dn->num_nodes_l; k++) {
-		for (j=0; j < dn->nodes[k].num_in; j++) {
-			neuroninputs = dn_mpi_getinputaddress(k,dn);
-			spike_pre[dn->nodes[k].idx_outbuf +j] = neuroninputs[j];
-			traces_syn[dn->nodes[k].idx_outbuf +j] = traces_syn[dn->nodes[k].idx_outbuf +j]*(1.0 - (dt/mp->tau_pre)) +
-				spike_pre[dn->nodes[k].idx_outbuf +j];
+	for (k=0; k<dn->numnodes; k++) {
+		for (j=0; j < dn->numbuffers[k]; j++) {
+			neuroninputs = dnf_getinputaddress(dn, k);
+			spike_pre[dn->nodebufferoffsets[k] +j] = neuroninputs[j];
+			traces_syn[dn->nodebufferoffsets[k] +j] =
+				traces_syn[dn->nodebufferoffsets[k]+j]*(1.0 - (dt/mp->tau_pre)) +
+				spike_pre[dn->nodebufferoffsets[k] +j];
 		}
 	}
 }
@@ -190,23 +222,23 @@ void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_
 }
 
 void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
-							FLOAT_T *neuronoutputs, dn_mpi_delaynet *dn, 
+							FLOAT_T *neuronoutputs, dnf_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp)
 {
 	size_t k, j;
-	FLOAT_T *synapseoutputs = dn->outputs;
-	for (k=0; k<dn->num_nodes_l; k++) 
-	for (j=0; j < dn->nodes[k].num_in; j++) {
+	FLOAT_T *synapseoutputs = dn->nodeinputbuf;
+	for (k=0; k<dn->numnodes; k++) 
+	for (j=0; j < dn->numbuffers[k]; j++) {
 		// only update excitatory synapses
-		if (synapses[dn->nodes[k].idx_outbuf+j] > 0) {
-			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] +
-					dt * (mp->a_post * traces_syn[dn->nodes[k].idx_outbuf+j] * neuronoutputs[k] -
-						  mp->a_pre * traces_neu[k] * synapseoutputs[dn->nodes[k].idx_outbuf+j]);
+		if (synapses[dn->nodebufferoffsets[k]+j] > 0) {
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] +
+					dt * (mp->a_post * traces_syn[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
+						  mp->a_pre * traces_neu[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
 			// clamp value	
-			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] < 0.0 ? 
-										0.0 : synapses[dn->nodes[k].idx_outbuf+j];
-			synapses[dn->nodes[k].idx_outbuf+j] = synapses[dn->nodes[k].idx_outbuf+j] > mp->synmax ?
-										mp->synmax : synapses[dn->nodes[k].idx_outbuf+j];
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] < 0.0 ? 
+										0.0 : synapses[dn->nodebufferoffsets[k]+j];
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] > mp->synmax ?
+										mp->synmax : synapses[dn->nodebufferoffsets[k]+j];
 		}
 	}
 	

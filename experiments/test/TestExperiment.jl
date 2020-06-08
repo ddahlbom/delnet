@@ -8,9 +8,9 @@ trialname1 = "training"
 trialname2 = "testing"
 
 # Model Parameters
-fs = 2000.0
+fs = 1000.0
 num_neurons = 1000.0
-p_contact = 0.2
+p_contact = 0.1
 p_exc = 0.8
 maxdelay = 20.0
 tau_pre = 0.02
@@ -30,15 +30,15 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 w_exc, w_inh)
 
 # Training trial Parameters
-dur = 1.0
+dur = 5.0
 λ_noise = 3.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
 inputmode = 3
 inputweight = 20.0
-recordstart = 0 
-recordstop = dur 
+recordstart = 0
+recordstop = dur
 λ_instarttimes = 0.75
 
 tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
@@ -55,7 +55,8 @@ tp2 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Input parameters
-λ_input = 3.0 * 800
+#λ_input = 3.0 * 800
+λ_input = 10.0 
 inputdur = 0.100
 
 times = DelNetExperiment.sparsepoisson(λ_input, inputdur)
@@ -81,7 +82,10 @@ results_training = runexperiment("new", modelname, mp, graph, tp1, input;
 								 numprocs=numprocs,
 								 execloc="/home/dahlbom/research/delnet/")
 
+println("Training complete. Testing...")
+
 # Run the trial
+
 results_trial = runexperiment("resume", modelname, trialname2, tp2, input;
 							  numprocs=numprocs,
 							  execloc="/home/dahlbom/research/delnet/")

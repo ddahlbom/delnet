@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
 #include <string.h>
@@ -47,6 +48,19 @@ static __inline__ ticks getticks(void)
 
 
 #define SU_DEBUG 1
+
+
+
+/*
+   TO DO
+   - [ ] Synapse sorting (probably need to coordinate with delnet mods)
+   - [ ] Make multiple model types, increasing modularity (e.g. synapse struct)
+
+*/
+
+
+
+
 
 /*************************************************************
  *  Functions
@@ -155,35 +169,6 @@ void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T
 
 /* -------------------- Graph Generation -------------------- */
 
-
-unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p)
-{
-
-	unsigned int *g, n, n_exc, maxdelay_n;
-	size_t i, j;
-	double thresh;
-
-	n = p->num_neurons;
-	n_exc = (p->num_neurons*p->p_exc);
-	thresh = p->p_contact * ((float) n)/((float) n_exc);
-	maxdelay_n = (p->maxdelay/1000.0) * p->fs; // since delay in ms
-
-
-	g = dn_mpi_blobgraph(n, p->p_contact, maxdelay_n);
-	for (i=n_exc; i<n; i++) { 			// only last 200 rows
-		for (j=0; j<n_exc; j++) { 				
-			if (unirand() < thresh) 
-				g[i*n+j] = 1;
-			else
-				g[i*n+j] = 0;
-		}
-		for (j=n_exc; j<n; j++) 
-			g[i*n+j] = 0;
-	}
-	return g;
-}
-
-
 static inline double meantime(double *vals, int n)
 {
 	double mean = 0;
@@ -223,17 +208,20 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	advancingbuffer 	 = 0;
 
 	/* derived params -- trim later, maybe cruft */
-	IDX_T n_l = m->dn->num_nodes_l;
+	idx_t n_l = m->dn->numnodes;
 	FLOAT_T dt = 1.0/m->p.fs;
 	IDX_T numsteps = tp.dur/dt;
 
 	/* local state for simulation */
-	FLOAT_T *neuroninputs, *neuronoutputs; 
+	FLOAT_T *neuroninputs, *neuronoutputs;
 	FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
+	idx_t *neuronevents;
+	idx_t numevents = 0;
 	//FLOAT_T nextinputtime = 0.0;
 	//bool waiting = true;
 	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
+	neuronevents = calloc(n_l, sizeof(idx_t));
 	unsigned long int numspikes = 0, numrandspikes = 0;
 	FLOAT_T t;
 
@@ -256,6 +244,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 	for (size_t i=0; i<numsteps; i++) {
 		if (profiling) totalticks_start = getticks(); 
+		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
 		t = dt*i;
@@ -298,9 +287,11 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* ---------- calculate neuron outputs ---------- */
 		if (profiling) ticks_start = getticks();
 
-		numspikes += sk_mpi_checkspiking(m->neurons, neuronoutputs, n_l, t,
-											sr, m->dn->nodeoffset,
-											tp.recordstart, tp.recordstop);
+		numevents = sk_mpi_checkspiking(m->neurons, neuronoutputs,
+										neuronevents, n_l, t,
+										sr, m->dn->nodeoffsetglobal,
+										tp.recordstart, tp.recordstop);
+		numspikes += numevents;
 
 		if (profiling) {
 			ticks_finish = getticks();
@@ -311,7 +302,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (profiling) ticks_start = getticks(); 
 
 		for (size_t k=0; k<n_l; k++)
-			dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // node outputs into delnet 
+			// dn_mpi_pushoutput(neuronoutputs[k], k, m->dn); // node outputs into delnet 
+			dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
 		if (profiling) {
 			ticks_finish = getticks();
 			pushingoutput += (ticks_finish - ticks_start);
@@ -321,7 +313,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* ---------- update synapse traces ---------- */
 		if (profiling) ticks_start = getticks();
 
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->outputs, m->dn, dt, &m->p);
+		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->nodeinputbuf, m->dn, dt, &m->p);
 
 		if (profiling) {
 			ticks_finish = getticks();
@@ -355,7 +347,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* advance the buffer */
 		if (profiling) ticks_start = getticks();
 
-		dn_mpi_advance(m->dn);
+		dnf_advance(m->dn);
 
 		if (profiling) {
 			ticks_finish = getticks();
@@ -542,10 +534,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 }
 
 
-unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
+unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 {
-	long int *graph=0, n;
-	unsigned int *ugraph = 0;
+	long long *graph=0, n;
+	unsigned long *ugraph = 0;
 
 	if (commrank == 0) {
 		FILE *f;
@@ -562,9 +554,9 @@ unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 
 		fclose(f);
 
-		ugraph = malloc(sizeof(unsigned int)*n*n);
+		ugraph = malloc(sizeof(unsigned long)*n*n);
 		for (size_t i=0; i<n*n; i++)
-			ugraph[i] = (unsigned int) graph[i];
+			ugraph[i] = (unsigned long) graph[i];
 		free(graph);
 
 
@@ -572,7 +564,7 @@ unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 			printf("MPI Broadcast failure (graph loading).\n");
 			exit(-1);
 		}
-		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD)) {
+		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD)) {
 			printf("MPI Broadcast failure (graph loading).\n");
 			exit(-1);
 		}
@@ -582,8 +574,8 @@ unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 			printf("MPI Broadcast failure (graph loading).\n");
 			exit(-1);
 		}
-		ugraph = malloc(sizeof(unsigned int)*n*n);
-		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD)) {
+		ugraph = malloc(sizeof(unsigned long)*n*n);
+		if (MPI_SUCCESS != MPI_Bcast(ugraph, n*n, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD)) {
 			printf("MPI Broadcast failure (graph loading).\n");
 			exit(-1);
 		}
@@ -598,7 +590,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 									      int commrank, int commsize)
 {
 	unsigned int n, n_exc, i;
-	unsigned int *graph = 0;
+	unsigned long *graph = 0;
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 
 	/* Give each rank a different seed */
@@ -619,8 +611,8 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 	n = m->p.num_neurons;
 	n_exc = (unsigned int) ((double) n * m->p.p_exc);
-	size_t maxnode = dn_mpi_maxnode(commrank, commsize, n);
-	size_t nodeoffset =  dn_mpi_nodeoffset(commrank, commsize, n);
+	size_t maxnode = dnf_maxnode(commrank, commsize, n);
+	size_t nodeoffset =  dnf_nodeoffset(commrank, commsize, n);
 	m->commrank = commrank;
 	m->commsize = commsize;
 	m->maxnode = maxnode;
@@ -632,7 +624,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	printf("Made it this far, ma! Got the graph!\n");
 	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
 
-	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
+	m->dn = dnf_delaynetfromgraph(graph, n, commrank, commsize);
 
 	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
 	printf("Made it this far, ma! Made the graph!\n");
@@ -665,8 +657,11 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	// Find out number of excitatory synapses
 	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
 		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
-		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
-						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
+		numsyn_exc = m->dn->bufferoffsetglobal
+			+ m->dn->nodebufferoffsets[ (n_exc-1) - m->dn->nodeoffsetglobal]
+		    + m->dn->numbuffers[(n_exc-1) - m->dn->nodeoffsetglobal];
+				// + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
+				// + m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
 		for (int q=0; q < commsize; q++) {
 			if (q != commrank) {
 				MPI_Send(&numsyn_exc,
@@ -693,13 +688,18 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 				commrank, numsyn_exc);
 	}
 
-	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
-	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
+	FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));
+	traces_syn = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));		
 
-	unsigned int i_g;
-	for (i=0; i< m->dn->numlinesin_l; i++) {
-		i_g = i + m->dn->lineoffset_out;
-		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
+	//unsigned int i_g;
+	idx_t numneuronexcitatory = m->p.p_exc * m->p.num_neurons;
+	for (i=0; i< m->dn->numbufferstotal; i++) {
+		//i_g = i + m->dn->bufferoffsetglobal;
+		//synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
+		synapses_local[i] =
+			m->dn->buffersourcenodes[i] < numneuronexcitatory ?
+			m->p.w_exc :
+			m->p.w_inh;
 	}
 	
 	m->neurons = neurons;
@@ -712,157 +712,6 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 	return m;
 }
-
-
-/* make models */
-su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize)
-{
-	unsigned int *graph = 0, n, n_exc, i;
-	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
-
-	/* Give each rank a different seed */
-	srand(commrank+1);
-
-	/* default neuron params (Izhikevich RS and FS) */
-	FLOAT_T g_v_default = -65.0;
-	FLOAT_T g_u_default = -13.0;
-
-	FLOAT_T g_a_exc  = 0.02;
-	FLOAT_T g_d_exc  = 8.0;
-
-	FLOAT_T g_a_inh  = 0.1;
-	FLOAT_T g_d_inh  = 2.0;
-
-	/* set up delnet framework -- MAYBE BCAST THIS*/
-	su_mpi_readmparameters(&m->p, mparamfilename);
-
-	n = m->p.num_neurons;
-	n_exc = (unsigned int) ((double) n * m->p.p_exc);
-	size_t maxnode = dn_mpi_maxnode(commrank, commsize, n);
-	size_t nodeoffset =  dn_mpi_nodeoffset(commrank, commsize, n);
-	m->commrank = commrank;
-	m->commsize = commsize;
-	m->maxnode = maxnode;
-	m->nodeoffset = nodeoffset;
-
-	/* make sure all using the same graph -- note Bcast version below */
-	if (commrank == 0) {
-		graph = su_mpi_iblobgraph(&m->p);
-		if (commsize > 1) {
-			//MPI_Request *sendReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			//MPI_Request *recvReq = malloc(sizeof(MPI_Request) * (commsize-1));
-			//MPI_Status *recvStatus = malloc(sizeof(MPI_Status) * (commsize-1));
-
-			/* send graph to other processes */
-			for (int k=1; k<commsize; k++) {
-				//MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD, &sendReq[k-1] );
-				if (SU_DEBUG) printf("Sending graph from rank 0 to rank %d\n", k);
-				MPI_Send(graph, n*n, MPI_UNSIGNED, k, 0, MPI_COMM_WORLD);
-				if (SU_DEBUG) printf("Sent graph from rank 0 to rank %d\n", k);
-			}
-
-			//free(sendReq);
-			//free(recvReq);
-			//free(recvStatus);
-		}
-	} else {
-		MPI_Status recvStatus;
-		graph = malloc(sizeof(unsigned int)*n*n);
-		if (SU_DEBUG) printf("Waiting for graph on rank %d from rank 0\n", commrank);
-		MPI_Recv(graph, n*n, MPI_UNSIGNED, 0, 0, MPI_COMM_WORLD, &recvStatus);
-		if (recvStatus.MPI_ERROR != MPI_SUCCESS) {
-			printf("Houston, we have a problem!\n");
-			exit(-1);
-		}
-		if (SU_DEBUG) printf("Received graph on rank %d from rank 0\n", commrank);
-	}
-	
-	// Crashes with -O3 for some reason...
-	/*
-	if (commrank == 0) {
-		graph = su_mpi_iblobgraph(&m->p);
-		MPI_Bcast(graph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-	} else {
-		graph = malloc(sizeof(unsigned int)*n*n);
-		MPI_Bcast(graph, n*n, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-	}
-	*/
-
-	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
-	m->dn = dn_mpi_delnetfromgraph(graph, n, commrank, commsize);
-	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
-
-
-	/* set up state for simulation */
-	if (SU_DEBUG) printf("Allocating state on rank %d\n", commrank);
-	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
-	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
-	FLOAT_T *traces_syn; 	
-
-	for (i=0; i<maxnode; i++) {
-		if (nodeoffset + i < n_exc)
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_exc, g_d_exc);
-		else
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default, g_a_inh, g_d_inh);
-	}
-
-	/* initialize synapse weights */
-	if (SU_DEBUG) printf("Initializing synapses on rank %d\n", commrank);
-	unsigned int numsyn_exc = 0;
-
-	// Find out number of excitatory synapses
-	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
-		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
-		numsyn_exc = m->dn->lineoffset_out + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
-						+ m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
-		for (int q=0; q < commsize; q++) {
-			if (q != commrank) {
-				MPI_Send(&numsyn_exc,
-						1,
-						MPI_UNSIGNED, 
-						q, 
-						101,
-						MPI_COMM_WORLD);
-			}
-		}
-	} else {
-		MPI_Recv(&numsyn_exc,
-				1,
-				MPI_UNSIGNED,
-				MPI_ANY_SOURCE,
-				101,
-				MPI_COMM_WORLD,
-				MPI_STATUS_IGNORE);
-
-	}
-
-	if (SU_DEBUG) {
-		printf("On rank %d we think there are %d excitatory synapses.\n",
-				commrank, numsyn_exc);
-	}
-
-	FLOAT_T *synapses_local = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));
-	traces_syn = calloc(m->dn->numlinesin_l, sizeof(FLOAT_T));		
-
-	//numsyn_exc = 83893; <- number in serial implementation
-	unsigned int i_g;
-	for (i=0; i< m->dn->numlinesin_l; i++) {
-		i_g = i + m->dn->lineoffset_out;
-		synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
-	}
-	
-	m->neurons = neurons;
-	m->traces_neu = traces_neu;
-	m->traces_syn = traces_syn;
-	m->synapses = synapses_local;
-
-	if (SU_DEBUG) printf("About to free graph on rank %d\n", commrank);
-	free(graph);
-	//free(synapses);
-
-	return m;
-}
-
 
 /* --------------- loading and freeing models --------------- */
 
@@ -885,7 +734,8 @@ void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)
 /*
  * This one could be easily parallelized with MPI read and write...
  */
-void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsize)
+void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
+						 int commrank, int commsize)
 {
 	FILE *f;
 	char filename[512];
@@ -903,7 +753,9 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 	/* Write length at head for parsing */
 	if (commrank == 0) synlens = malloc(sizeof(IDX_T)*commsize);
 
-	MPI_Gather(&m->dn->numlinesin_l, 1, MPI_UNSIGNED, synlens, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+	MPI_Gather(&m->dn->numbufferstotal, 1, mpi_idx_t,
+			   synlens, 1, mpi_idx_t, 0,
+			   MPI_COMM_WORLD);
 
 	if (commrank == 0) {
 		for (int i=0; i<commsize; i++) totallen += synlens[i];
@@ -919,13 +771,16 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 		offsets = len_to_offsets(synlens_i, commsize);
 	}
 
-	MPI_Gatherv(m->synapses, m->dn->numlinesin_l, MPI_DOUBLE,
-				synapses_g, synlens_i, offsets, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Gatherv(m->synapses, m->dn->numbufferstotal, MPI_DOUBLE,
+				synapses_g, synlens_i, offsets, MPI_DOUBLE, 0,
+				MPI_COMM_WORLD);
 
 	if (commrank == 0) {
 		synapses_sorted = malloc(sizeof(FLOAT_T)*totallen);
-		for (int i=0; i<totallen; i++) 
-			synapses_sorted[i] = synapses_g[ m->dn->destidx_g[i] ];
+		// FIGURE THIS ONE OUT LATER!!!! UNSORTED NOW
+		synapses_sorted = synapses_g;
+		//for (int i=0; i<totallen; i++) 
+		//	synapses_sorted[i] = synapses_g[ m->dn->destidx_g[i] ];
 
 		f = fopen(filename, "ab");
 		checkfileload(f, filename);
@@ -936,7 +791,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 		free(synlens);
 		free(synlens_i);
 		free(synapses_g);
-		free(synapses_sorted);
+		//free(synapses_sorted);
 	}
 }
 
@@ -945,7 +800,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name, int commrank, int commsi
 void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 {
 	/* Write data */	
-	dn_mpi_save(m->dn, f);
+	dnf_save(m->dn, f);
 
 	fwrite(&m->commrank, sizeof(int), 1, f);
 	fwrite(&m->commsize, sizeof(int), 1, f);
@@ -953,10 +808,10 @@ void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 	fwrite(&m->nodeoffset, sizeof(size_t), 1, f);
 	//fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
-	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
-	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
-	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
+	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->numnodes, f);
+	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->numnodes, f);
+	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
+	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
 }
 
 
@@ -965,7 +820,7 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 	size_t loadsize;
 
-	m->dn = dn_mpi_load(f);
+	m->dn = dnf_load(f);
 
 	loadsize = fread(&m->commrank, sizeof(int), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
@@ -985,21 +840,21 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	loadsize = fread(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	if (loadsize != 1) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->num_nodes_l);
-	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->num_nodes_l, f);
-	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->neurons = malloc(sizeof(su_mpi_neuron)*m->dn->numnodes);
+	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->numnodes, f);
+	if (loadsize != m->dn->numnodes) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->num_nodes_l);
-	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->num_nodes_l, f);
-	if (loadsize != m->dn->num_nodes_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->numnodes);
+	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->numnodes, f);
+	if (loadsize != m->dn->numnodes) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
-	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numbufferstotal);
+	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
+	if (loadsize != m->dn->numbufferstotal) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numlinesin_l);
-	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numlinesin_l, f);
-	if (loadsize != m->dn->numlinesin_l) { printf("Failed to load model.\n"); exit(-1); }
+	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numbufferstotal);
+	loadsize = fread(m->synapses, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
+	if (loadsize != m->dn->numbufferstotal) { printf("Failed to load model.\n"); exit(-1); }
 
 	return m;
 }
@@ -1123,7 +978,7 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 
 /* --------------- Free Model Memory -------------------- */
 void su_mpi_freemodel_l(su_mpi_model_l *m) {
-	dn_mpi_freedelnet(m->dn);
+	dnf_freedelaynet(m->dn);
 	free(m->neurons);
 	free(m->traces_neu);
 	free(m->traces_syn);

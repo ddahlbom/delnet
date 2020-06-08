@@ -4,7 +4,8 @@
 #include <stdbool.h>
 
 #include "spkrcd.h"
-#include "delnet.h"
+//#include "delnet.h"
+#include "delnetfixed.h"
 
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
@@ -62,7 +63,7 @@ typedef struct su_mpi_model_l_s {
 	size_t nodeoffset;
 	//IDX_T numsyn;
 	su_mpi_modelparams p;
-	dn_mpi_delaynet *dn;
+	dnf_delaynet *dn;
 	su_mpi_neuron  *neurons;
 	FLOAT_T *traces_neu;
 	FLOAT_T *traces_syn;
@@ -96,7 +97,7 @@ void su_mpi_globalsave(su_mpi_model_l *m_l, char *name, int commrank, int commsi
 su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
 
 /* graphs and models */
-unsigned int *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank);
+unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank);
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
 su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilename,
 									      int commrank, int commsize);

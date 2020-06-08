@@ -27,8 +27,8 @@ paramutils.o: paramutils.c paramutils.h
 spkrcd.o: spkrcd.c spkrcd.h
 	$(CC) $(CFLAGS) -c spkrcd.c
 
-delnet.o: delnet.c delnet.h
-	$(CC) $(CFLAGS) -c delnet.c
+delnet.o: delnetfixed.c delnetfixed.h
+	$(CC) $(CFLAGS) -c delnetfixed.c -o delnet.o
 
 clean:
 	rm *.o ../runtrial-mpi 

@@ -15,6 +15,7 @@
    - [ ] Make it so each process communicates *only* with processes
    		 to which it is connected instead of all no matter what.
    - [ ] Remove self-communication, profile results
+   - [ ] Debug work partitioning when n not divisible by commsize
 
 */
 
@@ -384,9 +385,11 @@ void dfn_synctargetinfo(idx_t **destoffsets, idx_t **dests,
 	/* allocate send and receive blocks */
 	dn->sendblocks = malloc(sizeof(idx_t *)*commsize);
 	dn->recvblocks = malloc(sizeof(idx_t *)*commsize);
+	dn->recvlenstot = malloc(sizeof(idx_t)*commsize);
 
 	for (idx_t r=0; r<commsize; r++) {
 		dn->sendblocks[r] = malloc(sizeof(idx_t)*dn->destlenstot[r]);
+		dn->recvlenstot[r] = destlenstot[r];
 		dn->recvblocks[r] = malloc(sizeof(idx_t)*destlenstot[r]);
 	}
 
@@ -400,6 +403,8 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 									int commrank, int commsize)
 {
 	dnf_delaynet *dn = malloc(sizeof(dnf_delaynet));
+	dn->commrank = commrank;
+	dn->commsize = commsize;
 
 	if (n < commsize) {
 		printf("Must have fewer processes than nodes!\n Exiting.\n");
@@ -413,6 +418,8 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	else 
 		startidcs = malloc(sizeof(idx_t)*commsize);
 	MPI_Bcast(startidcs, commsize, mpi_idx_t, 0, MPI_COMM_WORLD);
+
+	dn->nodeoffsetglobal = startidcs[commrank];
 
 
 	/* Build process-local delnet infrastructure */
@@ -460,6 +467,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 			}
 		}
 	}
+	dn->buffersourcenodes = bufferinputnodes;
 
 	// ASSERTION -- Delete later -- just for logic testing
 	if (counter != numinputstotal) {
@@ -542,15 +550,18 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 					   dn, nodesperrank, commsize);
 
 
-	/* Allocate local send/recv blocks */
-	// Already have send size information
-	dn->sendblocks = malloc(sizeof(idx_t *)*commsize);
-	for (idx_t r=0; r<commsize; r++)
-		dn->sendblocks[r] = malloc(sizeof(idx_t)*destlenstot[r]);
+	/* Coordinate global buffer info */
+	idx_t *numbuffersglobal = malloc(sizeof(idx_t)*commsize);
+	MPI_Allgather(&dn->numbufferstotal, 1, MPI_UNSIGNED_LONG,
+				  numbuffersglobal, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+	dn->bufferoffsetglobal = 0;
+	for (idx_t r=1; r<commrank; r++)
+		dn->bufferoffsetglobal += numbuffersglobal[r-1];	
+	free(numbuffersglobal);
 
-	// Gather receive size information
+
+
 	/* initialize static pointers */
-
 	sr_counts = malloc(sizeof(MPI_Request)*commsize);
 	sr = malloc(sizeof(MPI_Request)*commsize);
 	rr_counts = malloc(sizeof(MPI_Request)*commsize);
@@ -562,7 +573,6 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	/* Clean up remaining unused allocations */
 	free(startidcs);
 	free(nodesperrank);
-	free(bufferinputnodes);
 	free(destlenstot);
 	for (idx_t r=0; r<commsize; r++) {
 		free(destoffsets[r]);
@@ -577,25 +587,32 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 }
 
 
-void dnf_freedelaynet(dnf_delaynet *dn, int commsize)
+void dnf_freedelaynet(dnf_delaynet *dn)
 {
 	free(dn->nodeinputbuf);
 	free(dn->nodebufferoffsets);
 	free(dn->numbuffers);
+	free(dn->buffersourcenodes);
 	free(dn->buffers);
+	free(dn->destlenstot);
+	free(dn->recvlenstot);
 
-	for (idx_t i=0; i<commsize; i++) {
+	for (idx_t i=0; i<dn->commsize; i++) {
 		free(dn->dests[i]);
 		free(dn->destoffsets[i]);
 		free(dn->destlens[i]);
 		free(dn->sendblocks[i]);
 		free(dn->recvblocks[i]);
 	}
+	free(dn->dests);
+	free(dn->destoffsets);
+	free(dn->destlens);
 	free(dn->sendblocks);
 	free(dn->recvblocks);
-	free(dn->destlenstot);
+
 	free(dn);
-	/* free static pointers */
+
+	/* free memory pointed to by static pointers */
 	free(outcounts);
 	free(incounts);
 	free(sr_counts);
@@ -604,6 +621,169 @@ void dnf_freedelaynet(dnf_delaynet *dn, int commsize)
 	free(rr);
 }
 
+/* -------------------- IO -------------------- */
+void dnf_save(dnf_delaynet *dn, FILE *stream)
+{
+	fwrite(&dn->commsize, sizeof(int), 1, stream);
+	fwrite(&dn->commrank, sizeof(int), 1, stream);
+	fwrite(&dn->numnodes, sizeof(idx_t), 1, stream);
+	fwrite(&dn->nodeoffsetglobal, sizeof(idx_t), 1, stream);
+	fwrite(&dn->bufferoffsetglobal, sizeof(idx_t), 1, stream);
+
+	fwrite(&dn->numbufferstotal, sizeof(idx_t), 1, stream);
+	fwrite(dn->nodeinputbuf, sizeof(data_t), dn->numbufferstotal, stream);
+	fwrite(dn->nodebufferoffsets, sizeof(idx_t), dn->numnodes, stream);
+	fwrite(dn->numbuffers, sizeof(idx_t), dn->numnodes, stream);
+	fwrite(dn->buffersourcenodes, sizeof(idx_t), dn->numbufferstotal, stream);
+	fwrite(dn->buffers, sizeof(dnf_delaybuf), dn->numbufferstotal, stream);
+	fwrite(dn->destlenstot, sizeof(idx_t), dn->commsize, stream);
+	fwrite(dn->recvlenstot, sizeof(idx_t), dn->commsize, stream);
+
+	for (idx_t r=0; r<dn->commsize; r++) 
+		fwrite(dn->destlens[r], sizeof(idx_t), dn->numnodes, stream);
+	for (idx_t r=0; r<dn->commsize; r++)
+		fwrite(dn->destoffsets[r], sizeof(idx_t), dn->numnodes, stream);
+	for (idx_t r=0; r<dn->commsize; r++)
+		fwrite(dn->dests[r], sizeof(idx_t), dn->destlenstot[r], stream);
+
+}
+
+dnf_delaynet *dnf_load(FILE *stream)
+{
+	size_t loadsize;
+	dnf_delaynet *dn;
+	dn = malloc(sizeof(dnf_delaynet));
+
+	loadsize = fread(&dn->commsize, sizeof(int), 1, stream);
+	if (loadsize != 1) { printf("Failed to load dn->commsize\n"); exit(-1); }
+
+	loadsize = fread(&dn->commrank, sizeof(int), 1, stream);
+	if (loadsize != 1) { printf("Failed to load dn->commrank\n"); exit(-1); }
+
+	loadsize = fread(&dn->numnodes, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) { printf("Failed to load dn->numnodes\n"); exit(-1); }
+
+	loadsize = fread(&dn->nodeoffsetglobal, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) {
+		printf("Failed to load dn->nodeoffsetglobal\n");
+		exit(-1);
+	}
+
+	loadsize = fread(&dn->bufferoffsetglobal, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) {
+		printf("Failed to load dn->bufferoffsetglobal\n");
+		exit(-1);
+	}
+
+	loadsize = fread(&dn->numbufferstotal, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) {
+		printf("Failed to load dn->numbufferstotal\n");
+		exit(-1);
+	}
+
+	dn->nodeinputbuf = malloc(sizeof(data_t)*dn->numbufferstotal);
+	loadsize = fread(dn->nodeinputbuf, sizeof(data_t),
+					 dn->numbufferstotal, stream);
+	if (loadsize != dn->numbufferstotal) {
+		printf("Failed to load dn->nodeinputbuf\n");
+		exit(-1);
+	}
+
+	dn->nodebufferoffsets = malloc(sizeof(idx_t)*dn->numnodes);
+	loadsize = fread(dn->nodebufferoffsets, sizeof(idx_t),
+					 dn->numnodes, stream);
+	if (loadsize != dn->numnodes) {
+		printf("Failed to load dn->nodebufferoffsets\n");
+		exit(-1);
+	}
+
+	dn->numbuffers = malloc(sizeof(idx_t)*dn->numnodes);
+	loadsize = fread(dn->numbuffers, sizeof(idx_t), dn->numnodes, stream);
+	if (loadsize != dn->numnodes) {
+		printf("Failed to load dn->numbuffers\n");
+		exit(-1);
+	}
+
+	dn->buffersourcenodes = malloc(sizeof(idx_t)*dn->numbufferstotal);
+	loadsize = fread(dn->buffersourcenodes, sizeof(idx_t),
+					 dn->numbufferstotal, stream);
+	if (loadsize != dn->numbufferstotal) {
+		printf("Failed to load dn->buffersourcenodes\n");
+		exit(-1);
+	}
+
+	dn->buffers = malloc(sizeof(dnf_delaybuf)*dn->numbufferstotal);	
+	loadsize = fread(dn->buffers, sizeof(dnf_delaybuf),
+					 dn->numbufferstotal, stream);
+	if (loadsize != dn->numbufferstotal) {
+		printf("Failed to load dn->numbufferstotal\n");
+		exit(-1);
+	}
+
+	dn->destlenstot = malloc(sizeof(idx_t)*dn->commsize);
+	loadsize = fread(dn->destlenstot, sizeof(idx_t), dn->commsize, stream);
+	if (loadsize != dn->commsize) {
+		printf("Failed to load dn->destlenstot\n");
+		exit(-1); 
+	}
+
+	dn->recvlenstot = malloc(sizeof(idx_t)*dn->commsize);
+	loadsize = fread(dn->recvlenstot, sizeof(idx_t), dn->commsize, stream);
+	if (loadsize != dn->commsize) {
+		printf("Failed to load dn->recvlenstot\n");
+		exit(-1); 
+	}
+
+	dn->destlens = malloc(sizeof(idx_t *)*dn->commsize);
+	for (idx_t r=0; r<dn->commsize; r++) {
+		dn->destlens[r] = malloc(sizeof(idx_t)*dn->numnodes);
+		loadsize = fread(dn->destlens[r], sizeof(idx_t), dn->numnodes, stream);
+		if (loadsize != dn->numnodes) {
+			printf("Failed to load dn->destlens[%lu]\n", r);
+			exit(-1);
+		}
+	}
+
+	dn->destoffsets = malloc(sizeof(idx_t *)*dn->commsize);
+	for (idx_t r=0; r<dn->commsize; r++) {
+		dn->destoffsets[r] = malloc(sizeof(idx_t)*dn->numnodes);
+		loadsize = fread(dn->destoffsets[r], sizeof(idx_t),
+						 dn->numnodes, stream);
+		if (loadsize != dn->numnodes) {
+			printf("Failed to load dn->destloffsets[%lu]\n", r);
+			exit(-1);
+		}
+	}
+
+	dn->dests = malloc(sizeof(idx_t *)*dn->commsize);
+	for (idx_t r=0; r<dn->commsize; r++) {
+		dn->dests[r] = malloc(sizeof(idx_t)*dn->destlenstot[r]);
+		loadsize = fread(dn->dests[r], sizeof(idx_t),
+						 dn->destlenstot[r], stream);
+		if (loadsize != dn->destlenstot[r]) {
+			printf("Failed to load dn->destlenstot[%lu]\n", r);
+			exit(-1);
+		}
+	}
+	
+	/* initialize static memory */
+	sr_counts = malloc(sizeof(MPI_Request)*dn->commsize);
+	sr = malloc(sizeof(MPI_Request)*dn->commsize);
+	rr_counts = malloc(sizeof(MPI_Request)*dn->commsize);
+	rr = malloc(sizeof(MPI_Request)*dn->commsize);
+	outcounts = calloc(dn->commsize, sizeof(idx_t)); // remove this allocation
+	incounts = calloc(dn->commsize, sizeof(idx_t)); // remove this allocation
+
+	/* allocate recv and send blocks */
+	dn->sendblocks = malloc(sizeof(idx_t *)*dn->commsize);
+	dn->recvblocks = malloc(sizeof(idx_t *)*dn->commsize);
+	for (idx_t r=0; r<dn->commsize; r++) {
+		dn->sendblocks[r] = malloc(sizeof(idx_t)*dn->destlenstot[r]);
+		dn->recvblocks[r] = malloc(sizeof(idx_t)*dn->recvlenstot[r]);
+	}
+
+	return dn;
+}
 
 
 /* -------------------- Testing -------------------- */
@@ -618,101 +798,103 @@ bool in(idx_t val, idx_t *vals, idx_t n)
 	return found;
 }
 
-int main(int argc, char *argv[]) 
-{
+// int main(int argc, char *argv[]) 
+// {
+// 
+// 	/* Init MPI */
+// 	int commsize, commrank;
+// 	MPI_Init(&argc, &argv);	
+// 	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
+// 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
+// 
+// 	if (commrank == 0) {
+// 		dnf_delaybuf buf;
+// 		dnf_bufinit(&buf, 6);
+// 		data_t output = 0.0;
+// 
+// 		idx_t eventtimes[] = {3, 11, 18, 54, 76, 92};
+// 		idx_t n = 6;
+// 
+// 		for (idx_t i=0; i<100; i++) {
+// 			printf("Step %lu: %lf\n", i, output);
+// 			if (in(i, eventtimes, n))
+// 				dnf_recordevent(&buf);
+// 			dnf_bufadvance(&buf, &output);
+// 		}
+// 
+// 		// test partitioning 
+// 		idx_t numpoints = 1000;
+// 		idx_t numranks = 7;
+// 		idx_t *startidcs = dnf_getstartidcs(numranks, numpoints);
+// 		for (int i=0; i<numranks; i++)
+// 			printf("Start index on rank %d: %lu\n", i, startidcs[i]);
+// 		free(startidcs);
+// 	}
+// 
+// 	/* Test rank partitions */
+// 	int testcommsize = 3;
+// 	idx_t testnumpoints = 4;
+// 	for (idx_t r=0; r<testcommsize; r++)
+// 		printf("Num on rank %lu: %lu\n", r,
+// 				dnf_maxnode(r, testcommsize, testnumpoints));
+// 	idx_t *numperrank = dnf_getlens(testcommsize, testnumpoints);
+// 	for (idx_t r=0; r<testcommsize; r++)
+// 		printf("Num on rank %lu: %lu\n", r, numperrank[r]);
+// 	for (idx_t r=0; r<testcommsize; r++)
+// 		printf("Offset on rank %lu: %lu\n", r,
+// 				dnf_nodeoffset(r, testcommsize, testnumpoints));
+// 	idx_t *startidcs = dnf_getstartidcs(testcommsize, testnumpoints);
+// 	for (idx_t r=0; r<testcommsize; r++)
+// 		printf("Start idx on %lu: %lu\n", r, startidcs[r]);
+// 
+// 	/* test delnet from graph */
+// 	unsigned long graph[16] = { [0] = 0, [1] = 2, [2] = 5, [3] = 0,
+// 								[4] = 0, [5] = 0, [6] = 3, [7] = 3,
+// 								[8] = 0, [9] = 0, [10]= 0, [11]= 4,
+// 								[12]= 5, [13]= 0, [14]= 0, [15]= 0 };
+// 
+// 	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
+// 
+// 	/* take the delnet for a spin */
+// 	char display[1024];
+// 	idx_t events[100] = {0};
+// 	idx_t numevents = 0;
+// 	data_t *input;
+// 
+// 	dnf_recordevent(&dn->buffers[0]); // give it an initial kick
+// 	for (idx_t i=0; i<10; i++) {
+// 		MPI_Barrier(MPI_COMM_WORLD);
+// 		display[0] = '\0';
+// 		if (commrank == 0) printf("\nIteration %lu\n", i);
+// 		dnf_advance(dn);
+// 		for (idx_t n=0; n<dn->numnodes; n++) {
+// 			input = dnf_getinputaddress(dn, n);
+// 			for (idx_t j=0; j<dn->numbuffers[n]; j++) {
+// 				if (input[j] != 0) {
+// 					events[numevents] = n;
+// 					numevents += 1;
+// 					break;
+// 				}
+// 			}
+// 		}
+// 
+// 		sprintf(display, "(Rank %d) Num events: %lu\n", commrank, numevents);
+// 		strcat(display, "\t");
+// 		for (idx_t i=0; i<numevents; i++)
+// 			sprintf(display + strlen(display), "%lu ", events[i]);
+// 		strcat(display, "\n");
+// 		printf("%s", display);
+// 
+// 		dnf_pushevents(dn, events, numevents, commrank, commsize);
+// 		numevents=0;
+// 	}
+// 
+// 
+// 	/* clean up */
+// 	dnf_freedelaynet(dn);
+// 	MPI_Finalize();
+// 
+// 	return 0;
+// }
 
-	/* Init MPI */
-	int commsize, commrank;
-	MPI_Init(&argc, &argv);	
-	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
-	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
 
-	if (commrank == 0) {
-		dnf_delaybuf buf;
-		dnf_bufinit(&buf, 6);
-		data_t output = 0.0;
-
-		idx_t eventtimes[] = {3, 11, 18, 54, 76, 92};
-		idx_t n = 6;
-
-		for (idx_t i=0; i<100; i++) {
-			printf("Step %lu: %lf\n", i, output);
-			if (in(i, eventtimes, n))
-				dnf_recordevent(&buf);
-			dnf_bufadvance(&buf, &output);
-		}
-
-		// test partitioning 
-		idx_t numpoints = 1000;
-		idx_t numranks = 7;
-		idx_t *startidcs = dnf_getstartidcs(numranks, numpoints);
-		for (int i=0; i<numranks; i++)
-			printf("Start index on rank %d: %lu\n", i, startidcs[i]);
-		free(startidcs);
-	}
-
-	/* Test rank partitions */
-	int testcommsize = 3;
-	idx_t testnumpoints = 4;
-	for (idx_t r=0; r<testcommsize; r++)
-		printf("Num on rank %lu: %lu\n", r,
-				dnf_maxnode(r, testcommsize, testnumpoints));
-	idx_t *numperrank = dnf_getlens(testcommsize, testnumpoints);
-	for (idx_t r=0; r<testcommsize; r++)
-		printf("Num on rank %lu: %lu\n", r, numperrank[r]);
-	for (idx_t r=0; r<testcommsize; r++)
-		printf("Offset on rank %lu: %lu\n", r,
-				dnf_nodeoffset(r, testcommsize, testnumpoints));
-	idx_t *startidcs = dnf_getstartidcs(testcommsize, testnumpoints);
-	for (idx_t r=0; r<testcommsize; r++)
-		printf("Start idx on %lu: %lu\n", r, startidcs[r]);
-
-	/* test delnet from graph */
-	unsigned long graph[16] = { [0] = 0, [1] = 2, [2] = 5, [3] = 0,
-								[4] = 0, [5] = 0, [6] = 3, [7] = 3,
-								[8] = 0, [9] = 0, [10]= 0, [11]= 4,
-								[12]= 5, [13]= 0, [14]= 0, [15]= 0 };
-
-	dnf_delaynet *dn = dnf_delaynetfromgraph(graph, 4, commrank, commsize);
-
-	/* take the delnet for a spin */
-	char display[1024];
-	idx_t events[100] = {0};
-	idx_t numevents = 0;
-	data_t *input;
-
-	dnf_recordevent(&dn->buffers[0]); // give it an initial kick
-	for (idx_t i=0; i<10; i++) {
-		MPI_Barrier(MPI_COMM_WORLD);
-		display[0] = '\0';
-		if (commrank == 0) printf("\nIteration %lu\n", i);
-		dnf_advance(dn);
-		for (idx_t n=0; n<dn->numnodes; n++) {
-			input = dnf_getinputaddress(dn, n);
-			for (idx_t j=0; j<dn->numbuffers[n]; j++) {
-				if (input[j] != 0) {
-					events[numevents] = n;
-					numevents += 1;
-					break;
-				}
-			}
-		}
-
-		sprintf(display, "(Rank %d) Num events: %lu\n", commrank, numevents);
-		strcat(display, "\t");
-		for (idx_t i=0; i<numevents; i++)
-			sprintf(display + strlen(display), "%lu ", events[i]);
-		strcat(display, "\n");
-		printf("%s", display);
-
-		dnf_pushevents(dn, events, numevents, commrank, commsize);
-		numevents=0;
-	}
-
-
-	/* clean up */
-	dnf_freedelaynet(dn, commsize);
-	MPI_Finalize();
-
-	return 0;
-}

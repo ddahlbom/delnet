@@ -6,7 +6,8 @@
 #include <stddef.h>
 #include <mpi.h>
 
-#include "delnet.h"
+//#include "delnet.h"
+//#include "delnetfixed.h"
 #include "simutils.h"
 #include "spkrcd.h"
 
