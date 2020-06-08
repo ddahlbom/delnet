@@ -8,7 +8,7 @@ trialname1 = "training"
 trialname2 = "testing"
 
 # Model Parameters
-fs = 1000.0
+fs = 2000.0
 num_neurons = 1000.0
 p_contact = 0.1
 p_exc = 0.8
@@ -78,7 +78,7 @@ graph[801:end,801:end] .= 0
 
 # Run the training
 numprocs=8
-results_training = runexperiment("new", modelname, mp, graph, tp1, input;
+results_trial = runexperiment("new", modelname, mp, graph, tp1, input;
 								 numprocs=numprocs,
 								 execloc="/home/dahlbom/research/delnet/")
 
@@ -86,9 +86,9 @@ println("Training complete. Testing...")
 
 # Run the trial
 
-results_trial = runexperiment("resume", modelname, trialname2, tp2, input;
-							  numprocs=numprocs,
-							  execloc="/home/dahlbom/research/delnet/")
+# results_trial = runexperiment("resume", modelname, trialname2, tp2, input;
+# 							  numprocs=numprocs,
+# 							  execloc="/home/dahlbom/research/delnet/")
 
 
 # Quick analysis

@@ -16,7 +16,7 @@
    		 to which it is connected instead of all no matter what.
    - [ ] Remove self-communication, profile results
    - [ ] Debug work partitioning when n not divisible by commsize
-
+   - [ ] Optimize buffers (only cycle through necessary number)
 */
 
 
@@ -94,6 +94,7 @@ idx_t *dnf_getstartidcs(int commsize, idx_t numpoints)
 }
 
 
+/* ----- List utils for delaynet initialization only ----- */
 
 typedef struct dnf_listnode_uint_s { 	
 	unsigned long val;
@@ -166,10 +167,11 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	for (idx_t i=0; i<commsize; i++)
 		outcounts[i] = 0;
 
-	/* load send blocks */
+	/* populate send blocks */
+	/* Note: little difference between having r or n as outer loop var */
 	if (DEBUG) printf("Rank %d: Loading send blocks\n", commrank);
-	for (idx_t n=0; n<numevents; n++) {
-		for (idx_t r=0; r<commsize; r++) {
+	for (idx_t r=0; r<commsize; r++) {
+		for (idx_t n=0; n<numevents; n++) {
 			for (idx_t i=0; i<dn->destlens[r][eventnodes[n]]; i++) {
 				dn->sendblocks[r][outcounts[r]] =
 					dn->dests[r][dn->destoffsets[r][eventnodes[n]]+i];

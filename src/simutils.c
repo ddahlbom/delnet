@@ -47,13 +47,14 @@ static __inline__ ticks getticks(void)
 #endif
 
 
-#define SU_DEBUG 1
+#define SU_DEBUG 0
 
 
 
 /*
    TO DO
    - [ ] Synapse sorting (probably need to coordinate with delnet mods)
+   - [ ] Make synapse weights loadable
    - [ ] Make multiple model types, increasing modularity (e.g. synapse struct)
 
 */
@@ -744,7 +745,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 	int *offsets = 0;
 	FLOAT_T *synapses_g = 0;
 	FLOAT_T *synapses_sorted = 0;
-	IDX_T totallen = 0;
+	unsigned long totallen = 0;
 
 
 	strcpy(filename, name);
@@ -764,7 +765,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 
 		f = fopen(filename, "wb");
 		checkfileload(f, filename);
-		fwrite(&totallen, sizeof(IDX_T), 1, f);	
+		fwrite(&totallen, sizeof(unsigned long), 1, f);	
 		fclose(f);
 
 		for (int i=0; i<commsize; i++) synlens_i[i] = (int) synlens[i];
@@ -776,7 +777,7 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 				MPI_COMM_WORLD);
 
 	if (commrank == 0) {
-		synapses_sorted = malloc(sizeof(FLOAT_T)*totallen);
+		//synapses_sorted = malloc(sizeof(FLOAT_T)*totallen);
 		// FIGURE THIS ONE OUT LATER!!!! UNSORTED NOW
 		synapses_sorted = synapses_g;
 		//for (int i=0; i<totallen; i++) 
