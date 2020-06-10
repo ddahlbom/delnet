@@ -1,7 +1,10 @@
 module TestExperiment
 
 using DelNetExperiment
+using Random
 using Plots
+
+Random.seed!(1234)
 
 modelname = "testmodel"
 trialname1 = "training"
@@ -35,7 +38,7 @@ dur = 5.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
-inputmode = 3
+inputmode = 2
 inputweight = 20.0
 recordstart = 0
 recordstop = dur
@@ -78,7 +81,7 @@ graph[801:end,801:end] .= 0
 
 # Run the training
 numprocs=8
-results_trial = runexperiment("new", modelname, mp, graph, tp1, input;
+results_training = runexperiment("new", modelname, mp, graph, tp1, input;
 								 numprocs=numprocs,
 								 execloc="/home/dahlbom/research/delnet/")
 
@@ -86,9 +89,9 @@ println("Training complete. Testing...")
 
 # Run the trial
 
-# results_trial = runexperiment("resume", modelname, trialname2, tp2, input;
-# 							  numprocs=numprocs,
-# 							  execloc="/home/dahlbom/research/delnet/")
+results_trial = runexperiment("resume", modelname, trialname2, tp2, input;
+							  numprocs=numprocs,
+							  execloc="/home/dahlbom/research/delnet/")
 
 
 # Quick analysis
@@ -99,7 +102,10 @@ p_spikes = spikeanalysisplot(results_trial.output,
 							 results_trial.tp.recordstop,
 							 mp.fs)
 
-p_syn = plot(results_trial.synapses[1:800]; xlabel="Synapse Number", ylabel="Strength",
+
+p_syn = plot(filter(x -> x >= 0.0, results_trial.synapses);
+			 xlabel="Synapse Number",
+			 ylabel="Strength",
 			 legend=:none)
 
 p_img = pstplot(results_trial.output,
