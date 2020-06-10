@@ -303,7 +303,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (profiling) ticks_start = getticks(); 
 
 		//for (size_t k=0; k<n_l; k++)
-		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize, t);
+		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
 
 		if (profiling) {
 			ticks_finish = getticks();

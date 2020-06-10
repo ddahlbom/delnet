@@ -31,7 +31,7 @@ inline dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len)
 }
 
 
-inline dnf_error dnf_recordevent(dnf_delaybuf *buf, double t)
+inline dnf_error dnf_recordevent(dnf_delaybuf *buf)
 {
 	if (buf->numstored < DNF_BUF_SIZE) {
 		buf->counts[buf->numstored] = buf->delaylen;
@@ -163,7 +163,7 @@ idx_t *incounts;
 
 
 void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
-					int commrank, int commsize, double t)
+					int commrank, int commsize)
 {
 	for (idx_t i=0; i<commsize; i++)
 		outcounts[i] = 0;
@@ -223,7 +223,7 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	for (idx_t r=0; r<commsize; r++) {
 	//	if (r != commrank) {
 			for (idx_t n=0; n<incounts[r]; n++) {
-				dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]], t);
+				dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
 			}
 //		}
 //		else {

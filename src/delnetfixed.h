@@ -63,7 +63,7 @@ typedef struct dnf_delaynet_s {
 
 /* delaynet interaction */
 void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
-					int commrank, int commsize, double t);
+					int commrank, int commsize);
 void dnf_advance(dnf_delaynet *dn);
 data_t *dnf_getinputaddress(dnf_delaynet *dn, idx_t node);
 
@@ -78,7 +78,7 @@ dnf_delaynet *dnf_load(FILE *stream);
 
 /* buffer functions */
 dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len);
-dnf_error dnf_recordevent(dnf_delaybuf *buf, double t);
+dnf_error dnf_recordevent(dnf_delaybuf *buf);
 dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out);
 
 /* indexing utils */
