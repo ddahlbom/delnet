@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
 	/* save resulting model state */
 	//if (DN_MAIN_DEBUG) printf("Saving synapses on rank %d\n", commrank);
 	//su_mpi_savesynapses(m, out_name, commrank, commsize);
-	if (DN_MAIN_DEBUG) printf("Saving model state on rank %d\n", commrank);
-	su_mpi_globalsave(m, out_name, commrank, commsize);
+	//if (DN_MAIN_DEBUG) printf("Saving model state on rank %d\n", commrank);
+	//su_mpi_globalsave(m, out_name, commrank, commsize);
 
 	/* Clean up */
 	//sr_close(sr);
