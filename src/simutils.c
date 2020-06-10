@@ -30,7 +30,7 @@ static __inline__ ticks getticks(void)
 
 #define CLOCKSPEED 512000000
 typedef unsigned long long ticks;
-char perfFileName[] = "/gpfs/u/home/PCP9/PCP9dhlb/barn/delnet/performance_data.txt";
+char perfFileName[] = "/gpfs/u/home/CDAP/CDAPdhlb/barn/delnet/performance_data.txt";
 char prefix[] = "/gpfs/u/home/PCP9/PCP9dhlb/scratch/";
 static __inline__ ticks getticks(void)
 {
@@ -374,7 +374,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		double *totaltime_g=0;
 		double *updatingneutraces_g=0;
 		if (commrank==0) {
-			if (SU_DEBUG) printf("Allocating memomry for profiling");
 			firingrates_g = calloc(commsize, sizeof(double));
 			gettinginputs_g = calloc(commsize, sizeof(double));
 			updatingsyntraces_g = calloc(commsize, sizeof(double));
@@ -484,7 +483,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 						0, MPI_COMM_WORLD);
 
 		if (commrank==0) {
-			if (SU_DEBUG) printf("Writing performance report on rank 0.\n");
 			FILE *f;
 			f = fopen(perfFileName, "a");
 			fprintf(f, "\n----------------------------------------\n");
