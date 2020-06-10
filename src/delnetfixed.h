@@ -77,9 +77,9 @@ void dnf_save(dnf_delaynet *dn, FILE *stream);
 dnf_delaynet *dnf_load(FILE *stream);
 
 /* buffer functions */
-inline dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len);
-inline dnf_error dnf_recordevent(dnf_delaybuf *buf, double t);
-inline dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out);
+dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len);
+dnf_error dnf_recordevent(dnf_delaybuf *buf, double t);
+dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out);
 
 /* indexing utils */
 idx_t dnf_maxnode(int commrank, int commsize, idx_t numpoints);

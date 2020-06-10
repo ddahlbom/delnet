@@ -47,7 +47,7 @@ static __inline__ ticks getticks(void)
 #endif
 
 
-#define SU_DEBUG 0
+#define SU_DEBUG 1
 
 
 

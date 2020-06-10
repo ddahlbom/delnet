@@ -12,7 +12,7 @@
 #include "spkrcd.h"
 
 #define PROFILING 1
-#define DN_MAIN_DEBUG 0
+#define DN_MAIN_DEBUG 1
 
 #define DN_TRIALTYPE_NEW 0
 #define DN_TRIALTYPE_RESUME 1
