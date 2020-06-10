@@ -25,8 +25,6 @@ inline dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len)
 {
 	buf->delaylen = len;
 	buf->numstored = 0;
-	buf->last_t = -1.0;
-	buf->count_t = 1;
 	for (idx_t i=0; i<DNF_BUF_SIZE; i++) 
 		buf->counts[i] = 0;
 	return DNF_SUCCESS;
@@ -35,71 +33,28 @@ inline dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len)
 
 inline dnf_error dnf_recordevent(dnf_delaybuf *buf, double t)
 {
-	/*
 	if (buf->numstored < DNF_BUF_SIZE) {
-		if (t == buf->last_t) {
-			printf("You double pushed (time %lu)!\n", buf->count_t);
-			buf->count_t += 1;
-		}
-		else
-			buf->count_t = 1;
-
 		buf->counts[buf->numstored] = buf->delaylen;
 		buf->numstored += 1;
-		buf->last_t = t;
 		return DNF_SUCCESS;
 	}
 	return DNF_BUFFER_OVERFLOW;
-	*/
-
-	bool eventrecorded = false;
-	idx_t i = 0;
-	while (i < DNF_BUF_SIZE && !eventrecorded) {
-		if (buf->counts[i] == 0) {
-			buf->counts[i] = buf->delaylen;
-			if (buf->last_t == t)
-				printf("Double push\n");
-			eventrecorded = true;
-			buf->last_t = t;
-		}
-		i++;
-	}
-	return eventrecorded ? DNF_SUCCESS : DNF_BUFFER_OVERFLOW;
 }
 
 /* Cycles through all possible stored events -- OPTIMIZE LATER */
 inline dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out)
 {
-	/*
 	*out = 0.0;
 	unsigned short i;
 	if (buf->counts[0] == 1) {
-		printf("Spiked, baby\n");
 		buf->counts[0] = 0;
 		*out = 1.0;
 		for (i=1; i<buf->numstored; i++)
 			buf->counts[i-1] = buf->counts[i];
-		if (buf->numstored == 0)
-			printf("WT actual F?\n");
 		buf->numstored -= 1;
 	}
 	for (i=0; i<buf->numstored; i++) {
-		if (buf->counts[i] > 1)
-			buf->counts[i] -= 1;
-		else
-			printf("There's a fuck-up in your logic\n");
-	}
-	return DNF_SUCCESS;
-	*/
-
-	*out = 0.0;
-	for (idx_t i=0; i<DNF_BUF_SIZE; i++) {
-		if (buf->counts[i] > 1) {
-			buf->counts[i] -= 1;
-		} else if (buf->counts[i] == 1) {
-			buf->counts[i] = 0;
-			*out = 1.0;
-		}
+		buf->counts[i] -= 1;
 	}
 	return DNF_SUCCESS;
 }

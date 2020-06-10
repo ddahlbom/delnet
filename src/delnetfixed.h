@@ -30,8 +30,6 @@ typedef struct dnf_delaybuf_s {
 	unsigned short delaylen;
 	unsigned short numstored;
 	unsigned short counts[DNF_BUF_SIZE];	
-	double last_t;
-	unsigned long count_t;
 } dnf_delaybuf;
 
 

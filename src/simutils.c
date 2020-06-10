@@ -622,13 +622,12 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	/* load graph on all ranks (uses bcast) */ 
 	graph = su_mpi_loadgraph(graphfilename, m, commrank);
 
-	printf("Made it this far, ma! Got the graph!\n");
 	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
 
 	m->dn = dnf_delaynetfromgraph(graph, n, commrank, commsize);
 
 	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
-	printf("Made it this far, ma! Made the graph!\n");
+
 	if (SU_DEBUG) printf("About to free graph on rank %d\n", commrank);
 
 	free(graph);

@@ -11,7 +11,7 @@ trialname1 = "training"
 trialname2 = "testing"
 
 # Model Parameters
-fs = 2000.0
+fs = 1000.0
 num_neurons = 1000.0
 p_contact = 0.1
 p_exc = 0.8
