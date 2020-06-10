@@ -142,13 +142,12 @@ int main(int argc, char *argv[])
 	//su_mpi_globalsave(m, out_name, commrank, commsize);
 
 	/* Clean up */
-	//sr_close(sr);
-	char srfinalname[256];
-	strcpy(srfinalname, out_name);
-	strcat(srfinalname, "_spikes.txt");
+	//char srfinalname[256];
+	//strcpy(srfinalname, out_name);
+	//strcat(srfinalname, "_spikes.txt");
 
-	if (DN_MAIN_DEBUG) printf("Saving spikes on rank %d\n", commrank);
-	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
+	//if (DN_MAIN_DEBUG) printf("Saving spikes on rank %d\n", commrank);
+	//sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
 
 	su_mpi_freemodel_l(m);
 	free(input_forced);
