@@ -109,7 +109,7 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 				waiting = true;
 				t_local = 0.0;
 				if (commrank==0) {
-					nextinputtime = t + sk_mpi_expsampl(tp->lambdainput);
+					nextinputtime = t + sk_mpi_expsampl(tp->lambdainput) + tp->inputrefractorytime;
 					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 				} else {
 					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);

@@ -54,6 +54,7 @@ typedef struct su_mpi_trialparams_s {
 	double recordstart;
 	double recordstop;
 	double lambdainput;
+	double inputrefractorytime;
 } su_mpi_trialparams;
 
 typedef struct su_mpi_model_l_s {

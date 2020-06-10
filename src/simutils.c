@@ -112,6 +112,7 @@ void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename)
 	p->recordstart = pl_getvalue(pl, "recordstart");
 	p->recordstop = pl_getvalue(pl, "recordstop");
 	p->lambdainput = pl_getvalue(pl, "lambdainput");
+	p->inputrefractorytime = pl_getvalue(pl, "inputrefractorytime");
 
 	pl_free(pl);
 }
