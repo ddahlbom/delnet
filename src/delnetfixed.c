@@ -184,12 +184,12 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	/* non-blocking send */
 	if (DEBUG) printf("Rank %d: Loaded send blocks. Sending targets.\n", commrank);
 	for (idx_t r=0; r<commsize; r++) {
-		//if (r != commrank) {
+		if (r != commrank) {
 			MPI_Isend(&outcounts[r], 1, mpi_idx_t, r,
 						0, MPI_COMM_WORLD, &sr_counts[r]);
 			MPI_Isend(dn->sendblocks[r], outcounts[r], mpi_idx_t, r,
 						1, MPI_COMM_WORLD, &sr[r]);
-		//}
+		}
 	}
 
 	/* Receives */
@@ -198,21 +198,21 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Receiving counts and targets.\n");
 	}
 	for (idx_t r=0; r<commsize; r++) 
-	//if (r != commrank) 
+	if (r != commrank) 
 		MPI_Irecv(&incounts[r], 1, mpi_idx_t, r,
 					0, MPI_COMM_WORLD, &rr_counts[r]);
 
 	for (idx_t r=0; r<commsize; r++) 
-	//if (r != commrank) 
+	if (r != commrank) 
 		MPI_Wait(&rr_counts[r], MPI_STATUS_IGNORE);
 
 	for (idx_t r=0; r<commsize; r++)
-	//if (r != commrank) 
+	if (r != commrank) 
 		MPI_Irecv(dn->recvblocks[r], incounts[r], mpi_idx_t, r,
 					1, MPI_COMM_WORLD, &rr[r]);
 
 	for (idx_t r=0; r<commsize; r++) 
-	//if (r != commrank) 
+	if (r != commrank) 
 		MPI_Wait(&rr[r], MPI_STATUS_IGNORE);
 
 	/* record events */
@@ -221,16 +221,16 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Recording buffer events.\n");
 	}
 	for (idx_t r=0; r<commsize; r++) {
-	//	if (r != commrank) {
+		if (r != commrank) {
 			for (idx_t n=0; n<incounts[r]; n++) {
 				dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
 			}
-//		}
-//		else {
-//			for (idx_t n=0; n<outcounts[commrank]; n++) {
-//				dnf_recordevent(&dn->buffers[dn->sendblocks[commrank][n]], t);
-//			}
-//		}
+		}
+		else {
+			for (idx_t n=0; n<outcounts[commrank]; n++) {
+				dnf_recordevent(&dn->buffers[dn->sendblocks[commrank][n]]);
+			}
+		}
 	}
 
 	/* wait for sends to finish */
@@ -239,10 +239,10 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Ensuring sends complete.\n");
 	}
 	for (idx_t r=0; r<commsize; r++) {
-//		if (r != commrank) {
+		if (r != commrank) {
 			MPI_Wait(&sr[r], MPI_STATUS_IGNORE);
 			MPI_Wait(&sr_counts[r], MPI_STATUS_IGNORE);
-//		}
+		}
 	}
 
 	if (DEBUG) printf("Rank %d: Sends complete. Finishing.\n", commrank);
