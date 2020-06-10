@@ -7,7 +7,7 @@
 
 #include "delnetfixed.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /*
    TO DO
