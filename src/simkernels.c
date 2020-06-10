@@ -78,9 +78,9 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 	if (tp->inputmode == INPUT_MODE_PERIODIC) {
 		if ( t_local == 0.0 && commrank==0 ) fprintf(inputtimesfile, "%f\n", t);
 		for (size_t k=0; k < ninput; k++) {
-			if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
+			if (m->nodeoffset <= (input[k].i) && (input[k].i) < m->nodeoffset + m->maxnode) {
 				if (t_local <= input[k].t && input[k].t < t_local + dt) 
-					neuroninputs[input[k].i - 1 - m->nodeoffset] += tp->inputweight; 
+					neuroninputs[input[k].i - m->nodeoffset] += tp->inputweight; 
 			}
 		}
 		t_local += dt;
@@ -99,9 +99,9 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		}
 		if (!waiting) {
 			for (size_t k=0; k < ninput; k++) {
-				if (m->nodeoffset <= (input[k].i - 1) && (input[k].i - 1) < m->nodeoffset + m->maxnode) {
+				if (m->nodeoffset <= (input[k].i) && (input[k].i) < m->nodeoffset + m->maxnode) {
 					if (t_local <= input[k].t && input[k].t < t_local + dt) 
-						neuroninputs[input[k].i - 1 - m->nodeoffset] += tp->inputweight; 
+						neuroninputs[input[k].i - m->nodeoffset] += tp->inputweight; 
 				}
 			}
 			t_local += dt;
@@ -118,6 +118,7 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 		}
 	}
 }
+
 
 unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T t, 
 							size_t num_neurons, su_mpi_trialparams *tp)
@@ -179,9 +180,8 @@ unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
 	for (k=0; k<n; k++) {
 		neuronoutputs[k] = 0.0;
 		if (neurons[k].v >= 30.0) {
-			if( recordstart <= t && t < recordstop) {
+			if( recordstart <= t && t < recordstop) 
 				sr_save_spike(sr, k+offset, t);
-			}
 			neuronoutputs[k] = 1.0;
 			neurons[k].v = -65.0;
 			neurons[k].u += neurons[k].d;

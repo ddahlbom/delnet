@@ -56,7 +56,6 @@ static __inline__ ticks getticks(void)
    - [ ] Synapse sorting (probably need to coordinate with delnet mods)
    - [ ] Make synapse weights loadable
    - [ ] Make multiple model types, increasing modularity (e.g. synapse struct)
-
 */
 
 
@@ -485,6 +484,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (commrank==0) {
 			FILE *f;
 			f = fopen(perfFileName, "a");
+			checkfileload(f, perfFileName);
 			fprintf(f, "\n----------------------------------------\n");
 			fprintf(f, "Number of processes: %d\n", commsize);
 			fprintf(f, "----------------------------------------\n");
@@ -650,44 +650,8 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 										  g_a_inh, g_d_inh);
 	}
 
-	/* initialize synapse weights */
-	if (SU_DEBUG) printf("Initializing synapses on rank %d\n", commrank);
-	unsigned int numsyn_exc = 0;
 
-	// Find out number of excitatory synapses
-	if (n_exc >= m->nodeoffset && n_exc < m->nodeoffset + m->maxnode) {
-		if (n_exc < 1) { printf("Need at least one excitatory neuron!\n"); exit(-1); }
-		numsyn_exc = m->dn->bufferoffsetglobal
-			+ m->dn->nodebufferoffsets[ (n_exc-1) - m->dn->nodeoffsetglobal]
-		    + m->dn->numbuffers[(n_exc-1) - m->dn->nodeoffsetglobal];
-				// + m->dn->nodes[(n_exc-1) - m->nodeoffset].idx_outbuf
-				// + m->dn->nodes[(n_exc-1) - m->nodeoffset].num_in;
-		for (int q=0; q < commsize; q++) {
-			if (q != commrank) {
-				MPI_Send(&numsyn_exc,
-						1,
-						MPI_UNSIGNED, 
-						q, 
-						101,
-						MPI_COMM_WORLD);
-			}
-		}
-	} else {
-		MPI_Recv(&numsyn_exc,
-				1,
-				MPI_UNSIGNED,
-				MPI_ANY_SOURCE,
-				101,
-				MPI_COMM_WORLD,
-				MPI_STATUS_IGNORE);
-
-	}
-
-	if (SU_DEBUG) {
-		printf("On rank %d we think there are %d excitatory synapses.\n",
-				commrank, numsyn_exc);
-	}
-
+	/* set up synapses */
 	FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));
 	traces_syn = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));		
 
@@ -697,7 +661,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 		//i_g = i + m->dn->bufferoffsetglobal;
 		//synapses_local[i] = m->dn->sourceidx_g[i_g] < numsyn_exc ? m->p.w_exc : m->p.w_inh;
 		synapses_local[i] =
-			m->dn->buffersourcenodes[i] < numneuronexcitatory ?
+			m->dn->buffersourcenodes[i] <= numneuronexcitatory ?
 			m->p.w_exc :
 			m->p.w_inh;
 	}
