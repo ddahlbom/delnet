@@ -8,6 +8,7 @@
 #include "simutils.h"
 #include "simkernels.h"
 
+#define MAX_INPUT 80.0
 
 /* -------------------- Random Sampling -------------------- */
 double sk_mpi_expsampl(double lambda)
@@ -54,14 +55,15 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dnf_delaynet *dn, FLOAT_T *synapses
 {
 	size_t k,j;
 	FLOAT_T *delayoutputs;
+	double totalinput;
 	for (k=0; k<dn->numnodes; k++) {
 		// get inputs to neuron (outputs of delaylines)
 		neuroninputs[k] = 0.0;
+		totalinput = 0;
 		delayoutputs = dnf_getinputaddress(dn,k);
-		for (j=0; j < dn->numbuffers[k]; j++) {
-			// neuroninputs[k] += delayoutputs[j] * synapses[ dn->nodes[k].idx_outbuf+j ];
-			neuroninputs[k] += delayoutputs[j] * synapses[dn->nodebufferoffsets[k]+j];
-		}
+		for (j=0; j < dn->numbuffers[k]; j++) 
+			totalinput += delayoutputs[j] * synapses[dn->nodebufferoffsets[k]+j];	
+		neuroninputs[k] += totalinput > MAX_INPUT ? MAX_INPUT : totalinput;
 	}
 }
 

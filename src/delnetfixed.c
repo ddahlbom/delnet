@@ -41,6 +41,7 @@ inline dnf_error dnf_recordevent(dnf_delaybuf *buf)
 	return DNF_BUFFER_OVERFLOW;
 }
 
+
 /* Cycles through all possible stored events -- OPTIMIZE LATER */
 inline dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out)
 {
@@ -220,15 +221,21 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Rank %d: Received counts and targets.", commrank);
 		printf("Recording buffer events.\n");
 	}
+
+	static dnf_error e;
 	for (idx_t r=0; r<commsize; r++) {
 		if (r != commrank) {
 			for (idx_t n=0; n<incounts[r]; n++) {
-				dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
+				e = dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
+				if (e == DNF_BUFFER_OVERFLOW)
+					printf("Buffer full!\n");
 			}
 		}
 		else {
 			for (idx_t n=0; n<outcounts[commrank]; n++) {
-				dnf_recordevent(&dn->buffers[dn->sendblocks[commrank][n]]);
+				e = dnf_recordevent(&dn->buffers[dn->sendblocks[commrank][n]]);
+				if (e == DNF_BUFFER_OVERFLOW)
+					printf("Buffer full!\n");
 			}
 		}
 	}
@@ -251,7 +258,7 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 
 void dnf_advance(dnf_delaynet *dn)
 {
-	for (idx_t i=0; i<dn->numbufferstotal; i++)
+	for (idx_t i=0; i<dn->numbufferstotal; i++) 
 		dnf_bufadvance(&dn->buffers[i], &dn->nodeinputbuf[i]);
 }
 
