@@ -48,6 +48,11 @@ typedef struct dnf_delaynet_s {
 	idx_t *buffersourcenodes;
 	dnf_delaybuf *buffers;
 
+	idx_t numoutranks;
+	idx_t *outranks;
+	idx_t numinranks;
+	idx_t *inranks;
+
 	idx_t **destlens;
 	idx_t **destoffsets;
 	idx_t **dests; 	//destination indexed [target rank][local neuron number]

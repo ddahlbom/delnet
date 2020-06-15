@@ -16,7 +16,7 @@
    		 to which it is connected instead of all no matter what.
    - [X] Remove self-communication, profile results (~15-20% improvement)
    - [ ] Debug work partitioning when n not divisible by commsize
-   - [ ] Optimize buffers (only cycle through necessary number)
+   - [X] Optimize buffers (only cycle through necessary number) (~some improvement)
 */
 
 
@@ -42,7 +42,6 @@ inline dnf_error dnf_recordevent(dnf_delaybuf *buf)
 }
 
 
-/* Cycles through all possible stored events -- OPTIMIZE LATER */
 inline dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out)
 {
 	*out = 0.0;
@@ -159,8 +158,8 @@ MPI_Request *sr_counts;
 MPI_Request *sr;
 MPI_Request *rr_counts;
 MPI_Request *rr;
-idx_t *outcounts;
-idx_t *incounts;
+idx_t *outcounts; 	// adjust this (and corresponding above) later so only dn->numoutranks long
+idx_t *incounts; 	// adjust this (and corresponding above) later so only dn->numinranks long
 
 
 void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
@@ -172,7 +171,9 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 	/* populate send blocks */
 	/* Note: little difference between having r or n as outer loop var */
 	if (DEBUG) printf("Rank %d: Loading send blocks\n", commrank);
-	for (idx_t r=0; r<commsize; r++) {
+	idx_t r;
+	for (idx_t i=0; i<dn->numoutranks; i++) {
+		r = dn->outranks[i];
 		for (idx_t n=0; n<numevents; n++) {
 			for (idx_t i=0; i<dn->destlens[r][eventnodes[n]]; i++) {
 				dn->sendblocks[r][outcounts[r]] =
@@ -184,7 +185,8 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 
 	/* non-blocking send */
 	if (DEBUG) printf("Rank %d: Loaded send blocks. Sending targets.\n", commrank);
-	for (idx_t r=0; r<commsize; r++) {
+	for (idx_t i=0; i<dn->numoutranks; i++) {
+		r = dn->outranks[i];
 		if (r != commrank) {
 			MPI_Isend(&outcounts[r], 1, mpi_idx_t, r,
 						0, MPI_COMM_WORLD, &sr_counts[r]);
@@ -198,23 +200,33 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Rank %d: Sent targets. ", commrank);
 		printf("Receiving counts and targets.\n");
 	}
-	for (idx_t r=0; r<commsize; r++) 
-	if (r != commrank) 
-		MPI_Irecv(&incounts[r], 1, mpi_idx_t, r,
-					0, MPI_COMM_WORLD, &rr_counts[r]);
 
-	for (idx_t r=0; r<commsize; r++) 
-	if (r != commrank) 
-		MPI_Wait(&rr_counts[r], MPI_STATUS_IGNORE);
+	for (idx_t i=0; i<dn->numinranks; i++) { 
+		r = dn->inranks[i];
+		if (r != commrank) 
+			MPI_Irecv(&incounts[r], 1, mpi_idx_t, r,
+						0, MPI_COMM_WORLD, &rr_counts[r]);
+	}
 
-	for (idx_t r=0; r<commsize; r++)
-	if (r != commrank) 
-		MPI_Irecv(dn->recvblocks[r], incounts[r], mpi_idx_t, r,
-					1, MPI_COMM_WORLD, &rr[r]);
+	for (idx_t i=0; i<dn->numinranks; i++) {
+		r = dn->inranks[i];
+		if (r != commrank) 
+			MPI_Wait(&rr_counts[r], MPI_STATUS_IGNORE);
+	}
 
-	for (idx_t r=0; r<commsize; r++) 
-	if (r != commrank) 
-		MPI_Wait(&rr[r], MPI_STATUS_IGNORE);
+	for (idx_t i=0; i<dn->numinranks; i++) {
+		r = dn->inranks[i];
+		if (r != commrank) 
+			MPI_Irecv(dn->recvblocks[r], incounts[r], mpi_idx_t, r,
+						1, MPI_COMM_WORLD, &rr[r]);
+	}
+
+	for (idx_t i=0; i<dn->numinranks; i++) {
+		r = dn->inranks[i];
+		if (r != commrank) 
+			MPI_Wait(&rr[r], MPI_STATUS_IGNORE);
+	}
+
 
 	/* record events */
 	if (DEBUG) {
@@ -222,8 +234,9 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Recording buffer events.\n");
 	}
 
-	static dnf_error e;
-	for (idx_t r=0; r<commsize; r++) {
+	dnf_error e;
+	for (idx_t i=0; i<dn->numinranks; i++) {
+		r = dn->inranks[i];
 		if (r != commrank) {
 			for (idx_t n=0; n<incounts[r]; n++) {
 				e = dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
@@ -245,7 +258,8 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		printf("Rank %d: Recorded buffer events.", commrank);
 		printf("Ensuring sends complete.\n");
 	}
-	for (idx_t r=0; r<commsize; r++) {
+	for (idx_t i=0; i<dn->numoutranks; i++) {
+		r = dn->outranks[i];
 		if (r != commrank) {
 			MPI_Wait(&sr[r], MPI_STATUS_IGNORE);
 			MPI_Wait(&sr_counts[r], MPI_STATUS_IGNORE);
@@ -289,6 +303,8 @@ void dfn_synctargetinfo(idx_t **destoffsets, idx_t **dests,
 		dn->destoffsets[r] = malloc(sizeof(idx_t)*nodesperrank[r]);
 		dn->destlens[r] = malloc(sizeof(idx_t)*nodesperrank[r]);
 	}
+
+	/* Share information */ 
 
 	MPI_Request *sendreqoffsets = malloc(sizeof(MPI_Request)*commsize);
 	MPI_Request *sendreqlens = malloc(sizeof(MPI_Request)*commsize);
@@ -417,6 +433,30 @@ void dfn_synctargetinfo(idx_t **destoffsets, idx_t **dests,
 		dn->recvlenstot[r] = destlenstot[r];
 		dn->recvblocks[r] = malloc(sizeof(idx_t)*destlenstot[r]);
 	}
+
+
+	/* Determine which ranks communicate with each other so can run
+	 * communication efficiently */
+	dn->numoutranks = 0;
+	dn->outranks = malloc(sizeof(idx_t)*commsize);
+	for (idx_t r=0; r<commsize; r++) {
+		if (dn->destlenstot[r] > 0) {
+			dn->outranks[dn->numoutranks] = r;
+			dn->numoutranks += 1;
+		}
+	}
+	dn->outranks = realloc(dn->outranks, sizeof(idx_t)*dn->numoutranks);
+
+	dn->numinranks = 0;
+	dn->inranks = malloc(sizeof(idx_t)*commsize);
+	for (idx_t r=0; r<commsize; r++) {
+		if (dn->recvlenstot[r] > 0) {
+			dn->inranks[dn->numinranks] = r;
+			dn->numinranks += 1;
+		}
+	}
+	dn->inranks = realloc(dn->inranks, sizeof(idx_t)*dn->numinranks);
+
 
 }
 
@@ -627,6 +667,8 @@ void dnf_freedelaynet(dnf_delaynet *dn)
 	free(dn->numbuffers);
 	free(dn->buffersourcenodes);
 	free(dn->buffers);
+	free(dn->outranks);
+	free(dn->inranks);
 	free(dn->destlenstot);
 	free(dn->recvlenstot);
 
@@ -669,6 +711,10 @@ void dnf_save(dnf_delaynet *dn, FILE *stream)
 	fwrite(dn->numbuffers, sizeof(idx_t), dn->numnodes, stream);
 	fwrite(dn->buffersourcenodes, sizeof(idx_t), dn->numbufferstotal, stream);
 	fwrite(dn->buffers, sizeof(dnf_delaybuf), dn->numbufferstotal, stream);
+	fwrite(&dn->numoutranks, sizeof(idx_t), 1, stream);
+	fwrite(dn->outranks, sizeof(idx_t), dn->numoutranks, stream);
+	fwrite(&dn->numinranks, sizeof(idx_t), 1, stream);
+	fwrite(dn->inranks, sizeof(idx_t), dn->numinranks, stream);
 	fwrite(dn->destlenstot, sizeof(idx_t), dn->commsize, stream);
 	fwrite(dn->recvlenstot, sizeof(idx_t), dn->commsize, stream);
 
@@ -750,6 +796,32 @@ dnf_delaynet *dnf_load(FILE *stream)
 					 dn->numbufferstotal, stream);
 	if (loadsize != dn->numbufferstotal) {
 		printf("Failed to load dn->numbufferstotal\n");
+		exit(-1);
+	}
+
+	loadsize = fread(&dn->numoutranks, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) {
+		printf("Failed to load dn->numoutranks\n");
+		exit(-1);
+	}
+
+	dn->outranks = malloc(sizeof(idx_t)*dn->numoutranks);
+	loadsize = fread(dn->outranks, sizeof(idx_t), dn->numoutranks, stream);
+	if (loadsize != dn->numoutranks) {
+		printf("Failed to load dn->outranks\n");
+		exit(-1);
+	}
+
+	loadsize = fread(&dn->numinranks, sizeof(idx_t), 1, stream);
+	if (loadsize != 1) {
+		printf("Failed to load dn->numinranks\n");
+		exit(-1);
+	}
+
+	dn->inranks = malloc(sizeof(idx_t)*dn->numinranks);
+	loadsize = fread(dn->inranks, sizeof(idx_t), dn->numinranks, stream);
+	if (loadsize != dn->numinranks) {
+		printf("Failed to load dn->inranks\n");
 		exit(-1);
 	}
 
