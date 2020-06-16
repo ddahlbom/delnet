@@ -77,51 +77,6 @@ void sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput,
 	static double nextinputtime = 0.0;
 	static bool waiting = true;
 
-	/*
-	if (tp->inputmode == INPUT_MODE_PERIODIC) {
-		if ( t_local == 0.0 && commrank==0 )
-			fprintf(inputtimesfile, "%f\n", t);
-		for (size_t k=0; k < ninput; k++) {
-			if (m->nodeoffset <= (input[k].i) && (input[k].i) < m->nodeoffset + m->maxnode) {
-				if (t_local <= input[k].t && input[k].t < t_local + dt) 
-					neuroninputs[input[k].i - m->nodeoffset] += tp->inputweight; 
-			}
-		}
-		t_local += dt;
-		if (t_local > t_max) t_local = 0; 
-	}
-	else if (tp->inputmode == INPUT_MODE_POISSON ||
-			 tp->inputmode == INPUT_MODE_POISSON_EXCLUSIVE) {
-		if (waiting) {
-			if (t >= nextinputtime) {
-				waiting = false;
-				if (commrank == 0  && tp->recordstart <= t && t < tp->recordstop)
-					fprintf(inputtimesfile, "%f\n", t);
-				if (tp->inputmode == INPUT_MODE_POISSON_EXCLUSIVE) 
-					for (size_t j=0; j<m->dn->numnodes; j++) nextrand[j] += t_max;
-			}
-		}
-		if (!waiting) {
-			for (size_t k=0; k < ninput; k++) {
-				if (m->nodeoffset <= (input[k].i) && (input[k].i) < m->nodeoffset + m->maxnode) {
-					if (t_local <= input[k].t && input[k].t < t_local + dt) 
-						neuroninputs[input[k].i - m->nodeoffset] += tp->inputweight; 
-				}
-			}
-			t_local += dt;
-			if (t_local > t_max) {
-				waiting = true;
-				t_local = 0.0;
-				if (commrank==0) {
-					nextinputtime = t + sk_mpi_expsampl(tp->lambdainput) + tp->inputrefractorytime;
-					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-				} else {
-					MPI_Bcast(&nextinputtime, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-				}
-			}
-		}
-	}
-	*/
 	if (tp->inputmode == INPUT_MODE_PERIODIC) {
 		if ( t_local == 0.0 && commrank==0 )
 			fprintf(inputtimesfile, "%f\n", t);
