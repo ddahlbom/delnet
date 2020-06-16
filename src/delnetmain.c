@@ -21,7 +21,7 @@
 /*************************************************************
  *  Helper Functions
  *************************************************************/
-long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type, int commrank)
+long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type, su_mpi_model_l *m, int commrank)
 {
 	FILE *infile;
 	long int ninput;
@@ -51,7 +51,29 @@ long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_
 	}
 	if (DN_MAIN_DEBUG) printf("Loaded input on process %d\n", commrank);
 
-	return ninput;
+	// Optimize this later -- for now just prune to local input only
+	idx_t nlocal=0;
+	idx_t i1, i2;
+	i1 = m->dn->nodeoffsetglobal;
+	i2 = i1 + m->dn->numnodes;
+
+	for (idx_t n=0; n<ninput; n++) 
+		if (i1 <= (*input_forced)[n].i && (*input_forced)[n].i < i2) nlocal += 1;
+
+	su_mpi_spike *input_local = 0;
+	idx_t c = 0;
+	input_local = malloc(sizeof(su_mpi_spike)*nlocal);
+	for (idx_t n=0; n<ninput; n++) {
+		if (i1 <= (*input_forced)[n].i && (*input_forced)[n].i < i2) {
+			input_local[c].i = (*input_forced)[n].i-i1; // ... - i1: put into local indexing basis
+			input_local[c].t = (*input_forced)[n].t;
+			c++;
+		}
+	}
+	free(*input_forced);
+	*input_forced = input_local;
+
+	return nlocal;
 }
 
 
@@ -126,7 +148,7 @@ int main(int argc, char *argv[])
 
 	/* load input sequence on each rank */
 	su_mpi_spike *input_forced = 0;
-	long int ninput = loadinput(in_name, &input_forced, mpi_spike_type, commrank);
+	long int ninput = loadinput(in_name, &input_forced, mpi_spike_type, m, commrank);
 
 
 	/* run simulation */

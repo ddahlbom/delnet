@@ -12,7 +12,7 @@
 /*
    TO DO
    ----
-   - [ ] Make it so each process communicates *only* with processes
+   - [X] Make it so each process communicates *only* with processes
    		 to which it is connected instead of all no matter what.
    - [X] Remove self-communication, profile results (~15-20% improvement)
    - [ ] Debug work partitioning when n not divisible by commsize

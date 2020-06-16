@@ -229,13 +229,18 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	FILE *inputtimesfile = 0;
 	char filename[MAX_NAME_LEN];
 	sprintf(filename, "%s_instarttimes.txt", trialname);
-	// size_t inputidx = 0;
-	// unsigned int inputcounter = 0;
 
-	//double t_local = 0.0;
-	double t_max = 0.0;
+	double t_max_l = 0.0;
 	for (int i=0; i<inputlen; i++)
-		if (input[i].t > t_max) t_max = input[i].t;
+		if (input[i].t > t_max_l) t_max_l = input[i].t;
+
+	/* find maximum accross ranks for coordinating input times */
+	double *t_maxs = malloc(sizeof(double)*commsize);
+	MPI_Allgather(&t_max_l, 1, MPI_DOUBLE, t_maxs, 1, MPI_DOUBLE, MPI_COMM_WORLD);
+	double t_max = 0.0;
+	for (idx_t i=0; i<commsize; i++) 
+		if (t_maxs[i] > t_max) t_max = t_maxs[i];
+	
 
 	if (commrank == 0)
 		inputtimesfile = fopen(filename, "w");
