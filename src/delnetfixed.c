@@ -508,6 +508,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 
 	/* ----- Initialize delaylines and record their origin ----- */
 	idx_t *bufferinputnodes = 0;
+	idx_t *bufferdestnodes = 0;
 	idx_t *bufferoffsets = 0;
 	idx_t numinputstotal = 0;
 
@@ -524,17 +525,20 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	dn->nodebufferoffsets = bufferoffsets;
 
 	bufferinputnodes = malloc(sizeof(idx_t)*numinputstotal);
+	bufferdestnodes = malloc(sizeof(idx_t)*numinputstotal);
 	idx_t counter = 0;
 	for (idx_t c=n1; c<n2; c++) {
 		for (idx_t r=0; r<n; r++) {
 			if(graph[r*n+c] != 0) {
 				dnf_bufinit(&dn->buffers[counter], graph[r*n+c]);
 				bufferinputnodes[counter] = r; 	// ***
+				bufferdestnodes[counter] = c;
 				counter++;
 			}
 		}
 	}
 	dn->buffersourcenodes = bufferinputnodes;
+	dn->bufferdestnodes = bufferdestnodes;
 
 	// ASSERTION -- Delete later -- just for logic testing
 	if (counter != numinputstotal) {
@@ -666,6 +670,7 @@ void dnf_freedelaynet(dnf_delaynet *dn)
 	free(dn->nodebufferoffsets);
 	free(dn->numbuffers);
 	free(dn->buffersourcenodes);
+	free(dn->bufferdestnodes);
 	free(dn->buffers);
 	free(dn->outranks);
 	free(dn->inranks);
@@ -710,6 +715,7 @@ void dnf_save(dnf_delaynet *dn, FILE *stream)
 	fwrite(dn->nodebufferoffsets, sizeof(idx_t), dn->numnodes, stream);
 	fwrite(dn->numbuffers, sizeof(idx_t), dn->numnodes, stream);
 	fwrite(dn->buffersourcenodes, sizeof(idx_t), dn->numbufferstotal, stream);
+	fwrite(dn->bufferdestnodes, sizeof(idx_t), dn->numbufferstotal, stream);
 	fwrite(dn->buffers, sizeof(dnf_delaybuf), dn->numbufferstotal, stream);
 	fwrite(&dn->numoutranks, sizeof(idx_t), 1, stream);
 	fwrite(dn->outranks, sizeof(idx_t), dn->numoutranks, stream);
@@ -788,6 +794,14 @@ dnf_delaynet *dnf_load(FILE *stream)
 					 dn->numbufferstotal, stream);
 	if (loadsize != dn->numbufferstotal) {
 		printf("Failed to load dn->buffersourcenodes\n");
+		exit(-1);
+	}
+
+	dn->bufferdestnodes = malloc(sizeof(idx_t)*dn->numbufferstotal);
+	loadsize = fread(dn->bufferdestnodes, sizeof(idx_t),
+					 dn->numbufferstotal, stream);
+	if (loadsize != dn->numbufferstotal) {
+		printf("Failed to load dn->bufferdestnodes\n");
 		exit(-1);
 	}
 

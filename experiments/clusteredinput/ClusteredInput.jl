@@ -4,18 +4,18 @@ using DelNetExperiment
 using Plots
 using Random: seed!
 
-seed!(1234)
+seed!(1)
 
 modelname = "clusteredinput"
 trialname1 = "training"
 trialname2 = "testing"
 
 # Model Parameters
-fs = 10000.0
+fs = 2000.0
 num_neurons = 1000.0
-p_contact = 0.1
+p_contact = 0.20
 p_exc = 0.80
-maxdelay = 20.0
+maxdelay = 100.0
 tau_pre = 0.02
 tau_post = 0.02
 a_pre = 1.2*10
@@ -25,7 +25,7 @@ a_post = 1.0*10
 # a_post = 0.0168 * 10.0
 # a_pre = 0.0337 * 10.0
 synmax = 10.0
-w_exc = 4.0
+w_exc = 6.0
 w_inh = -5.0
 
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
@@ -33,10 +33,10 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 w_exc, w_inh)
 
 # Training trial Parameters
-dur = 100.0
+dur = 10.0
 recorddur = 10.0
-λ_noise = 3.0
-randspikesize = 20.0
+λ_noise = 0.5
+randspikesize = 00.0
 randinput = 1
 inhibition = 1
 inputmode = 2
@@ -53,17 +53,20 @@ tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Input parameters
+dn = 16 
 numexc = Int(round(p_exc*num_neurons))
-λ_input = 1000.0 
-
-#times = DelNetExperiment.sparserefractorypoisson(λ_input, inputdur, 0.004)
-times = [0.000, 0.002, 0.003, 0.008]
-dn = 20
+# λ_input = 0.6 * 800
+# inputdur = 0.00
+# 
+# times = DelNetExperiment.sparserefractorypoisson(λ_input, inputdur, 0.000)
+times = vcat([[0.1*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
+input = DelNetExperiment.channelscatter(times, 1:numexc)
+#times = [0.000, 0.002, 0.003, 0.008]
 
 inputdur = maximum(times)
-spikes = [DelNetExperiment.channeldup([times[k]], ((k-1)*dn+1):(k*dn))
-		  for k ∈ 1:length(times)]
-input = vcat(spikes...)
+# spikes = [DelNetExperiment.channeldup([times[k]], ((k-1)*dn+1):(k*dn))
+# 		  for k ∈ 1:length(times)]
+# input = vcat(spikes...)
 
 # Generate the graph
 graph = zeros(Int64,Int(num_neurons),Int(num_neurons))
@@ -95,7 +98,7 @@ p_spikes = spikeanalysisplot(results_trial.output,
 							 mp.fs;
 							 numneurons=Int(num_neurons))
 
-p_syn = plot(filter(x->x>=0, results_trial.synapses);
+p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
 			 xlabel="Synapse Number", ylabel="Strength",
 			 legend=:none)
 

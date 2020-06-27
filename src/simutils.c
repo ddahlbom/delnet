@@ -47,7 +47,7 @@ static __inline__ ticks getticks(void)
 #endif
 
 
-#define SU_DEBUG 1
+#define SU_DEBUG 0
 
 
 
@@ -713,12 +713,15 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 	int *synlens_i = 0;
 	int *offsets = 0;
 	FLOAT_T *synapses_g = 0;
-	FLOAT_T *synapses_sorted = 0;
+	idx_t *sourcenodes_g = 0;
+	idx_t *destnodes_g = 0;
+	unsigned short *delays_g = 0;
+	unsigned short *delays_l = 0;
 	unsigned long totallen = 0;
 
 
 	strcpy(filename, name);
-	strcat(filename, "_synweights.bin");
+	strcat(filename, "_synapses.bin");
 
 	/* Write length at head for parsing */
 	if (commrank == 0) synlens = malloc(sizeof(IDX_T)*commsize);
@@ -730,6 +733,9 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 	if (commrank == 0) {
 		for (int i=0; i<commsize; i++) totallen += synlens[i];
 		synapses_g = malloc(sizeof(FLOAT_T)*totallen);
+		sourcenodes_g = malloc(sizeof(idx_t)*totallen);
+		destnodes_g = malloc(sizeof(idx_t)*totallen);
+		delays_g = malloc(sizeof(unsigned short)*totallen);
 		synlens_i = malloc(sizeof(IDX_T)*commsize);
 
 		f = fopen(filename, "wb");
@@ -741,26 +747,46 @@ void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 		offsets = len_to_offsets(synlens_i, commsize);
 	}
 
+	delays_l = malloc(sizeof(unsigned short)*m->dn->numbufferstotal);
+	for (idx_t i=0; i<m->dn->numbufferstotal; i++)
+		delays_l[i] = m->dn->buffers[i].delaylen;
+
 	MPI_Gatherv(m->synapses, m->dn->numbufferstotal, MPI_DOUBLE,
 				synapses_g, synlens_i, offsets, MPI_DOUBLE, 0,
 				MPI_COMM_WORLD);
+	MPI_Gatherv(m->dn->buffersourcenodes, m->dn->numbufferstotal,
+				MPI_UNSIGNED_LONG, sourcenodes_g, synlens_i, offsets,
+				MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+	MPI_Gatherv(m->dn->bufferdestnodes, m->dn->numbufferstotal,
+				MPI_UNSIGNED_LONG, destnodes_g, synlens_i, offsets,
+				MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+	MPI_Gatherv(delays_l, m->dn->numbufferstotal,
+				MPI_UNSIGNED_SHORT, delays_g, synlens_i, offsets,
+				MPI_UNSIGNED_SHORT, 0, MPI_COMM_WORLD);
 
 	if (commrank == 0) {
 		//synapses_sorted = malloc(sizeof(FLOAT_T)*totallen);
 		// FIGURE THIS ONE OUT LATER!!!! UNSORTED NOW
-		synapses_sorted = synapses_g;
+		//synapses_sorted = synapses_g;
 		//for (int i=0; i<totallen; i++) 
 		//	synapses_sorted[i] = synapses_g[ m->dn->destidx_g[i] ];
 
 		f = fopen(filename, "ab");
 		checkfileload(f, filename);
-		fwrite(synapses_sorted, sizeof(FLOAT_T), totallen, f);	
+		fwrite(synapses_g, sizeof(FLOAT_T), totallen, f);	
+		fwrite(sourcenodes_g, sizeof(idx_t), totallen, f);	
+		fwrite(destnodes_g, sizeof(idx_t), totallen, f);	
+		fwrite(delays_g, sizeof(unsigned short), totallen, f);	
 		fclose(f);
 
 		free(offsets);
 		free(synlens);
 		free(synlens_i);
 		free(synapses_g);
+		free(sourcenodes_g);
+		free(destnodes_g);
+		free(delays_l);
+		free(delays_g);
 		//free(synapses_sorted);
 	}
 }

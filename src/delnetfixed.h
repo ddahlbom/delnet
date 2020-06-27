@@ -46,6 +46,7 @@ typedef struct dnf_delaynet_s {
 	idx_t *numbuffers; // per node
 	idx_t numbufferstotal;
 	idx_t *buffersourcenodes;
+	idx_t *bufferdestnodes;
 	dnf_delaybuf *buffers;
 
 	idx_t numoutranks;
