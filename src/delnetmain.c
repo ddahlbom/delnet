@@ -18,6 +18,9 @@
 #define DN_TRIALTYPE_RESUME 1
 
 #define MAX_NAME_LEN 512
+
+
+
 /*************************************************************
  *  Helper Functions
  *************************************************************/
@@ -45,12 +48,6 @@ long int pruneinputtolocal(su_mpi_spike **forced_input, idx_t inputlen, su_mpi_m
 	
 	return nlocal;
 }
-
-/*
-long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type,
-				    su_mpi_model_l *m, int commrank) {
-}
-*/
 
 long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi_spike_type,
 				    su_mpi_model_l *m, int commrank)
@@ -197,7 +194,7 @@ int main(int argc, char *argv[])
 
 	/* run simulation */
 	if (DN_MAIN_DEBUG) printf("Running simulation on rank %d\n", commrank);
-	su_mpi_runstdpmodel(m, tp, forced_inputs[0].spikes, forced_inputs[0].len,
+	su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
 						sr, out_name, commrank, commsize, PROFILING);
 
 

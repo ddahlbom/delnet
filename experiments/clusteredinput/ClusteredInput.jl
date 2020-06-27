@@ -4,7 +4,7 @@ using DelNetExperiment
 using Plots
 using Random: seed!
 
-seed!(1)
+seed!(10)
 
 modelname = "clusteredinput"
 trialname1 = "training"
@@ -39,28 +39,31 @@ recorddur = 10.0
 randspikesize = 00.0
 randinput = 1
 inhibition = 1
-inputmode = 2
+inputmode = 1
+multiinputmode = 1
 inputweight = 20.0
 recordstart = max(0.0,dur-recorddur)
 recordstop = dur 
-λ_instarttimes = 1.0 
+λ_instarttimes = 2.0 
 inputrefractorytime = 0.008 + 5*maxdelay/fs
 
 tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
-				  inputmode, inputweight, recordstart, recordstop,
+				  inputmode, multiinputmode, inputweight, recordstart, recordstop,
 				  λ_instarttimes, inputrefractorytime)
 
 
 
 # Input parameters
-dn = 16 
+dn = 10 
 numexc = Int(round(p_exc*num_neurons))
 # λ_input = 0.6 * 800
 # inputdur = 0.00
 # 
 # times = DelNetExperiment.sparserefractorypoisson(λ_input, inputdur, 0.000)
 times = vcat([[(1/10.0)*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
-input = DelNetExperiment.channelscatter(times, 1:numexc)
+input1 = DelNetExperiment.channelscatter(times, 1:numexc)
+input2 = DelNetExperiment.channelscatter(times, 1:numexc)
+input = [input1, input2]
 #times = [0.000, 0.002, 0.003, 0.008]
 
 inputdur = maximum(times)
@@ -93,6 +96,7 @@ numprocs=8
 p_spikes = spikeanalysisplot(results_trial.output,
 							 results_trial.input,
 							 results_trial.inputtimes,
+							 results_trial.inputids,
 							 results_trial.tp.recordstart,
 							 results_trial.tp.recordstop,
 							 mp.fs;
@@ -110,7 +114,7 @@ p_img = pstplot(results_trial.output,
 				fs;
 				xlabel="Time (s)", ylabel="Neuron Number")
 
-spikeraster(p_img, results_trial.input;
+spikeraster(p_img, results_trial.input[1];
 			markersize=4.0,
 			markercolor=:white,
 			markershape=:x,

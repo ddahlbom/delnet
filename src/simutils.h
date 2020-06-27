@@ -9,9 +9,14 @@
 
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
-#define INPUT_MODE_POISSON_EXCLUSIVE 3
+#define INPUT_MODE_POISSON_EXCLUSIVE 3 		// cuts random noise during input
+
+#define MULTI_INPUT_MODE_SEQUENTIAL 1
+#define MULTI_INPUT_MODE_RANDOM 2
 
 #define MAX_NAME_LEN 512
+
+#define getrandom(max1) ((rand()%(int)((max1)))) // random integer between 0 and max-1
 
 /*************************************************************
  *  Structs
@@ -50,6 +55,7 @@ typedef struct su_mpi_trialparams_s {
 	bool randinput;
 	bool inhibition;
 	IDX_T inputmode;
+	idx_t multiinputmode;
 	double inputweight;
 	double recordstart;
 	double recordstop;
@@ -110,8 +116,14 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 
 /* run simulations */
 
+/*
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 							su_mpi_spike *input, size_t inputlen,
+							spikerecord *sr, char *trialname,
+							int commrank, int commsize, bool profiling);
+*/
+void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
+							su_mpi_input *inputs, idx_t numinputs, 
 							spikerecord *sr, char *trialname,
 							int commrank, int commsize, bool profiling);
 #endif
