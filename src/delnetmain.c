@@ -21,10 +21,44 @@
 /*************************************************************
  *  Helper Functions
  *************************************************************/
-long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type, su_mpi_model_l *m, int commrank)
+long int pruneinputtolocal(su_mpi_spike **forced_input, idx_t inputlen, su_mpi_model_l *m) {
+	idx_t nlocal=0;
+	idx_t i1, i2;
+	i1 = m->dn->nodeoffsetglobal;
+	i2 = i1 + m->dn->numnodes;
+
+	for (idx_t n=0; n<inputlen; n++) 
+		if (i1 <= (*forced_input)[n].i && (*forced_input)[n].i < i2) nlocal += 1;
+
+	su_mpi_spike *input_local = 0;
+	idx_t c = 0;
+	input_local = malloc(sizeof(su_mpi_spike)*nlocal);
+	for (idx_t n=0; n<inputlen; n++) {
+		if (i1 <= (*forced_input)[n].i && (*forced_input)[n].i < i2) {
+			input_local[c].i = (*forced_input)[n].i-i1; // ... - i1: put into local indexing basis
+			input_local[c].t = (*forced_input)[n].t;
+			c++;
+		}
+	}
+	free(*forced_input);
+	*forced_input = input_local;
+	
+	return nlocal;
+}
+
+/*
+long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_spike_type,
+				    su_mpi_model_l *m, int commrank) {
+}
+*/
+
+long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi_spike_type,
+				    su_mpi_model_l *m, int commrank)
 {
 	FILE *infile;
-	long int ninput;
+	long int inputlen;
+	long int prunedlen;
+	long int numinputs;
 	size_t loadsize;
 	if (DN_MAIN_DEBUG) printf("Loading input on process %d\n", commrank);
 	if (commrank == 0) {
@@ -34,46 +68,56 @@ long int loadinput(char *in_name, su_mpi_spike **input_forced, MPI_Datatype mpi_
 		strcat(infilename, "_input.bin");
 		infile = fopen(infilename, "rb");
 		checkfileload(infile, infilename);
-		loadsize = fread(&ninput, sizeof(long int), 1, infile);
-		if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
-		*input_forced = malloc(sizeof(su_mpi_spike)*ninput);
-		loadsize = fread(*input_forced, sizeof(su_mpi_spike), ninput, infile);
-		if (loadsize != ninput) {printf("Failed to load input\n"); exit(-1); }
+
+		/* Set up array of input structures */
+		loadsize = fread(&numinputs, sizeof(long int), 1, infile);
+		if (loadsize != 1) {printf("Failed to load number of inputs\n"); exit(-1); }
+		MPI_Bcast(&numinputs, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		*forced_input = malloc(sizeof(su_mpi_input)*numinputs);
+
+		/* Load each input */
+		for (idx_t n=0; n<numinputs; n++) {
+			/* find out number of spikes in input and allocate */
+			loadsize = fread(&inputlen, sizeof(long int), 1, infile);
+			if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
+			(*forced_input)[n].len = inputlen; 
+			(*forced_input)[n].spikes = malloc(sizeof(su_mpi_spike)*inputlen);
+
+			/* broadcast input */
+			loadsize = fread((*forced_input)[n].spikes, sizeof(su_mpi_spike), inputlen, infile);
+			if (loadsize != inputlen) {printf("Failed to load input\n"); exit(-1); }
+
+			/* Broadcast to all ranks */
+			MPI_Bcast( &inputlen, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+			MPI_Bcast( (*forced_input)[n].spikes, inputlen, mpi_spike_type, 0, MPI_COMM_WORLD);
+			prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes, (*forced_input)[n].len, m);
+			(*forced_input)[n].len = prunedlen;
+		}
 		fclose(infile);
-		/* Broadcast to all ranks */
-		MPI_Bcast( &ninput, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		MPI_Bcast( *input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
 	} else {
-		/* Recieve input from rank 0 */
-		MPI_Bcast( &ninput, 1, MPI_LONG, 0, MPI_COMM_WORLD);
-		*input_forced = malloc(sizeof(su_mpi_spike)*ninput);
-		MPI_Bcast( *input_forced, ninput, mpi_spike_type, 0, MPI_COMM_WORLD);
+		/* Get number of inputs and allocate */
+		MPI_Bcast(&numinputs, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+		*forced_input = malloc(sizeof(su_mpi_input)*numinputs);
+
+		for (idx_t n=0; n<numinputs; n++) {
+			/* Recieve input from rank 0 */
+			MPI_Bcast( &inputlen, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+			(*forced_input)[n].len = inputlen;
+			(*forced_input)[n].spikes = malloc(sizeof(su_mpi_spike)*inputlen);
+			MPI_Bcast( (*forced_input)[n].spikes, inputlen, mpi_spike_type, 0, MPI_COMM_WORLD);
+			prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes, (*forced_input)[n].len, m);
+			(*forced_input)[n].len = prunedlen;
+		}
 	}
 	if (DN_MAIN_DEBUG) printf("Loaded input on process %d\n", commrank);
 
-	// Optimize this later -- for now just prune to local input only
-	idx_t nlocal=0;
-	idx_t i1, i2;
-	i1 = m->dn->nodeoffsetglobal;
-	i2 = i1 + m->dn->numnodes;
+	return numinputs;
+}
 
-	for (idx_t n=0; n<ninput; n++) 
-		if (i1 <= (*input_forced)[n].i && (*input_forced)[n].i < i2) nlocal += 1;
-
-	su_mpi_spike *input_local = 0;
-	idx_t c = 0;
-	input_local = malloc(sizeof(su_mpi_spike)*nlocal);
-	for (idx_t n=0; n<ninput; n++) {
-		if (i1 <= (*input_forced)[n].i && (*input_forced)[n].i < i2) {
-			input_local[c].i = (*input_forced)[n].i-i1; // ... - i1: put into local indexing basis
-			input_local[c].t = (*input_forced)[n].t;
-			c++;
-		}
-	}
-	free(*input_forced);
-	*input_forced = input_local;
-
-	return nlocal;
+void freeinputs(su_mpi_input **forced_input, idx_t numinputs) {
+	for (idx_t n=0; n<numinputs; n++) 
+		free((*forced_input)[n].spikes);
+	free(*forced_input);
 }
 
 
@@ -147,13 +191,13 @@ int main(int argc, char *argv[])
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
 
 	/* load input sequence on each rank */
-	su_mpi_spike *input_forced = 0;
-	long int ninput = loadinput(in_name, &input_forced, mpi_spike_type, m, commrank);
+	su_mpi_input *forced_inputs = 0;
+	long int numinputs = loadinputs(in_name, &forced_inputs, mpi_spike_type, m, commrank);
 
 
 	/* run simulation */
 	if (DN_MAIN_DEBUG) printf("Running simulation on rank %d\n", commrank);
-	su_mpi_runstdpmodel(m, tp, input_forced, ninput,
+	su_mpi_runstdpmodel(m, tp, forced_inputs[0].spikes, forced_inputs[0].len,
 						sr, out_name, commrank, commsize, PROFILING);
 
 
@@ -172,7 +216,7 @@ int main(int argc, char *argv[])
 	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
 
 	su_mpi_freemodel_l(m);
-	free(input_forced);
+	freeinputs(&forced_inputs, numinputs);
 	MPI_Finalize();
 
 	return 0;

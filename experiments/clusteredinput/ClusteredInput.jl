@@ -59,7 +59,7 @@ numexc = Int(round(p_exc*num_neurons))
 # inputdur = 0.00
 # 
 # times = DelNetExperiment.sparserefractorypoisson(λ_input, inputdur, 0.000)
-times = vcat([[0.1*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
+times = vcat([[(1/10.0)*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
 input = DelNetExperiment.channelscatter(times, 1:numexc)
 #times = [0.000, 0.002, 0.003, 0.008]
 
