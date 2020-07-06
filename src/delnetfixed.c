@@ -540,7 +540,7 @@ dnf_delaynet *dnf_delaynetfromgraph(unsigned long *graph, unsigned long n,
 	dn->buffersourcenodes = bufferinputnodes;
 	dn->bufferdestnodes = bufferdestnodes;
 
-	// ASSERTION -- Delete later -- just for logic testing
+	// ASSERTION -- Delete later -- just for logic testing, not for runtime
 	if (counter != numinputstotal) {
 		printf("counter: %lu, total inputs: %lu\n", counter, numinputstotal);
 		exit(-1);

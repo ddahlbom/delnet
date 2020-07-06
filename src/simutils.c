@@ -97,12 +97,12 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
 	p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
 
-	p->a_exc = pl_getvalue(pl, "a_exc");
-	p->d_exc = pl_getvalue(pl, "d_exc");
-	p->a_inh = pl_getvalue(pl, "a_inh");
-	p->d_inh = pl_getvalue(pl, "d_inh");
-	p->v_default = pl_getvalue(pl, "v_default");
-	p->u_default = pl_getvalue(pl, "u_default");
+	//p->a_exc = pl_getvalue(pl, "a_exc");
+	//p->d_exc = pl_getvalue(pl, "d_exc");
+	//p->a_inh = pl_getvalue(pl, "a_inh");
+	//p->d_inh = pl_getvalue(pl, "d_inh");
+	//p->v_default = pl_getvalue(pl, "v_default");
+	//p->u_default = pl_getvalue(pl, "u_default");
 
 	pl_free(pl);
 }
@@ -582,10 +582,90 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	free(nextrand);
 }
 
+double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
+{
+	long int dim;
+	double *syngraph = 0;
+	double *synapses_l = 0; 
+	char filename[MAX_NAME_LEN];
+	strcpy(filename, name);
+	strcat(filename, "_syngraph.bin");
+
+	if (m->commrank == 0) {
+		FILE *f;
+		size_t loadsize;
+
+		f = fopen(filename, "rb");
+		checkfileload(f, filename);
+
+		loadsize = fread(&dim, sizeof(long int), 1, f);
+		if (loadsize != 1) {printf("Failed to load syngraph.\n"); exit(-1);}
+		if (dim != (long int) m->p.num_neurons) {
+			printf("Synapse graph size doesn't match parameter file!\n");
+			exit(-1);
+		}
+		syngraph = malloc(sizeof(double)*dim*dim);
+		loadsize = fread(syngraph, sizeof(double), dim*dim, f);
+		if (loadsize != dim*dim) {printf("Failed to load syngraph.\n"); exit(-1);}
+		fclose(f);
+		
+		if (MPI_SUCCESS != MPI_Bcast(&dim, 1, MPI_LONG, 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+		if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
+									 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+
+	} else {
+		if (MPI_SUCCESS != MPI_Bcast(&dim, 1, MPI_LONG,
+									 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+		syngraph = malloc(sizeof(double)*dim*dim);
+		if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
+									 0, MPI_COMM_WORLD)) {
+			printf("MPI Broadcast failure (graph loading).\n");
+			exit(-1);
+		}
+	}
+
+	/* Transfer graph info into synapses */
+	unsigned long n = (unsigned long) m->p.num_neurons;
+	unsigned long n1, n2;
+	unsigned long counter = 0;
+
+	synapses_l = malloc(sizeof(double)*m->dn->numbufferstotal);
+	n1 = dnf_nodeoffset(m->commrank, m->commsize, m->p.num_neurons);
+	n2 = m->commrank < m->commsize - 1 ?
+		 dnf_nodeoffset(m->commrank+1, m->commsize, m->p.num_neurons) :
+		 m->p.num_neurons;
+
+	for (unsigned long c=n1; c<n2; c++) {
+		for (unsigned long r=0; r<m->p.num_neurons; r++) {
+			if (syngraph[r*n+c] != 0) {
+				synapses_l[counter] = syngraph[r*n+c];
+				counter++;
+			}
+		}
+	}
+
+	if (counter != m->dn->numbufferstotal) {
+		printf("Couldn't match synapses with buffers!\n");
+		exit(-1);
+	}
+
+	free(syngraph);
+
+	return synapses_l;
+}
 
 unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 {
-	long long *graph=0, n;
+	long int *graph=0, n;
 	unsigned long *ugraph = 0;
 	char filename[MAX_NAME_LEN];
 	strcpy(filename, name);
@@ -750,7 +830,7 @@ su_mpi_neuron *su_mpi_loadlocalneurons(char *name, su_mpi_model_l *m)
 /* make models */
 su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize)
 {
-	unsigned int n, n_exc, i;
+	unsigned int n;//, n_exc, i;
 	unsigned long *graph = 0;
 	su_mpi_model_l *m = malloc(sizeof(su_mpi_model_l));
 
@@ -761,7 +841,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 	su_mpi_readmparameters(&m->p, name);
 
 	n = m->p.num_neurons;
-	n_exc = (unsigned int) ((double) n * m->p.p_exc);
+	//n_exc = (unsigned int) ((double) n * m->p.p_exc);
 	size_t maxnode = dnf_maxnode(commrank, commsize, n);
 	size_t nodeoffset =  dnf_nodeoffset(commrank, commsize, n);
 	m->commrank = commrank;
@@ -779,15 +859,19 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 	su_mpi_neuron *neurons  = 0;
 	neurons = su_mpi_loadlocalneurons(name, m);
 
-	/* set up other state for simulation */
+	/* set up synapse traces */ 
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
-
-	/* set up synapses */
-	FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));
 	traces_syn = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));		
 
+	/* set up synapses */
+	//FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));
+	FLOAT_T *synapses_local = 0;
+	synapses_local = su_mpi_loadsyngraph(name, m);
+
 	//unsigned int i_g;
+	
+	/*	
 	idx_t numneuronexcitatory = m->p.p_exc * m->p.num_neurons;
 	for (i=0; i< m->dn->numbufferstotal; i++) {
 		//i_g = i + m->dn->bufferoffsetglobal;
@@ -797,6 +881,7 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 			m->p.w_exc :
 			m->p.w_inh;
 	}
+	*/
 	
 	m->neurons = neurons;
 	m->traces_neu = traces_neu;

@@ -44,14 +44,6 @@ typedef struct su_mpi_modelparams_s {
 	double p_exc; 			
 	double maxdelay; 		
 
-	// Neurons
-	double a_exc;
-	double d_exc;
-	double a_inh;
-	double d_inh;
-	double v_default;
-	double u_default;
-
 	// Synapses
 	double synmax; 			
 	double w_exc; 			
