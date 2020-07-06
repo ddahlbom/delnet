@@ -108,8 +108,11 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
 }
 
 
-void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename)
+void su_mpi_readtparameters(su_mpi_trialparams *p, char *name)
 {
+	char filename[512];
+	strcpy(filename, name);
+	strcat(filename, "_tparams.txt");
 	paramlist *pl = pl_readparams(filename);
 	
 	p->dur = pl_getvalue(pl, "dur");
@@ -1035,7 +1038,7 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 	char filename[512];
 
 	strcpy(filename, name);
-	// strcat(filename, "_model.bin");
+	strcat(filename, "_model.bin");
 
 	/* Read the number of processes at the head and check if matches commsize */
 	if (commrank == 0) {

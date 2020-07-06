@@ -143,25 +143,14 @@ int main(int argc, char *argv[])
 
 	char *in_name = argv[2];
 	char *out_name = argv[3];
-
-	char tparams_name[MAX_NAME_LEN];
-	//strcpy(model_name, in_name);
-	//strcpy(graph_name, in_name);
-	strcpy(tparams_name, in_name);
-
 	int trialtype = atoi(argv[1]);
 
 	/* model create or load */
 	if (trialtype == DN_TRIALTYPE_NEW) {
-		//strcat(model_name, "_mparams.txt");
-		//strcat(graph_name, "_graph.bin");
 		m = su_mpi_izhimodelfromgraph(in_name, commrank, commsize);
 		if (DN_MAIN_DEBUG) printf("Made model on process %d\n", commrank);
 	} else if (trialtype == DN_TRIALTYPE_RESUME) {
-		char model_name[MAX_NAME_LEN];
-		strcpy(model_name, in_name);
-		strcat(model_name, "_model.bin");
-		m = su_mpi_globalload(model_name, commrank, commsize);
+		m = su_mpi_globalload(in_name, commrank, commsize);
 		if (DN_MAIN_DEBUG) printf("Loaded model on process %d\n", commrank);
 	} else {
 		printf("First argument must be 0 or 1. Exiting.\n");
@@ -170,8 +159,7 @@ int main(int argc, char *argv[])
 
 	/* process trial parameters */
 	if (commrank == 0) {
-		strcat(tparams_name, "_tparams.txt");
-		su_mpi_readtparameters(&tp, tparams_name);
+		su_mpi_readtparameters(&tp, in_name);
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
 	} else {
 		MPI_Bcast( &tp, sizeof(su_mpi_trialparams), MPI_CHAR, 0, MPI_COMM_WORLD);
