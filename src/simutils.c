@@ -77,8 +77,11 @@ void checkfileload(FILE *f, char *name)
 
 
 /* -------------------- Parameter Setting -------------------- */
-void su_mpi_readmparameters(su_mpi_modelparams *p, char *filename)
+void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
 {
+	char filename[MAX_NAME_LEN];
+	strcpy(filename, name);
+	strcat(filename, "_mparams.txt");
 	paramlist *pl = pl_readparams(filename);	
 
 	p->fs = pl_getvalue(pl, "fs");
@@ -93,6 +96,13 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *filename)
 	p->w_exc  = pl_getvalue(pl, "w_exc");
 	p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
+
+	p->a_exc = pl_getvalue(pl, "a_exc");
+	p->d_exc = pl_getvalue(pl, "d_exc");
+	p->a_inh = pl_getvalue(pl, "a_inh");
+	p->d_inh = pl_getvalue(pl, "d_inh");
+	p->v_default = pl_getvalue(pl, "v_default");
+	p->u_default = pl_getvalue(pl, "u_default");
 
 	pl_free(pl);
 }
@@ -161,12 +171,15 @@ void su_mpi_analyzeconnectivity(unsigned int *g, unsigned int n,
 
 
 /* -------------------- Initialization Functions -------------------- */
-void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T d)
+void su_mpi_neuronset(su_mpi_neuron *n, FLOAT_T a, FLOAT_T b, FLOAT_T c, FLOAT_T d)
 {
-	n->v = v;
-	n->u = u;
 	n->a = a;
+	n->b = b;
+	n->c = c;
 	n->d = d;
+
+	n->v = c;
+	n->u = b*c;
 }
 
 /* -------------------- Graph Generation -------------------- */
@@ -571,16 +584,23 @@ unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 {
 	long long *graph=0, n;
 	unsigned long *ugraph = 0;
+	char filename[MAX_NAME_LEN];
+	strcpy(filename, name);
+	strcat(filename, "_graph.bin");
 
 	if (commrank == 0) {
 		FILE *f;
 		size_t loadsize;
 
-		f = fopen(name, "rb");
+		f = fopen(filename, "rb");
 
-		checkfileload(f, name);
+		checkfileload(f, filename);
 		loadsize = fread(&n, sizeof(long int), 1, f);
 		if (loadsize != 1) { printf("Failed to load graph.\n"); exit(-1); }
+		if (n != m->p.num_neurons) {
+			printf("Graph size doesn't match parameter file!\n");
+			exit(-1);
+		}
 		graph = malloc(sizeof(long int)*n*n);
 		loadsize = fread(graph, sizeof(long int), n*n, f);
 		if (loadsize != n*n) { printf("Failed to load graph.\n"); exit(-1); }
@@ -617,10 +637,115 @@ unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank)
 	return ugraph;
 }
 
+MPI_Datatype commitmpineurontype() 
+{
+	const int nitems = 6;
+	int blocklengths[6] = { 1, 1, 1, 1, 1, 1 };
+	MPI_Datatype types[6] = { MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE,
+							  MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE };
+	MPI_Datatype mpi_neuron_type;
+	MPI_Aint offsets[6];
+
+	offsets[0] = offsetof(su_mpi_neuron, v);
+	offsets[1] = offsetof(su_mpi_neuron, u);
+	offsets[2] = offsetof(su_mpi_neuron, a);
+	offsets[3] = offsetof(su_mpi_neuron, b);
+	offsets[4] = offsetof(su_mpi_neuron, c);
+	offsets[5] = offsetof(su_mpi_neuron, d);
+
+	MPI_Type_create_struct(nitems, blocklengths, offsets,
+						   types, &mpi_neuron_type);
+	if (MPI_SUCCESS != MPI_Type_commit(&mpi_neuron_type)) {
+		printf("Failed to commit custom MPI neuron type!\n");
+		exit(-1);
+	}
+
+	return mpi_neuron_type;
+}
+
+/* TO-DO: Proper MPI IO implementation -- this isn't parallelized */
+su_mpi_neuron *su_mpi_loadlocalneurons(char *name, su_mpi_model_l *m)
+{
+	FILE *f;
+	char filename[MAX_NAME_LEN];
+	size_t loadsize;
+	long int numneurons;
+	MPI_Datatype mpi_neuron_type = commitmpineurontype();
+	su_mpi_neuron *neurons_g = 0; 
+	su_mpi_neuron *neurons_l = malloc(sizeof(su_mpi_neuron)*m->maxnode);
+
+	if (m->commrank == 0) {
+		strcpy(filename, name);
+		strcat(filename, "_neurons.bin");
+		f = fopen(filename, "rb");
+		checkfileload(f, filename);
+
+		/* Load number of neurons and check */
+		loadsize = fread(&numneurons, sizeof(long int), 1, f);
+		if (loadsize != 1) {
+			printf("Failed to load number of neurons\n");
+			exit(-1);
+		}
+		if (m->p.num_neurons != numneurons) {
+			printf("Bad neuron data: %f (parameters), %ld (file)\n",
+					m->p.num_neurons, numneurons);
+			exit(-1);
+		}
+
+		/* Load neuron data */
+		neurons_g = malloc(sizeof(su_mpi_neuron)*numneurons);
+		double a,b,c,d;
+		for (int i=0; i<numneurons; i++) {
+			loadsize = fread(&a, sizeof(double), 1, f);
+			if (loadsize != 1) {
+				printf("Failed to load neuron %d\n", i); exit(-1);
+			}
+			loadsize = fread(&b, sizeof(double), 1, f);
+			if (loadsize != 1) {
+				printf("Failed to load neuron %d\n", i); exit(-1);
+			}
+			loadsize = fread(&c, sizeof(double), 1, f);
+			if (loadsize != 1) {
+				printf("Failed to load neuron %d\n", i); exit(-1);
+			}
+			loadsize = fread(&d, sizeof(double), 1, f);
+			if (loadsize != 1) {
+				printf("Failed to load neuron %d\n", i); exit(-1);
+			}
+			su_mpi_neuronset(&neurons_g[i], a, b, c, d);
+		}
+		fclose(f);
+
+		/* Data for Scatterv */
+		int *lens = malloc(sizeof(int)*m->commsize);
+		int *displs = malloc(sizeof(int)*m->commsize);
+		for (int i=0; i<m->commsize; i++) {
+			lens[i] = dnf_maxnode(i, m->commsize, numneurons);
+			displs[i] = dnf_nodeoffset(i, m->commsize, numneurons);
+		}
+
+		/* Scatter data */
+		MPI_Scatterv(neurons_g, lens, displs, mpi_neuron_type,
+					 neurons_l, m->maxnode, mpi_neuron_type,
+					 0, MPI_COMM_WORLD);
+
+		/* Clean up */
+		free(neurons_g);
+		free(lens);
+		free(displs);
+	}
+	else {
+		neurons_l = malloc(sizeof(su_mpi_neuron)*m->maxnode);
+		MPI_Scatterv(NULL, NULL, NULL, NULL,
+					 neurons_l, m->maxnode, mpi_neuron_type,
+					 0, MPI_COMM_WORLD);
+	}
+	return neurons_l;
+}
+
 
 /* make models */
-su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilename,
-									      int commrank, int commsize)
+su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize)
 {
 	unsigned int n, n_exc, i;
 	unsigned long *graph = 0;
@@ -629,18 +754,8 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	/* Give each rank a different seed */
 	srand(commrank+1);
 
-	/* default neuron params (Izhikevich RS and FS) */
-	FLOAT_T g_v_default = -65.0;
-	FLOAT_T g_u_default = -13.0;
-
-	FLOAT_T g_a_exc  = 0.02;
-	FLOAT_T g_d_exc  = 8.0;
-
-	FLOAT_T g_a_inh  = 0.1;
-	FLOAT_T g_d_inh  = 2.0;
-
 	/* set up delnet framework -- MAYBE BCAST THIS*/
-	su_mpi_readmparameters(&m->p, mparamfilename);
+	su_mpi_readmparameters(&m->p, name);
 
 	n = m->p.num_neurons;
 	n_exc = (unsigned int) ((double) n * m->p.p_exc);
@@ -652,36 +767,18 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilen
 	m->nodeoffset = nodeoffset;
 
 	/* load graph on all ranks (uses bcast) */ 
-	graph = su_mpi_loadgraph(graphfilename, m, commrank);
-
-	if (SU_DEBUG) printf("Making delnet on process %d\n", commrank);
-
+	graph = su_mpi_loadgraph(name, m, commrank);
 	m->dn = dnf_delaynetfromgraph(graph, n, commrank, commsize);
-
-	if (SU_DEBUG) printf("Made delnet on process %d\n", commrank);
-
-	if (SU_DEBUG) printf("About to free graph on rank %d\n", commrank);
-
 	free(graph);
 
-	if (SU_DEBUG) printf("Freed graph on rank %d\n", commrank);
 
+	/* load neuron parameter information */
+	su_mpi_neuron *neurons  = 0;
+	neurons = su_mpi_loadlocalneurons(name, m);
 
-	/* set up state for simulation */
-	if (SU_DEBUG) printf("Allocating state on rank %d\n", commrank);
-	su_mpi_neuron *neurons  = malloc(sizeof(su_mpi_neuron)*maxnode);
+	/* set up other state for simulation */
 	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
 	FLOAT_T *traces_syn; 	
-
-	for (i=0; i<maxnode; i++) {
-		if (nodeoffset + i < n_exc)
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default,
-										  g_a_exc, g_d_exc);
-		else
-			su_mpi_neuronset(&neurons[i], g_v_default, g_u_default,
-										  g_a_inh, g_d_inh);
-	}
-
 
 	/* set up synapses */
 	FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));

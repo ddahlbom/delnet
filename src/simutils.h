@@ -27,25 +27,42 @@ typedef struct su_mpi_spike_s {
 } su_mpi_spike;
 
 typedef struct su_mpi_neuron_s {
-	FLOAT_T v;
-	FLOAT_T u;
-	FLOAT_T a;
-	FLOAT_T d;
+	double v;
+	double u;
+	double a;
+	double b;
+	double c;
+	double d;
 } su_mpi_neuron;
 
 typedef struct su_mpi_modelparams_s {
 	double fs; 				
+
+	// Graph -- legacy issues, revise and remove later
 	double num_neurons; 	
 	double p_contact; 		
 	double p_exc; 			
 	double maxdelay; 		
+
+	// Neurons
+	double a_exc;
+	double d_exc;
+	double a_inh;
+	double d_inh;
+	double v_default;
+	double u_default;
+
+	// Synapses
+	double synmax; 			
+	double w_exc; 			
+	double w_inh; 			
+
+	// STDP
 	double tau_pre; 		
 	double tau_post; 		
 	double a_pre; 			
 	double a_post; 			
-	double synmax; 			
-	double w_exc; 			
-	double w_inh; 			
+
 } su_mpi_modelparams;
 
 typedef struct su_mpi_trialparams_s {
@@ -111,8 +128,7 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize);
 /* graphs and models */
 unsigned long *su_mpi_loadgraph(char *name, su_mpi_model_l *m, int commrank);
 su_mpi_model_l *su_mpi_izhiblobstdpmodel(char *mparamfilename, int commrank, int commsize);
-su_mpi_model_l *su_mpi_izhimodelfromgraph(char *mparamfilename, char *graphfilename,
-									      int commrank, int commsize);
+su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int rank, int size);
 
 /* run simulations */
 

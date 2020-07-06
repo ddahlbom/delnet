@@ -23,27 +23,28 @@ static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
 	return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
 
-static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a) {
-	return a*(0.2*v - u);
+static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T b) {
+	return a*(b*v - u);
 }
 
-void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T input, FLOAT_T a, FLOAT_T h) {
+void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
+					  FLOAT_T input, FLOAT_T h) {
 	FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
 
 	half_h = h*0.5;
 	sixth_h = h/6.0;
 	
 	K1 = f1(*v, *u, 0.0);
-	L1 = f2(*v, *u, a);
+	L1 = f2(*v, *u, a, b);
 
 	K2 = f1(*v + half_h*K1, *u + half_h*L1, 0.0); 
-	L2 = f2(*v + half_h*K1, *u + half_h*L1, a);
+	L2 = f2(*v + half_h*K1, *u + half_h*L1, a, b);
 
 	K3 = f1(*v + half_h*K2, *u + half_h*L2, 0.0);
-	L3 = f2(*v + half_h*K2, *u + half_h*L2, a);
+	L3 = f2(*v + half_h*K2, *u + half_h*L2, a, b);
 
 	K4 = f1(*v + h*K3, *u + h*L3, 0.0);
-	L4 = f2(*v + h*K3, *u + h*L3, a);
+	L4 = f2(*v + h*K3, *u + h*L3, a, b);
 
 	*v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + input;
 	*u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
@@ -141,8 +142,9 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
 {
 	size_t k;
 	for (k=0; k<num_neurons; k++) {
-		neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neuroninputs[k],
-							neurons[k].a, 1000.0/fs);
+		neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
+						 neurons[k].a, neurons[k].b, neuroninputs[k],
+						 1000.0/fs);
 	}
 }
 
@@ -184,7 +186,7 @@ unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
 			if( recordstart <= t && t < recordstop) 
 				sr_save_spike(sr, k+offset, t);
 			neuronoutputs[k] = 1.0;
-			neurons[k].v = -65.0;
+			neurons[k].v = neurons[k].c;
 			neurons[k].u += neurons[k].d;
 			eventlist[numspikes] = k;
 			numspikes += 1;

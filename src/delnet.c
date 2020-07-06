@@ -216,26 +216,6 @@ void dn_mpi_advance(dn_mpi_delaynet *dn)
 }
 
 
-unsigned int *dn_mpi_blobgraph(unsigned int n, float p, unsigned int maxdel) {
-	unsigned int count = 0;
-	unsigned int *delmat;
-	unsigned int i, j;
-	delmat = malloc(sizeof(int)*n*n);
-
-	for (i=0; i<n; i++) 
-	for (j=0; j<n; j++) {
-		if (unirand() < p && i != j) {
-			delmat[i*n+j] = getrandom(maxdel) + 1;
-			count += 1;
-		}
-		else 
-			delmat[i*n+j] = 0;
-	}
-
-	return delmat;
-}
-
-
 dn_mpi_delaynet *dn_mpi_delnetfromgraph(unsigned int *g, unsigned int n, 
 											int commrank, int commsize)
 {

@@ -104,7 +104,7 @@ MPI_Datatype sr_commitmpispiketype()
 	offsets[1] = offsetof(spike, time);
 	MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_spike_type);
 	if (MPI_SUCCESS != MPI_Type_commit(&mpi_spike_type)) {
-		printf("Failed to commit custom MPI type!\n");
+		printf("Failed to commit custom MPI spike type!\n");
 		exit(-1);
 	}
 

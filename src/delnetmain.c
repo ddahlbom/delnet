@@ -144,22 +144,22 @@ int main(int argc, char *argv[])
 	char *in_name = argv[2];
 	char *out_name = argv[3];
 
-	char model_name[MAX_NAME_LEN];
-	char graph_name[MAX_NAME_LEN];
 	char tparams_name[MAX_NAME_LEN];
-	strcpy(model_name, in_name);
-	strcpy(graph_name, in_name);
+	//strcpy(model_name, in_name);
+	//strcpy(graph_name, in_name);
 	strcpy(tparams_name, in_name);
 
 	int trialtype = atoi(argv[1]);
 
 	/* model create or load */
 	if (trialtype == DN_TRIALTYPE_NEW) {
-		strcat(model_name, "_mparams.txt");
-		strcat(graph_name, "_graph.bin");
-		m = su_mpi_izhimodelfromgraph(model_name, graph_name, commrank, commsize);
+		//strcat(model_name, "_mparams.txt");
+		//strcat(graph_name, "_graph.bin");
+		m = su_mpi_izhimodelfromgraph(in_name, commrank, commsize);
 		if (DN_MAIN_DEBUG) printf("Made model on process %d\n", commrank);
 	} else if (trialtype == DN_TRIALTYPE_RESUME) {
+		char model_name[MAX_NAME_LEN];
+		strcpy(model_name, in_name);
 		strcat(model_name, "_model.bin");
 		m = su_mpi_globalload(model_name, commrank, commsize);
 		if (DN_MAIN_DEBUG) printf("Loaded model on process %d\n", commrank);

@@ -2,6 +2,7 @@ module ClusteredInput
 
 using DelNetExperiment
 using Plots
+using Measures
 using Random: seed!
 
 seed!(10)
@@ -12,7 +13,7 @@ trialname2 = "testing"
 
 # Model Parameters
 fs = 2000.0
-num_neurons = 1000.0
+num_neurons = 496.0
 p_contact = 0.20
 p_exc = 0.80
 maxdelay = 100.0
@@ -33,18 +34,18 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 w_exc, w_inh)
 
 # Training trial Parameters
-dur = 10.0
-recorddur = 10.0
+dur = 100.0
+recorddur = 50.0
 λ_noise = 0.5
-randspikesize = 00.0
+randspikesize = 05.0
 randinput = 1
 inhibition = 1
-inputmode = 1
+inputmode = 2
 multiinputmode = 1
 inputweight = 20.0
 recordstart = max(0.0,dur-recorddur)
 recordstop = dur 
-λ_instarttimes = 2.0 
+λ_instarttimes = 0.5 
 inputrefractorytime = 0.008 + 5*maxdelay/fs
 
 tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
@@ -54,13 +55,13 @@ tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Input parameters
-dn = 10 
+dn = 5 
 numexc = Int(round(p_exc*num_neurons))
 # λ_input = 0.6 * 800
 # inputdur = 0.00
 # 
 # times = DelNetExperiment.sparserefractorypoisson(λ_input, inputdur, 0.000)
-times = vcat([[(1/10.0)*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
+times = vcat([[(1/100.0)*k for _ ∈ 1:dn] for k ∈ 1:5]...) 
 input1 = DelNetExperiment.channelscatter(times, 1:numexc)
 input2 = DelNetExperiment.channelscatter(times, 1:numexc)
 input = [input1, input2]
@@ -106,25 +107,27 @@ p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
 			 xlabel="Synapse Number", ylabel="Strength",
 			 legend=:none)
 
-p_img = pstplot(results_trial.output,
-				results_trial.inputtimes,
-				inputdur+5*maxdelay/1000.0,
-				1,
-				Int(num_neurons),
-				fs;
-				xlabel="Time (s)", ylabel="Neuron Number")
+heatmaps = DelNetExperiment.pstplots(results_trial.output,
+								  results_trial.inputtimes,
+								  results_trial.inputids,
+								  inputdur+5*maxdelay/1000.0,
+								  1,
+								  Int(num_neurons),
+								  fs;
+								  xlabel="Time (s)",
+								  ylabel="Neuron Number")
 
-spikeraster(p_img, results_trial.input[1];
-			markersize=4.0,
-			markercolor=:white,
-			markershape=:x,
-			markerstrokewidth=0.0,
-			legend=:none)
+for (k,input) ∈ enumerate(results_trial.input)
+	spikeraster(heatmaps[k], input;
+				markersize=4.0,
+				markercolor=:white,
+				markershape=:x,
+				markerstrokewidth=0.0,
+				legend=:none)
+end
 
-l_rc = @layout [ a{0.75h}; b]
-p_rc = plot(p_img, p_syn, layout=l_rc)
 
-l = @layout [ a{0.65w} b]
-p = plot(p_spikes, p_rc, layout=l)
+p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])
+p2 = plot(heatmaps..., margins=2mm)
 
 end
