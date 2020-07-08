@@ -7,7 +7,7 @@ using Plots; pyplot()
 dist( p1, p2 ) = sqrt(sum((p1 .- p2) .^ 2))
 
 """
-x, y, z in mm.  ρ in n/mm.  λ tbd. v ∈ mm/s
+x, y, z in mm.  ρ in #/mm^3.  λ tbd. v ∈ mm/s
 """
 function uniformblock(x, y, z, ρ, λ, v; verbose=false, maxlen=1.0)
 	n = Int(round(x * y * z * ρ))

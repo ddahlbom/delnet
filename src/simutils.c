@@ -610,25 +610,25 @@ double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
 		fclose(f);
 		
 		if (MPI_SUCCESS != MPI_Bcast(&dim, 1, MPI_LONG, 0, MPI_COMM_WORLD)) {
-			printf("MPI Broadcast failure (graph loading).\n");
+			printf("MPI Broadcast failure (syngraph len loading).\n");
 			exit(-1);
 		}
 		if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
 									 0, MPI_COMM_WORLD)) {
-			printf("MPI Broadcast failure (graph loading).\n");
+			printf("MPI Broadcast failure (syngraph loading).\n");
 			exit(-1);
 		}
 
 	} else {
 		if (MPI_SUCCESS != MPI_Bcast(&dim, 1, MPI_LONG,
 									 0, MPI_COMM_WORLD)) {
-			printf("MPI Broadcast failure (graph loading).\n");
+			printf("MPI Broadcast failure (syngraph len loading).\n");
 			exit(-1);
 		}
 		syngraph = malloc(sizeof(double)*dim*dim);
 		if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
 									 0, MPI_COMM_WORLD)) {
-			printf("MPI Broadcast failure (graph loading).\n");
+			printf("MPI Broadcast failure (syngraph loading).\n");
 			exit(-1);
 		}
 	}
