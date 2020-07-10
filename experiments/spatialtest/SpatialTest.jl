@@ -44,18 +44,19 @@ type_inh = SimpleNeuronType("fs")
 dims = (0.1, 0.1, 3.0)
 types = [type_exc, type_inh]
 ρs = [40000.0, 10000.0]
-λs = [0.5, 0.25]
-vs = [100.0, 100.0]
+λs = [0.5, 0.5] # [0.5, 0.15]
+vs = [90.0, 100.0]
+probfactor = [0.5, 1.0]
 
 pos, neurontypes, delgraph = genpatch(dims, types, ρs, λs, vs, fs;
-									  probfactor = 0.5,
-									  numslices = 10,
+									  probfactor = probfactor,
+									  numslices = 20,
 									  maxlen=5.0,
 									  verbose=true)
 numexc = length(filter(x -> x == type_exc, neurontypes)) 
 
 # Make the synapse graph
-weights = Dict(type_exc => 3.0900,
+weights = Dict(type_exc =>  5.0,
 			   type_inh => -6.0)
 syngraph = gensyn(delgraph, neurontypes, weights)
 
@@ -86,8 +87,8 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 10.0
-recorddur = 10.0
+dur = 1.0
+recorddur = 1.0
 λ_noise = 0.1
 randspikesize = 00.0
 randinput = 1
@@ -106,8 +107,9 @@ tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Generate Inputs 
-times = vcat([[0.0, 0.03] for _ ∈ 1:10]...)
-input1 = channelscatter(times, 1:40)
+#times = vcat([[0.0, 0.03] for _ ∈ 1:10]...)
+times = [0.0, 0.1]
+input1 = channeldup(times, 1:20)
 inputs = [input1]
 
 inputdur = times[end]

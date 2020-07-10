@@ -889,7 +889,6 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 	m->synapses = synapses_local;
 
 	//free(synapses);
-	printf("On rank %d: %g\n", commrank, m->p.num_neurons);
 
 	return m;
 }
