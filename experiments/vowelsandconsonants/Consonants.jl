@@ -9,14 +9,14 @@ using Match
 
 # seed!(10)
 
-modelname = "twotones"
+modelname = "consonants"
 trialname1 = "training"
 trialname2 = "testing"
 
 # Model Parameters
 fs = 4000.0
 num_neurons = 1000.0
-p_contact = 0.12
+p_contact = 0.10
 p_exc = 0.80
 maxdelay = 20.0
 
@@ -28,13 +28,13 @@ v_default = -65.0
 u_default = -13.0
 
 synmax = 10.0
-w_exc = 5.0
-w_inh = -6.0
+w_exc = 5.25
+w_inh = -5.0
 
 tau_pre = 0.02
 tau_post = 0.02
-a_pre = 1.2/10
-a_post = 1.0/10
+a_pre = 1.2
+a_post = 1.0
 
 ## I think these are from Masquelier, Thorpe et al.
 # tau_post = 0.03125
@@ -48,8 +48,8 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 2000.0
-recorddur = 800.0
+dur = 1000.0
+recorddur = 200.0
 λ_noise = 0.1
 randspikesize = 00.0
 randinput = 1
@@ -116,28 +116,28 @@ tonedur = 0.05
 numharmonics = 5
 numchannels = 30
 numperchan = 10 
-densityfactor = 1000.0
+densityfactor = 10000.0/5.5 #1.23
 refractorytime = 0.005
 
 numinstances = 5
 
-bas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/ba0$k.wav", fs) for k ∈ 1:numinstances]
+kas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/ka0$k.wav", fs) for k ∈ 1:numinstances]
 
 sas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/sa0$k.wav", fs) for k ∈ 1:numinstances]
 
-bas_spikes = [auditoryspikes(tone, numchannels, numperchan, idcs_exc, fs;
+kas_spikes = [auditoryspikes(tone, numchannels, numperchan, idcs_exc, fs;
 							 rt = refractorytime,
 							 densityfactor = densityfactor)
-			  for tone ∈ bas]
+			  for tone ∈ kas]
 
 sas_spikes = [auditoryspikes(tone, numchannels, numperchan, idcs_exc, fs;
 							 rt = refractorytime,
 							 densityfactor = densityfactor)
 			  for tone ∈ sas]
 
-inputs = [bas_spikes..., sas_spikes...]
+inputs = [kas_spikes..., sas_spikes...]
 
-inputdur = maximum( vcat([length(x) for x ∈ bas],
+inputdur = maximum( vcat([length(x) for x ∈ kas],
 						 [length(x) for x ∈ sas]) ) / fs
 println("Input duration: $inputdur")
 
@@ -192,20 +192,23 @@ for input ∈ results_trial.input
 	push!(inputs, spikes_input)
 end
 
-p_spikes = spikeanalysisplot(#results_trial.output,
-							 sortedoutput,
-							 inputs,
-							 results_trial.inputtimes,
-							 results_trial.inputids,
-							 results_trial.tp.recordstart,
-							 results_trial.tp.recordstop,
-							 mp.fs;
-							 numneurons=Int(num_neurons),
-							 windowdur=0.02)
+# p_spikes = spikeanalysisplot(#results_trial.output,
+# 							 sortedoutput,
+# 							 inputs,
+# 							 results_trial.inputtimes,
+# 							 results_trial.inputids,
+# 							 results_trial.tp.recordstart,
+# 							 results_trial.tp.recordstop,
+# 							 mp.fs;
+# 							 numneurons=Int(num_neurons),
+# 							 windowdur=0.02)
+# 
+# p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
+# 			 xlabel="Synapse Number", ylabel="Strength",
+# 			 legend=:none)
+# 
+# p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])
 
-p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
-			 xlabel="Synapse Number", ylabel="Strength",
-			 legend=:none)
 
 # heatmaps = DelNetExperiment.pstplots(results_trial.output,
 # 								  results_trial.inputtimes,
@@ -227,7 +230,6 @@ p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
 # end
 
 
-p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])
 # p2 = plot(heatmaps..., margins=2mm)
 
 save("consonantsresults.jld", "results", results_trial)

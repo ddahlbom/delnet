@@ -9,7 +9,7 @@ using Match
 
 # seed!(10)
 
-modelname = "twotones"
+modelname = "spatialtest"
 trialname1 = "training"
 trialname2 = "testing"
 
@@ -28,8 +28,8 @@ w_inh = -5.0
 
 tau_pre = 0.02
 tau_post = 0.02
-a_pre = 1.2/10
-a_post = 1.0/10
+a_pre = 1.2
+a_post = 1.0
 ## I think these are from Masquelier, Thorpe et al.
 # tau_post = 0.03125
 # tau_pre = 0.85*tau_post 
@@ -37,16 +37,18 @@ a_post = 1.0/10
 # a_pre = 0.0337 * 10.0
 
 # Neuron Types 
-type_exc = SimpleNeuronType("rs")
-type_inh = SimpleNeuronType("fs")
+type_exc = SimpleNeuronType("exc")
+type_inh = SimpleNeuronType("inh")
 
 # Make the delay graph
 dims = (0.1, 0.1, 3.0)
 types = [type_exc, type_inh]
-ρs = [40000.0, 10000.0]
-λs = [0.5, 0.5] # [0.5, 0.15]
-vs = [90.0, 100.0]
-probfactor = [0.5, 1.0]
+#ρs = [40000.0, 10000.0]
+ρs = [40000.0, 10000.0] .* (8.0/5.0)
+# λs = [0.5, 0.4] # [0.5, 0.15]
+λs = [0.188, 0.188] # [0.5, 0.15]
+vs = [90.0, 200.0]
+probfactor = [0.50, 1.05]
 
 pos, neurontypes, delgraph = genpatch(dims, types, ρs, λs, vs, fs;
 									  probfactor = probfactor,
@@ -56,7 +58,7 @@ pos, neurontypes, delgraph = genpatch(dims, types, ρs, λs, vs, fs;
 numexc = length(filter(x -> x == type_exc, neurontypes)) 
 
 # Make the synapse graph
-weights = Dict(type_exc =>  5.0,
+weights = Dict(type_exc =>  4.0,
 			   type_inh => -6.0)
 syngraph = gensyn(delgraph, neurontypes, weights)
 
@@ -87,10 +89,10 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 1.0
-recorddur = 1.0
-λ_noise = 0.1
-randspikesize = 00.0
+dur = 100.0
+recorddur = 10.0
+λ_noise = 1.0
+randspikesize = 20.0
 randinput = 1
 inhibition = 1
 inputmode = 2
@@ -98,8 +100,9 @@ multiinputmode = 1
 inputweight = 20.0
 recordstart = max(0.0,dur-recorddur)
 recordstop = dur 
-λ_instarttimes = 0.5 
-inputrefractorytime = 0.008 + 5*maxdelay/fs
+λ_instarttimes = 2.0 
+#inputrefractorytime = 0.008 + 5*maxdelay/fs
+inputrefractorytime = 0.2 
 
 tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 				  inputmode, multiinputmode, inputweight, recordstart,
@@ -107,9 +110,8 @@ tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Generate Inputs 
-#times = vcat([[0.0, 0.03] for _ ∈ 1:10]...)
-times = [0.0, 0.1]
-input1 = channeldup(times, 1:20)
+times = vcat([[0.0, 0.03] for _ ∈ 1:10]...)
+input1 = channelscatter(times, 1:20)
 inputs = [input1]
 
 inputdur = times[end]
@@ -158,7 +160,7 @@ p_spikes = spikeanalysisplot(#results_trial.output,
 							 results_trial.tp.recordstop,
 							 mp.fs;
 							 numneurons=Int(num_neurons),
-							 windowdur=0.02)
+							 windowdur=0.01)
 
 p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
 			 xlabel="Synapse Number", ylabel="Strength",
