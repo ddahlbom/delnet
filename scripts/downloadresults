@@ -1,0 +1,17 @@
+#!/bin/sh
+
+NAME=$1
+
+if [ $# != 1 ]; then
+	echo "Need one argument (experiment name prefix)"
+else
+	scp \
+	CDAPdhlb@blp01.ccni.rpi.edu:/gpfs/u/home/CDAP/CDAPdhlb/scratch/delnetresults/"$NAME"_synapses.bin
+	\
+	CDAPdhlb@blp01.ccni.rpi.edu:/gpfs/u/home/CDAP/CDAPdhlb/scratch/delnetresults/"$NAME"_instarttimes.txt
+	\
+	CDAPdhlb@blp01.ccni.rpi.edu:/gpfs/u/home/CDAP/CDAPdhlb/scratch/delnetresults/"$NAME"_spikes.txt
+
+fi
+
+
