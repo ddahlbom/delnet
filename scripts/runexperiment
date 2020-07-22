@@ -22,7 +22,6 @@ mv /tmp/tmp.$SLURM_JOB_ID /tmp/hosts.$SLURM_JOB_ID
 
 module load gcc/7.4.0/1 spectrum-mpi cuda
 
-mpirun -hostfile /tmp/hosts.$SLURM_JOB_ID -np $SLURM_NPROCS\
- /gpfs/u/home/CDAP/CDAPdhlb/barn/delnet/runtrial-mpi $@
+mpirun -hostfile /tmp/hosts.$SLURM_JOB_ID -np $SLURM_NPROCS /gpfs/u/home/CDAP/CDAPdhlb/barn/delnet/runtrial-mpi $@
 rm /tmp/hosts.$SLURM_JOB_ID
 
