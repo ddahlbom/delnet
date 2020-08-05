@@ -43,9 +43,7 @@ a_post = 1.0
 # a_pre = 0.0337 * 10.0
 
 mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
-				 a_exc, d_exc, a_inh, d_inh, v_default, u_default,
-				 synmax, w_exc, w_inh,
-				 tau_pre, tau_post, a_pre, a_post)
+				 synmax, tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
 dur = 1000.0
@@ -192,45 +190,45 @@ for input ∈ results_trial.input
 	push!(inputs, spikes_input)
 end
 
-# p_spikes = spikeanalysisplot(#results_trial.output,
-# 							 sortedoutput,
-# 							 inputs,
-# 							 results_trial.inputtimes,
-# 							 results_trial.inputids,
-# 							 results_trial.tp.recordstart,
-# 							 results_trial.tp.recordstop,
-# 							 mp.fs;
-# 							 numneurons=Int(num_neurons),
-# 							 windowdur=0.02)
-# 
-# p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
-# 			 xlabel="Synapse Number", ylabel="Strength",
-# 			 legend=:none)
-# 
-# p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])
+if plotting
+	p_spikes = spikeanalysisplot(#results_trial.output,
+								 sortedoutput,
+								 inputs,
+								 results_trial.inputtimes,
+								 results_trial.inputids,
+								 results_trial.tp.recordstart,
+								 results_trial.tp.recordstop,
+								 mp.fs;
+								 numneurons=Int(num_neurons),
+								 windowdur=0.02)
+
+	p_syn = plot(filter(x->x>=0, [s.strength for s ∈ results_trial.synapses]);
+				 xlabel="Synapse Number", ylabel="Strength",
+				 legend=:none)
+
+	p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])
 
 
-# heatmaps = DelNetExperiment.pstplots(results_trial.output,
-# 								  results_trial.inputtimes,
-# 								  results_trial.inputids,
-# 								  inputdur+5*maxdelay/1000.0,
-# 								  1,
-# 								  Int(num_neurons),
-# 								  fs;
-# 								  xlabel="Time (s)",
-# 								  ylabel="Neuron Number")
-# 
-# for (k,input) ∈ enumerate(results_trial.input)
-# 	spikeraster(heatmaps[k], input;
-# 				markersize=4.0,
-# 				markercolor=:white,
-# 				markershape=:x,
-# 				markerstrokewidth=0.0,
-# 				legend=:none)
-# end
+	heatmaps = DelNetExperiment.pstplots(results_trial.output,
+									  results_trial.inputtimes,
+									  results_trial.inputids,
+									  inputdur+5*maxdelay/1000.0,
+									  1,
+									  Int(num_neurons),
+									  fs;
+									  xlabel="Time (s)",
+									  ylabel="Neuron Number")
 
-
-# p2 = plot(heatmaps..., margins=2mm)
+	for (k,input) ∈ enumerate(results_trial.input)
+		spikeraster(heatmaps[k], input;
+					markersize=4.0,
+					markercolor=:white,
+					markershape=:x,
+					markerstrokewidth=0.0,
+					legend=:none)
+	end
+	p2 = plot(heatmaps..., margins=2mm)
+end
 
 save("consonantsresults.jld", "results", results_trial)
 

@@ -93,8 +93,8 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
 	p->a_pre = pl_getvalue(pl, "a_pre");
 	p->a_post = pl_getvalue(pl, "a_post");
 	p->synmax = pl_getvalue(pl, "synmax");
-	p->w_exc  = pl_getvalue(pl, "w_exc");
-	p->w_inh = pl_getvalue(pl, "w_inh");
+	//p->w_exc  = pl_getvalue(pl, "w_exc");
+	//p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
 
 	//p->a_exc = pl_getvalue(pl, "a_exc");
@@ -146,8 +146,8 @@ void su_mpi_printmparameters(su_mpi_modelparams p)
 	printf("tau_post:\t\t%f\n", p.tau_post);
 	printf("A_post:\t\t\t%f\n", p.a_post);
 	printf("Max synapse strength:\t%lf\n", p.synmax);
-	printf("Exc syn strength:\t%lf\n", p.w_exc);
-	printf("Inh syn strength:\t%lf\n", p.w_inh);
+	//printf("Exc syn strength:\t%lf\n", p.w_exc);
+	//printf("Inh syn strength:\t%lf\n", p.w_inh);
 	printf("Max delay (ms):\t\t%lf\n", p.maxdelay);
 	printf("----------------------------------------\n");
 }

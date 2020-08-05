@@ -7,7 +7,7 @@ if [ $# != 1 ]; then
 else
 	scp "$NAME""_mparams.txt" "$NAME""_graph.bin" \
 		"$NAME""_syngraph.bin" "$NAME""_neurons.bin" \
-		"$NAME""_tparams.bin" "$NAME""_input.bin" \
+		"$NAME""_tparams.txt" "$NAME""_input.bin" \
 		CDAPdhlb@blp01.ccni.rpi.edu:/gpfs/u/barn/CDAP/CDAPdhlb/delnet/staging
 fi
 

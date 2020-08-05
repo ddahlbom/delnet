@@ -46,8 +46,8 @@ typedef struct su_mpi_modelparams_s {
 
 	// Synapses
 	double synmax; 			
-	double w_exc; 			
-	double w_inh; 			
+	//double w_exc; 			
+	//double w_inh; 			
 
 	// STDP
 	double tau_pre; 		
