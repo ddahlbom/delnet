@@ -46,8 +46,8 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 synmax, tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 1000.0
-recorddur = 200.0
+dur = 1500.0; plotting = false
+recorddur = 500.0
 λ_noise = 0.1
 randspikesize = 00.0
 randinput = 1
@@ -110,8 +110,8 @@ end
 
 # Generate Inputs 
 numexc = Int(round(p_exc*num_neurons))
-tonedur = 0.05
-numharmonics = 5
+# tonedur = 0.05
+# numharmonics = 5
 numchannels = 30
 numperchan = 10 
 densityfactor = 10000.0/5.5 #1.23
@@ -121,7 +121,7 @@ numinstances = 5
 
 kas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/ka0$k.wav", fs) for k ∈ 1:numinstances]
 
-sas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/sa0$k.wav", fs) for k ∈ 1:numinstances]
+sas = [loadaudiofile("/home/dahlbom/research/delnet/experiments/vowelsandconsonants/audio/ba0$k.wav", fs) for k ∈ 1:numinstances]
 
 kas_spikes = [auditoryspikes(tone, numchannels, numperchan, idcs_exc, fs;
 							 rt = refractorytime,

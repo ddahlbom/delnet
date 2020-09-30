@@ -116,7 +116,7 @@ unsigned int dn_mpi_list_uint_pop(dn_mpi_list_uint *l) {
 		l->count -= 1;
 	}
 	else {
-		// trying to pop an empty list
+		/* trying to pop an empty list */
 		//val = 0;
 		exit(-1);
 	}

@@ -53,8 +53,8 @@ static __inline__ ticks getticks(void)
 
 /*
    TO DO
-   - [ ] Synapse sorting (probably need to coordinate with delnet mods)
-   - [ ] Make synapse weights loadable
+   - [X] Synapse sorting (probably need to coordinate with delnet mods)
+   - [X] Make synapse weights loadable
    - [ ] Make multiple model types, increasing modularity (e.g. synapse struct)
 */
 
@@ -93,10 +93,11 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
 	p->a_pre = pl_getvalue(pl, "a_pre");
 	p->a_post = pl_getvalue(pl, "a_post");
 	p->synmax = pl_getvalue(pl, "synmax");
-	//p->w_exc  = pl_getvalue(pl, "w_exc");
-	//p->w_inh = pl_getvalue(pl, "w_inh");
 	p->maxdelay = pl_getvalue(pl, "maxdelay");
 
+	// All parameters below now loaded directly
+	//p->w_exc  = pl_getvalue(pl, "w_exc");
+	//p->w_inh = pl_getvalue(pl, "w_inh");
 	//p->a_exc = pl_getvalue(pl, "a_exc");
 	//p->d_exc = pl_getvalue(pl, "d_exc");
 	//p->a_inh = pl_getvalue(pl, "a_inh");
@@ -209,12 +210,12 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 							int commrank, int commsize, bool profiling)
 {
 
+	/* timing info */
 	ticks gettinginputs, updatingsyntraces, updatingneurons, spikechecking,
 			updatingneutraces, updatingsynstrengths, pushingoutput,
 			advancingbuffer, ticks_start=0, ticks_finish, totalticks_start,
 		  	totalticks_finish, totaltickscum=0;
 
-	/* timing info */
 	gettinginputs 		 = 0;
 	updatingsyntraces 	 = 0;
 	updatingneutraces 	 = 0;
@@ -912,7 +913,10 @@ void checksizeandrank(su_mpi_model_l *m, int commrank, int commsize)
 
 
 /*
- * This one could be easily parallelized with MPI read and write...
+ * This one could be easily parallelized with MPI read and write. To-do.
+ *
+ * This is to make the synapse weights available for analysis.  They are
+ * saved in a different, less convenient, format in the model itself.
  */
 void su_mpi_savesynapses(su_mpi_model_l *m, char *name,
 						 int commrank, int commsize)

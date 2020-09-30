@@ -34,10 +34,10 @@ typedef struct dnf_delaybuf_s {
 
 
 typedef struct dnf_delaynet_s {
-	//dnf_node *nodes;
+	//dnf_node *nodes; 	// have all node info external to dn functionality
 	int commrank;
 	int commsize;
-	idx_t numnodes;
+	idx_t numnodes; // local
 	idx_t nodeoffsetglobal;
 	idx_t bufferoffsetglobal;
 
