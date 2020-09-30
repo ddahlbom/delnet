@@ -3,8 +3,7 @@
 #include <stdio.h>
 #include <mpi.h>
 
-//#include "delnet.h"
-#include "delnetfixed.h"
+#include "delnet.h"
 #include "simutils.h"
 #include "simkernels.h"
 

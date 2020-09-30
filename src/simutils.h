@@ -4,8 +4,7 @@
 #include <stdbool.h>
 
 #include "spkrcd.h"
-//#include "delnet.h"
-#include "delnetfixed.h"
+#include "delnet.h"
 
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
