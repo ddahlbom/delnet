@@ -27,29 +27,38 @@ void getcontributors(su_mpi_model_l *m, idx_t **prev, idx_t *numprev,
 					 int commrank, int commsize)
 {
 	dnf_delaynet *dn = m->dn;
-	idx_t n_g = 0;
-	int numbuffers_g = 0; // per node -- a count
-	int *numbuffers_per_rank = malloc(sizeof(int)*commsize);
-	int *n_l = malloc(sizeof(int)*commsize);
-	int *node_offsets = calloc(commsize, sizeof(int));
+	idx_t numnodes_g = 0;
+	int *numnodes_l = malloc(sizeof(int)*commsize);
+	int numbuffers_pernode_g = 0; // per node -- a count
+	int *numbufferspernode; 
+	int *numbufferstotal_perrank = malloc(sizeof(int)*commsize);
+	int *nodeoffsets = calloc(commsize, sizeof(int));
+
+	/* Get the number of buffers per nodes globally */
 	MPI_Allgather(&dn->numnodes, 1, MPI_UNSIGNED_LONG,
-			      n_l, 1, MPI_UNSIGNED_LONG,
+			      numnodes_l, 1, MPI_UNSIGNED_LONG,
 				  MPI_COMM_WORLD);
 	for (idx_t i=0; i<commsize; i++)
-		n_g += n_l[i];
+		numnodes_g += numnodes_l[i];
 	for (idx_t i=1; i<commsize; i++)
-		node_offsets[i] = node_offsets[i-1] + n_l[i];
+		nodeoffsets[i] = nodeoffsets[i-1] + numnodes_l[i];
 
 	if (commrank == 0) {
-		idx_t *numbuffers_g = malloc(sizeof(idx_t)*n_g);
+		numbufferspernode = malloc(sizeof(int)*numnodes_g);
 		MPI_Gatherv(dn->numbuffers, dn->numnodes, MPI_UNSIGNED_LONG, 
-					numbuffers_g, n_l, node_offsets,
+					numbufferspernode, numnodes_l, nodeoffsets,
 					MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
 	} else {
 		MPI_Gatherv(dn->numbuffers, dn->numnodes, MPI_UNSIGNED_LONG, 
 					NULL, NULL, NULL,
 					MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
 	}
+
+	/* Get the buffer sources */
+	MPI_Allgather(&dn->numbufferstotal, 1, MPI_UNSIGNED_LONG,
+				  numbufferstotal_perrank, 1, MPI_UNSIGNED_LONG,
+				  MPI_COMM_WORLD);
+				  
 
 	MPI_Gatherv(dn->buffersourcenodes, dn->numbufferstotal, MPI_UNSIGNED_LONG,
 				___, ___, ___, 
