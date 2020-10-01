@@ -34,7 +34,7 @@ idx_t getcontributors(su_mpi_model_l *m,
 	dnf_delaynet *dn = m->dn;
 
 	/* Get the number of buffers per nodes globally */
-	idx_t numnodes = (int) dn->numnodes;
+	int numnodes = (int) dn->numnodes;
 
 	if (commrank == 0) {
 		int numnodes_g = 0;
@@ -57,7 +57,7 @@ idx_t getcontributors(su_mpi_model_l *m,
 
 		*numbufferspernode = malloc(sizeof(idx_t)*numnodes_g);
 		MPI_Gatherv(dn->numbuffers,
-				    (int) dn->numnodes,
+				    numnodes,
 					MPI_UNSIGNED_LONG, 
 					*numbufferspernode,
 					numnodes_l,
@@ -78,7 +78,7 @@ idx_t getcontributors(su_mpi_model_l *m,
 				   0,
 				   MPI_COMM_WORLD);
 		MPI_Gatherv(dn->numbuffers,
-				    (int) dn->numnodes,
+				    numnodes,
 					MPI_UNSIGNED_LONG, 
 					NULL,
 					NULL,
@@ -106,14 +106,14 @@ idx_t getcontributors(su_mpi_model_l *m,
 
 		for (idx_t i=0; i<commsize; i++) {
 			numbufferstotal_perrank_int[i] = (int) numbufferstotal_perrank[i];
-			numbuffers_g += numbufferstotal_perrank_int[i];
+			numbuffers_g += numbufferstotal_perrank[i];
 		}
 		for (idx_t i=1; i<commsize; i++) {
 			bufferoffsets_int[i] = bufferoffsets_int[i-1] +
 								   numbufferstotal_perrank_int[i-1];
 		}
 
-		*sourcenodes = malloc(sizeof(int)*numbuffers_g);
+		*sourcenodes = malloc(sizeof(idx_t)*numbuffers_g);
 		MPI_Gatherv(dn->buffersourcenodes,
 					(int) dn->numbufferstotal,
 					MPI_UNSIGNED_LONG, 
@@ -145,6 +145,7 @@ idx_t getcontributors(su_mpi_model_l *m,
 					0,
 					MPI_COMM_WORLD);
 	}
+
 	return numbuffers_g;
 }
 
@@ -191,12 +192,11 @@ int main(int argc, char *argv[])
 
 	/* Look of polychronous groups (PGs) */
 	if (PG_MAIN_DEBUG) printf("Running simulation on rank %d\n", commrank);
-	//su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
-	//					sr, out_name, commrank, commsize, PROFILING);
+	// su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
+	// 					sr, out_name, commrank, commsize, PROFILING);
 	idx_t *sourcenodes = 0, *numbufferspernode = 0;
 	idx_t numbuffers;
 	numbuffers = getcontributors(m, &sourcenodes, &numbufferspernode, commrank, commsize);
-
 	if (commrank == 0) printf("Number of buffers: %lu\n", numbuffers);
 		
 
