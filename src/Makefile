@@ -8,21 +8,24 @@ optim: main
 sanitize: CFLAGS += -fsanitize=address
 sanitize: debug
 debug: main
-pg-debug: pgsearchmain
+pg-debug: pgsearch-exec
 pg: CFLAGS += -O3
-pg: pgsearchmain
+pg: pgsearch-exec
+
+pgsearch-exec: pgsearchmain.o pgsearch.o delnet.o spkrcd.o paramutils.o simkernels.o simutils.o
+	$(CC) $(CFLAGS) -o ../pgsearch-mpi delnet.o spkrcd.o pgsearch.o pgsearchmain.o paramutils.o simkernels.o simutils.o $(LDLIBS) 
+
+pgsearchmain.o: pgsearchmain.c 
+	$(CC) $(CFLAGS) -c pgsearchmain.c
 
 main: delnetmain.o delnet.o spkrcd.o paramutils.o simkernels.o simutils.o
 	$(CC) $(CFLAGS) -o ../runtrial-mpi delnet.o delnetmain.o spkrcd.o paramutils.o simkernels.o simutils.o $(LDLIBS) 
 
-pgsearchmain: pgsearch.o delnet.o spkrcd.o paramutils.o simkernels.o simutils.o
-	$(CC) $(CFLAGS) -o ../pgsearch-mpi delnet.o spkrcd.o pgsearch.o paramutils.o simkernels.o simutils.o $(LDLIBS) 
-
-pgsearch.o: pgsearch.c
-	$(CC) $(CFLAGS) -c pgsearch.c
-
 delnetmain.o: delnetmain.c delnet.o
 	$(CC) $(CFLAGS) -c delnetmain.c
+
+pgsearch.o: pgsearch.c pgsearch.h
+	$(CC) $(CFLAGS) -c pgsearch.c
 
 simkernels.o: simkernels.c simkernels.h
 	$(CC) $(CFLAGS) -c simkernels.c

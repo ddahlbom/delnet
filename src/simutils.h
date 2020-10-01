@@ -2,8 +2,10 @@
 #define SIMUTILSMPI_H
 
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "spkrcd.h"
+//#include "delnet.h"
 #include "delnet.h"
 
 #define INPUT_MODE_PERIODIC 1

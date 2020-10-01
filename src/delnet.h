@@ -1,6 +1,8 @@
 #ifndef DELNETFIXED_H
 #define DELNETFIXED_H
 
+#include <stdio.h>
+
 #define DNF_BUF_SIZE 15  // 2^n - 1
 #define FLOAT_T double 	// remove later
 #define IDX_T unsigned long
