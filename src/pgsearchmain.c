@@ -140,6 +140,9 @@ int main(int argc, char *argv[])
 			}
 		}
 		printf("number of anchor groups: %lu\n", numgroups);
+		free(pgs);
+		free(positions);
+		free(positions_old);
 	} else {
 	}
 
@@ -153,6 +156,7 @@ int main(int argc, char *argv[])
 	if (commrank == 0) {
 		free(sourcenodes);
 		free(numbufferspernode);
+		free(weights);
 	}
 	su_mpi_freemodel_l(m);
 	MPI_Finalize();
