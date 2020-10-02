@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #define DNF_BUF_SIZE 15  // 2^n - 1
-#define FLOAT_T double 	// remove later
+#define FLOAT_T double 	// remove later -- now using data_t
 #define IDX_T unsigned long
 #define data_t double
 #define idx_t unsigned long

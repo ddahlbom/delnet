@@ -67,44 +67,80 @@ int main(int argc, char *argv[])
 	/* Get incoming neurons */
 	if (PG_MAIN_DEBUG) printf("Starting PG search process... %d\n", commrank);
 	idx_t *sourcenodes = 0, *numbufferspernode = 0;
-	idx_t numnodes_g;
+	idx_t numnodes_g, numbuffers_g=0;
 	numnodes_g = getcontributors(m, &sourcenodes, &numbufferspernode, commrank, commsize);
 	idx_t *bufstartidcs = malloc(numnodes_g*sizeof(idx_t));
 	bufstartidcs[0] = 0;
-	for (idx_t i=1; i<numnodes_g; i++)
-		bufstartidcs[i] = bufstartidcs[i-1] + numbufferspernode[i-1];
+
+	if (commrank == 0) {
+		numbuffers_g += numbufferspernode[0];
+		for (idx_t i=1; i<numnodes_g; i++) {
+			bufstartidcs[i] = bufstartidcs[i-1] + numbufferspernode[i-1];
+			numbuffers_g += numbufferspernode[i];
+		}
+		printf("TEST: Total # of synapses: %lu\n", numbuffers_g);
+	}
+
+	/* Consolidate synapse weights */
+	data_t *weights = 0;
+	numbuffers_g = getcontributorweights(m, &weights, commrank, commsize);
 
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
 	idx_t maxgroups = 10000;
-	idx_t numgroups = 1;
+	idx_t numgroups = 0;
 
-	threegroup *pgs = malloc(sizeof(threegroup)*maxgroups);
-	idx_t *positions = malloc(sizeof(idx_t)*groupsize);
-	idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
-	for (idx_t i=0; i<groupsize; i++)
-		positions[i] = i;
-
-	pgs[0].members[0] = positions[0];
-	pgs[0].members[1] = positions[1];
-	pgs[0].members[2] = positions[2];
-
-	bool done = false;
-	idx_t new = 0;
 	if (commrank == 0) {
-		printf("This is a test...\n");
-		while (!done) {
-			for (idx_t i=0; i<groupsize; i++)
-				positions_old[i] = positions[i];	
-			updateposition(positions, groupsize, 2, numnodes_g-1); 
-			for (idx_t i=0; i<groupsize; i++)
-				new += positions_old[i] == positions[i];
-			if (new == groupsize) {
-				done = true;
-			} else {
-				printf("%lu %lu %lu\n", positions[0], positions[1], positions[2]);
+		threegroup *pgs = malloc(sizeof(threegroup)*maxgroups);
+		idx_t *positions = malloc(sizeof(idx_t)*groupsize);
+		idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
+
+		bool done = false;
+		idx_t new = 0;
+		idx_t offset = 0;
+		idx_t maxidx = 0;
+		data_t threshold = 18.8;
+		data_t totalweight = 0.0;
+
+		/* Iterate through nodes, test combinations of their contributors */
+		printf("TEST: Starting search...\n");
+		for (idx_t i=0; i<numnodes_g; i++) {
+			offset = bufstartidcs[i];	
+			maxidx = numbufferspernode[i]-1;
+			for (idx_t j=0; j<groupsize; j++) {
+				positions[j] = j;
+				positions_old[j] = 0;
+			}
+			while (!done) {
+				/* Make sure its new -- only repeats when combos exhausted */
+				new = 0;
+				for (idx_t k=0; k<groupsize; k++)
+					new += positions_old[k] == positions[k];
+				if (new == groupsize) {
+					done = true;
+				} else {
+					/* Test weights and run trial if necessary */
+					totalweight = 0.0;
+					for (idx_t l=0; l<groupsize; l++) 
+						totalweight += weights[offset+positions[l]];
+					if (totalweight > threshold) {
+						/* here run partial simulation with group as input */
+						/* going to need to recover delays as well... */
+						numgroups += 1;
+						printf("Candidate group: %lu %lu %lu\n", 
+								sourcenodes[offset+positions[0]],
+								sourcenodes[offset+positions[1]],
+								sourcenodes[offset+positions[2]]);
+					}
+				}
+				/* Find a new combination */
+				for (idx_t m=0; m<groupsize; m++)
+					positions_old[m] = positions[m];	
+				updateposition(positions, groupsize, groupsize-1, maxidx); 
 			}
 		}
+		printf("number of anchor groups: %lu\n", numgroups);
+	} else {
 	}
 
 
