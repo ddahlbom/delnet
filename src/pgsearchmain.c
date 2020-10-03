@@ -85,9 +85,13 @@ int main(int argc, char *argv[])
 	data_t *weights = 0;
 	numbuffers_g = getcontributorweights(m, &weights, commrank, commsize);
 
+	/* Consolidate delay times */
+	delay_t *delays = 0;
+	getcontributordelays(m, &delays, commrank, commsize);
+
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
-	idx_t maxgroups = 10000;
+	idx_t maxgroups = 100000;
 	idx_t numgroups = 0;
 
 	if (commrank == 0) {
@@ -99,20 +103,22 @@ int main(int argc, char *argv[])
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		data_t threshold = 18.8;
+		data_t threshold = 19.0;
 		data_t totalweight = 0.0;
 
 		/* Iterate through nodes, test combinations of their contributors */
 		printf("TEST: Starting search...\n");
 		for (idx_t i=0; i<numnodes_g; i++) {
+			//printf("Check inputs to neuron %lu\n", i);
 			offset = bufstartidcs[i];	
 			maxidx = numbufferspernode[i]-1;
 			for (idx_t j=0; j<groupsize; j++) {
 				positions[j] = j;
 				positions_old[j] = 0;
 			}
+			done = false;
 			while (!done) {
-				/* Make sure its new -- only repeats when combos exhausted */
+				/* Check if new position. Repeat only when combos exhausted. */
 				new = 0;
 				for (idx_t k=0; k<groupsize; k++)
 					new += positions_old[k] == positions[k];
@@ -126,11 +132,21 @@ int main(int argc, char *argv[])
 					if (totalweight > threshold) {
 						/* here run partial simulation with group as input */
 						/* going to need to recover delays as well... */
-						numgroups += 1;
-						printf("Candidate group: %lu %lu %lu\n", 
-								sourcenodes[offset+positions[0]],
-								sourcenodes[offset+positions[1]],
-								sourcenodes[offset+positions[2]]);
+						// printf("Candidate group: %lu %lu %lu\n", 
+						// 		sourcenodes[offset+positions[0]],
+						// 		sourcenodes[offset+positions[1]],
+						// 		sourcenodes[offset+positions[2]]);
+						//printf("\t to: %lu\n", i);
+							
+						
+						
+						numgroups += 1; // change so only if group accepted
+
+						if (numgroups == maxgroups) {
+							printf("Hit max number of groups!");
+							done = true;
+							i = numnodes_g;
+						}
 					}
 				}
 				/* Find a new combination */
@@ -157,6 +173,7 @@ int main(int argc, char *argv[])
 		free(sourcenodes);
 		free(numbufferspernode);
 		free(weights);
+		free(delays);
 	}
 	su_mpi_freemodel_l(m);
 	MPI_Finalize();

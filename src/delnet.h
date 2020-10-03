@@ -8,6 +8,7 @@
 #define IDX_T unsigned long
 #define data_t double
 #define idx_t unsigned long
+#define delay_t unsigned short
 #define mpi_idx_t MPI_UNSIGNED_LONG
 
 typedef enum dnf_error {
@@ -29,9 +30,9 @@ typedef struct dnf_node_s {
 
 
 typedef struct dnf_delaybuf_s {
-	unsigned short delaylen;
-	unsigned short numstored;
-	unsigned short counts[DNF_BUF_SIZE];	
+	delay_t delaylen;
+	delay_t numstored;
+	delay_t counts[DNF_BUF_SIZE];	
 } dnf_delaybuf;
 
 
@@ -85,7 +86,7 @@ void dnf_save(dnf_delaynet *dn, FILE *stream);
 dnf_delaynet *dnf_load(FILE *stream);
 
 /* buffer functions */
-dnf_error dnf_bufinit(dnf_delaybuf *buf, unsigned short len);
+dnf_error dnf_bufinit(dnf_delaybuf *buf, delay_t len);
 dnf_error dnf_recordevent(dnf_delaybuf *buf);
 dnf_error dnf_bufadvance(dnf_delaybuf *buf, data_t *out);
 
