@@ -10,6 +10,7 @@
 #include "simutils.h"
 #include "spkrcd.h"
 #include "pgsearch.h"
+#include "inputs.h"
 
 #define PROFILING 1
 #define PG_MAIN_DEBUG 1
@@ -93,13 +94,34 @@ int main(int argc, char *argv[])
 	idx_t groupsize = 3;
 	idx_t maxgroups = 100000;
 	idx_t numgroups = 0;
+	idx_t numinputs_l = 0;
+
+	su_mpi_input input_g, input_l;
+	input_g.len = groupsize;
+	su_mpi_spike *inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
+	data_t *spiketimes = malloc(sizeof(data_t)*groupsize);
+	data_t maxdelay = 0;
+
+	su_mpi_trialparams tp;
+	tp.dur = 0.07; // make variable
+	tp.lambda = 0.01; 
+	tp.randspikesize = 0.0;
+	tp.randinput = 0.0;
+	tp.inhibition = 1.0;
+	tp.inputmode = 2.0;
+	tp.multiinputmode = 1.0;
+	tp.inputweight = 20.0;
+	tp.recordstart = 0.0;
+	tp.recordstop = tp.dur;
+	tp.lambdainput = 1.0;
+	tp.inputrefractorytime = 1.0;
 
 	if (commrank == 0) {
 		threegroup *pgs = malloc(sizeof(threegroup)*maxgroups);
 		idx_t *positions = malloc(sizeof(idx_t)*groupsize);
 		idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
 
-		bool done = false;
+		int done = 0;
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
@@ -116,14 +138,14 @@ int main(int argc, char *argv[])
 				positions[j] = j;
 				positions_old[j] = 0;
 			}
-			done = false;
+			done = 0;
 			while (!done) {
 				/* Check if new position. Repeat only when combos exhausted. */
 				new = 0;
 				for (idx_t k=0; k<groupsize; k++)
 					new += positions_old[k] == positions[k];
 				if (new == groupsize) {
-					done = true;
+					done = 1;
 				} else {
 					/* Test weights and run trial if necessary */
 					totalweight = 0.0;
@@ -131,28 +153,43 @@ int main(int argc, char *argv[])
 						totalweight += weights[offset+positions[l]];
 					if (totalweight > threshold) {
 						/* here run partial simulation with group as input */
-						/* going to need to recover delays as well... */
-						// printf("Candidate group: %lu %lu %lu\n", 
-						// 		sourcenodes[offset+positions[0]],
-						// 		sourcenodes[offset+positions[1]],
-						// 		sourcenodes[offset+positions[2]]);
-						//printf("\t to: %lu\n", i);
-							
+						free(inputspikes);
+						inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
+						maxdelay = 0;
+						for (idx_t n=0; n<groupsize; n++) {
+							spiketimes[n] = (data_t) delays[offset+positions[n]]
+											/ m->p.fs;
+							if (spiketimes[n] > maxdelay)
+								maxdelay = spiketimes[n];
+						}
+						for (idx_t n=0; n<groupsize; n++)
+							inputspikes[n].t = maxdelay - inputspikes[n].t;
+						MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
+								  0, MPI_COMM_WORLD);
+						MPI_Bcast(&done, 1, MPI_INT, 0, MPI_COMM_WORLD);
+						input_l.len = pruneinputtolocal(&inputspikes,
+														groupsize, m);
+						input_l.spikes = inputspikes;
 						
-						
-						numgroups += 1; // change so only if group accepted
+						// Run the trial...
+						su_mpi_runpgtrial(m,tp, &input_l, 1, sr, "test",
+										  commrank, commsize); 
 
+
+						numgroups += 1; // change so only if group accepted
 						if (numgroups == maxgroups) {
 							printf("Hit max number of groups!");
-							done = true;
+							done = 1;
 							i = numnodes_g;
 						}
 					}
 				}
+
 				/* Find a new combination */
 				for (idx_t m=0; m<groupsize; m++)
 					positions_old[m] = positions[m];	
 				updateposition(positions, groupsize, groupsize-1, maxidx); 
+
 			}
 		}
 		printf("number of anchor groups: %lu\n", numgroups);
@@ -160,6 +197,13 @@ int main(int argc, char *argv[])
 		free(positions);
 		free(positions_old);
 	} else {
+		bool done = false;
+		while (!done) {
+			MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
+					  0, MPI_COMM_WORLD);
+			MPI_Bcast(&done, 1, MPI_INT,
+					  0, MPI_COMM_WORLD);
+		}
 	}
 
 

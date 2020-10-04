@@ -135,4 +135,9 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 							su_mpi_input *inputs, idx_t numinputs, 
 							spikerecord *sr, char *trialname,
 							int commrank, int commsize, bool profiling);
+
+void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
+							su_mpi_input *inputs, idx_t numinputs,
+							spikerecord *sr, char *trialname,
+							int commrank, int commsize);
 #endif
