@@ -606,7 +606,8 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronevents = calloc(n_l, sizeof(idx_t));
-	unsigned long int numspikes = 0, numrandspikes = 0;
+	unsigned long int numspikes = 0;
+	//unsigned long int numrandspikes = 0;
 	FLOAT_T t;
 
 	/* initiate input */

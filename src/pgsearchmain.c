@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 	idx_t groupsize = 3;
 	idx_t maxgroups = 100000;
 	idx_t numgroups = 0;
-	idx_t numinputs_l = 0;
+	//idx_t numinputs_l = 0;
 
 	su_mpi_input input_g, input_l;
 	input_g.len = groupsize;
@@ -122,6 +122,9 @@ int main(int argc, char *argv[])
 		idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
 
 		int done = 0;
+		int dotrial = 1;
+		int globaldone = 0;
+		MPI_Request donereq, trialreq;
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
@@ -131,7 +134,10 @@ int main(int argc, char *argv[])
 		/* Iterate through nodes, test combinations of their contributors */
 		printf("TEST: Starting search...\n");
 		for (idx_t i=0; i<numnodes_g; i++) {
-			//printf("Check inputs to neuron %lu\n", i);
+			printf("Check inputs to neuron %lu\n", i);
+			if (globaldone) {
+				break;
+			}
 			offset = bufstartidcs[i];	
 			maxidx = numbufferspernode[i]-1;
 			for (idx_t j=0; j<groupsize; j++) {
@@ -146,12 +152,18 @@ int main(int argc, char *argv[])
 					new += positions_old[k] == positions[k];
 				if (new == groupsize) {
 					done = 1;
+					break;
 				} else {
 					/* Test weights and run trial if necessary */
 					totalweight = 0.0;
 					for (idx_t l=0; l<groupsize; l++) 
 						totalweight += weights[offset+positions[l]];
 					if (totalweight > threshold) {
+						printf("Found a combo -- testing\n");
+						for (idx_t r=1; r<commsize; r++) {
+							MPI_Isend(&dotrial, 1, MPI_INT, r, 1,
+									  MPI_COMM_WORLD, &trialreq);
+						}
 						/* here run partial simulation with group as input */
 						free(inputspikes);
 						inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
@@ -166,7 +178,6 @@ int main(int argc, char *argv[])
 							inputspikes[n].t = maxdelay - inputspikes[n].t;
 						MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
 								  0, MPI_COMM_WORLD);
-						MPI_Bcast(&done, 1, MPI_INT, 0, MPI_COMM_WORLD);
 						input_l.len = pruneinputtolocal(&inputspikes,
 														groupsize, m);
 						input_l.spikes = inputspikes;
@@ -180,6 +191,7 @@ int main(int argc, char *argv[])
 						if (numgroups == maxgroups) {
 							printf("Hit max number of groups!");
 							done = 1;
+							globaldone = 1;
 							i = numnodes_g;
 						}
 					}
@@ -192,17 +204,41 @@ int main(int argc, char *argv[])
 
 			}
 		}
+		for (idx_t r=1; r<commsize; r++) {
+			MPI_Isend(&done, 1, MPI_INT, r, 0,
+					  MPI_COMM_WORLD, &donereq);
+		}
 		printf("number of anchor groups: %lu\n", numgroups);
 		free(pgs);
 		free(positions);
 		free(positions_old);
 	} else {
-		bool done = false;
-		while (!done) {
-			MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
-					  0, MPI_COMM_WORLD);
-			MPI_Bcast(&done, 1, MPI_INT,
-					  0, MPI_COMM_WORLD);
+		MPI_Request trialreq;
+		MPI_Request donereq;
+		int done = false;
+		int dotrial = false;
+		int trialflag=0, doneflag=0;
+		MPI_Irecv(&done, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &donereq);
+		MPI_Irecv(&dotrial, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &trialreq);
+		while (1) {
+			MPI_Test(&trialreq, &trialflag, MPI_STATUS_IGNORE);
+			if (trialflag) {
+				MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
+						  0, MPI_COMM_WORLD);
+				dotrial=false;
+				input_l.len = pruneinputtolocal(&inputspikes,
+												groupsize, m);
+				input_l.spikes = inputspikes;
+				
+				// Run the trial...
+				su_mpi_runpgtrial(m,tp, &input_l, 1, sr, "test",
+								  commrank, commsize); 
+				MPI_Irecv(&dotrial, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &trialreq);
+			}
+			MPI_Test(&donereq, &doneflag, MPI_STATUS_IGNORE);
+			if (doneflag) {
+				break;
+			}
 		}
 	}
 
