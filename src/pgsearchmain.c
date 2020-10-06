@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
 
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
-	idx_t maxgroups = 100000;
+	idx_t maxgroups = 1;
 	idx_t numgroups = 0;
 	//idx_t numinputs_l = 0;
 
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 		/* Iterate through nodes, test combinations of their contributors */
 		printf("TEST: Starting search...\n");
 		for (idx_t i=0; i<numnodes_g; i++) {
-			printf("Check inputs to neuron %lu\n", i);
+			//printf("Check inputs to neuron %lu\n", i);
 			if (globaldone) {
 				break;
 			}
@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 					for (idx_t l=0; l<groupsize; l++) 
 						totalweight += weights[offset+positions[l]];
 					if (totalweight > threshold) {
-						printf("Found a combo -- testing\n");
+						//printf("Found a combo -- testing\n");
 						for (idx_t r=1; r<commsize; r++) {
 							MPI_Isend(&dotrial, 1, MPI_INT, r, 1,
 									  MPI_COMM_WORLD, &trialreq);
@@ -167,24 +167,41 @@ int main(int argc, char *argv[])
 						/* here run partial simulation with group as input */
 						free(inputspikes);
 						inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
-						maxdelay = 0;
+						maxdelay = 0.0;
 						for (idx_t n=0; n<groupsize; n++) {
-							spiketimes[n] = (data_t) delays[offset+positions[n]]
+							inputspikes[n].i = sourcenodes[offset+positions[n]];
+							spiketimes[n] = ((data_t) delays[offset+positions[n]])
 											/ m->p.fs;
+							// printf("Delay in steps (%lu, %lu): %hu\n",
+							// 		offset+positions[n],
+							// 		sourcenodes[offset+positions[n]],
+							// 		delays[offset+positions[n]]);
 							if (spiketimes[n] > maxdelay)
 								maxdelay = spiketimes[n];
 						}
+						//printf("Max delay: %g\n", maxdelay);
 						for (idx_t n=0; n<groupsize; n++)
-							inputspikes[n].t = maxdelay - inputspikes[n].t;
+							inputspikes[n].t = maxdelay - spiketimes[n];
+						//for (idx_t q=0; q<groupsize; q++) 
+						//	printf("(%lu, %g) ", inputspikes[q].i, inputspikes[q].t);
+						//printf("\n");
 						MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
 								  0, MPI_COMM_WORLD);
 						input_l.len = pruneinputtolocal(&inputspikes,
 														groupsize, m);
 						input_l.spikes = inputspikes;
+
+						//printf("Input len (rank %d): %lu\n", commrank, input_l.len);
+						printf("Input spikes (rank %d): ", commrank);
+						for (idx_t q=0; q<input_l.len; q++)
+							printf("%lu at %g ", input_l.spikes[q].i, input_l.spikes[q].t);
+						printf("\n");
 						
 						// Run the trial...
-						su_mpi_runpgtrial(m,tp, &input_l, 1, sr, "test",
+						su_mpi_runpgtrial(m, tp, &input_l, 1, sr, "test",
 										  commrank, commsize); 
+						//su_mpi_runstdpmodel(m,tp, &input_l, 1, sr, "test",
+						//				    commrank, commsize, 0); 
 
 
 						numgroups += 1; // change so only if group accepted
@@ -204,6 +221,7 @@ int main(int argc, char *argv[])
 
 			}
 		}
+		/* Let other processes know we're finished with combos */
 		for (idx_t r=1; r<commsize; r++) {
 			MPI_Isend(&done, 1, MPI_INT, r, 0,
 					  MPI_COMM_WORLD, &donereq);
@@ -221,26 +239,40 @@ int main(int argc, char *argv[])
 		MPI_Irecv(&done, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &donereq);
 		MPI_Irecv(&dotrial, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &trialreq);
 		while (1) {
+			/* Check if need to run trial */
 			MPI_Test(&trialreq, &trialflag, MPI_STATUS_IGNORE);
 			if (trialflag) {
+				free(inputspikes);
+				inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
 				MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
 						  0, MPI_COMM_WORLD);
 				dotrial=false;
 				input_l.len = pruneinputtolocal(&inputspikes,
 												groupsize, m);
 				input_l.spikes = inputspikes;
+
+				// printf("Input len (rank %d ): %lu\n", commrank, input_l.len);
+				printf("Input spikes (rank %d): ", commrank);
+				for (idx_t q=0; q<input_l.len; q++)
+					printf("%lu at %g", input_l.spikes[q].i, input_l.spikes[q].t);
+				printf("\n");
 				
 				// Run the trial...
 				su_mpi_runpgtrial(m,tp, &input_l, 1, sr, "test",
-								  commrank, commsize); 
+				 				  commrank, commsize); 
+				//su_mpi_runstdpmodel(m,tp, &input_l, 1, sr, "test",
+				//					commrank, commsize, 0); 
 				MPI_Irecv(&dotrial, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &trialreq);
 			}
+
+			/* Check if done */
 			MPI_Test(&donereq, &doneflag, MPI_STATUS_IGNORE);
 			if (doneflag) {
 				break;
 			}
 		}
 	}
+	free(inputspikes);
 
 
 	/* Clean up */

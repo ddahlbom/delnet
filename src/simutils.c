@@ -642,6 +642,7 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 	/* main simulation loop */
 	for (size_t i=0; i<numsteps; i++) {
+		printf("Step %lu on %d\n", i, commrank);
 		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
@@ -652,7 +653,9 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 		/* ---------- inputs ---------- */
 		/* get inputs from delay net */
+		printf("PGDEBUG: Made it to getinputs on %d\n", commrank);
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
+		printf("PGDEBUG: Did getinputs on %d\n", commrank);
 
 		/* ---------- put in forced input -- make this a function in kernels! ---------- */
 		neednewinput = sk_mpi_forcedinput(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
@@ -680,25 +683,33 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 
 		/* ---------- update neuron state ---------- */
+		printf("PGDEBUG: Made it to updateneurons on %d\n", commrank);
 		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, m->p.fs);
+		printf("PGDEBUG: Did updateneurons on %d\n", commrank);
 
 		/* ---------- calculate neuron outputs ---------- */
+		printf("PGDEBUG: Made it to checkspiking on %d\n", commrank);
 		numevents = sk_mpi_checkspiking(m->neurons, neuronoutputs,
 										neuronevents, n_l, t,
 										sr, m->dn->nodeoffsetglobal,
 										tp.recordstart, tp.recordstop);
+		printf("PGDEBUG: Did checkspiking on %d\n", commrank);
 		numspikes += numevents;
 
 		/* ---------- push the neuron output into the buffer ---------- */
+		printf("PGDEBUG: Made it to pushevents on %d\n", commrank);
 		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
+		printf("PGDEBUG: Did pushevents on %d\n", commrank);
 
 
 		/* ---------- advance the buffer ---------- */
+		printf("PGDEBUG: Made it to advance on %d\n", commrank);
 		dnf_advance(m->dn);
+		printf("PGDEBUG: Did advance on %d\n", commrank);
 	}
 
 
-	/* -------------------- Performance Analysis -------------------- */
+	/* -------------------- Clean up -------------------- */
 	free(neuroninputs);
 	free(neuronoutputs);
 	free(neuronevents); 
