@@ -647,8 +647,8 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 		/* ---------- calculate time update ---------- */
 		t = dt*i;
-		if (i%1000 == 0 && commrank == 0)
-			printf("Time: %f\n", t);
+		//if (i%1000 == 0 && commrank == 0)
+		//	printf("Time: %f\n", t);
 
 
 		/* ---------- inputs ---------- */

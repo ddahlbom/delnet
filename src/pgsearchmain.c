@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
 	MPI_Init(&argc, &argv);	
 	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
+	printf("Rank: %d\n", commrank);
 
 	/* Set up MPI Datatype for spikes */
 	MPI_Datatype mpi_spike_type = sr_commitmpispiketype();
@@ -58,7 +59,7 @@ int main(int argc, char *argv[])
 
 	/* Set up trial parameters */
 	su_mpi_trialparams tp;
-	tp.dur = 1.00; // make parameter of executable
+	tp.dur = 0.07; // make parameter of executable
 	tp.lambda = 0.01; 
 	tp.randspikesize = 0.0;
 	tp.randinput = 1.0;
@@ -79,13 +80,6 @@ int main(int argc, char *argv[])
 	strcat(srname, rankstr);
 	strcat(srname, "_spikes.txt");
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
-
-	/* Test normal behavior with loaded input */
-	//su_mpi_input *forced_inputs = 0;
-	//long int numinputs = loadinputs(in_name, &forced_inputs, mpi_spike_type, m, commrank);
-	//printf("Numinputs: %ld\n", numinputs);
-	//su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
-	//					sr, "resumetest", commrank, commsize, PROFILING);
 
 	/* Make list of contributing neurons */
 	if (PG_MAIN_DEBUG) printf("Starting PG search process... %d\n", commrank);
@@ -114,7 +108,7 @@ int main(int argc, char *argv[])
 
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
-	idx_t maxgroups = 1;
+	idx_t maxgroups = 100000;
 	idx_t numgroups = 0; // running tally of groups found
 	su_mpi_input input_l;
 	su_mpi_spike *inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
@@ -126,9 +120,8 @@ int main(int argc, char *argv[])
 		idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
 
 		int done = 0;
-		int dotrial = 1;
+		int dotrial;
 		int globaldone = 0;
-		MPI_Request donereq, trialreq;
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
@@ -138,10 +131,6 @@ int main(int argc, char *argv[])
 		/* Iterate through nodes, test combinations of their contributors */
 		printf("TEST: Starting search...\n");
 		for (idx_t i=0; i<numnodes_g; i++) {
-			//printf("Check inputs to neuron %lu\n", i);
-			if (globaldone) {
-				break;
-			}
 			offset = bufstartidcs[i];	
 			maxidx = numbufferspernode[i]-1;
 			for (idx_t j=0; j<groupsize; j++) {
@@ -176,7 +165,7 @@ int main(int argc, char *argv[])
 						}
 						for (idx_t n=0; n<groupsize; n++)
 							inputspikes[n].t = maxdelay - inputspikes[n].t;
-						int dotrial=1;
+						dotrial=1;
 						MPI_Bcast(&dotrial, 1, MPI_INT, 0, MPI_COMM_WORLD);
 						MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
 								  0, MPI_COMM_WORLD);
@@ -195,6 +184,8 @@ int main(int argc, char *argv[])
 							i = numnodes_g;
 						}
 					}
+					if (globaldone)
+						break;
 				}
 
 				/* Find a new combination */
@@ -211,40 +202,52 @@ int main(int argc, char *argv[])
 		free(positions);
 		free(positions_old);
 	} else {
-		int msg; // 1 = run trial, 0 = stop loop
+		int notfinished; // 1 = run trial, 0 = stop loop
 		while (1) {
-			MPI_Bcast(&msg, 1, MPI_INT, 0, MPI_COMM_WORLD);
-			if (msg) {
+			MPI_Bcast(&notfinished, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			if (notfinished) {
 				free(inputspikes);
 				inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
 				MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
 						  0, MPI_COMM_WORLD);
 				input_l.len = pruneinputtolocal(&inputspikes, groupsize, m);
 				input_l.spikes = inputspikes;
-				// Run the trial...
 				su_mpi_runpgtrial(m, tp, &input_l, 1, sr, "test", commrank, commsize); 
-			} else {
+			} else 
 				break;
-			}
 		}
 	}
-	free(inputspikes);
+
 
 
 	/* Clean up */
-	char srfinalname[256];
-	strcpy(srfinalname, in_name);
-	strcat(srfinalname, "_spikes.txt");
-
-	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
 	if (commrank == 0) {
+		printf("Freeing misc allocations (%d)\n", commrank);
 		free(sourcenodes);
 		free(numbufferspernode);
 		free(weights);
 		free(delays);
+		printf("Freed misc allocations (%d)\n", commrank);
 	}
+
+	printf("Freeing inputspikes (%d)\n", commrank);
+	free(inputspikes);
+	printf("Freed inputspikes (%d)\n", commrank);
+
+	printf("Freeing spike records (%d)\n", commrank);
+	char srfinalname[256];
+	strcpy(srfinalname, in_name);
+	strcat(srfinalname, "_spikes.txt");
+	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
+	printf("Freed spike records (%d)\n", commrank);
+
+	printf("Freeing the model (%d)\n", commrank);
 	su_mpi_freemodel_l(m);
+	printf("Freed the model (%d)\n", commrank);
+
+	printf("MPI_Finalize() (%d)\n", commrank);
 	MPI_Finalize();
+	printf("MPI_Finalized() (%d)\n", commrank);
 
 	return 0;
 }
