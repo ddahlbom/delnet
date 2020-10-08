@@ -11,6 +11,7 @@
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
 #define INPUT_MODE_POISSON_EXCLUSIVE 3 		// cuts random noise during input
+#define INPUT_MODE_SINGLE_SHOT 4
 
 #define MULTI_INPUT_MODE_SEQUENTIAL 1
 #define MULTI_INPUT_MODE_RANDOM 2
@@ -139,5 +140,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 							su_mpi_input *inputs, idx_t numinputs,
 							spikerecord *sr, char *trialname,
+							data_t t0,
 							int commrank, int commsize);
 #endif

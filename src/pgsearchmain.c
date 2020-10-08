@@ -64,11 +64,11 @@ int main(int argc, char *argv[])
 	tp.randspikesize = 0.0;
 	tp.randinput = 1.0;
 	tp.inhibition = 1.0;
-	tp.inputmode = 2.0;
-	tp.multiinputmode = 1.0;
+	tp.inputmode = 1.0;
+	tp.multiinputmode = 4.0;
 	tp.inputweight = 20.0;
 	tp.recordstart = 0.0;
-	tp.recordstop = tp.dur;
+	tp.recordstop = 1000.0;
 	tp.lambdainput = 1.0;
 	tp.inputrefractorytime = 1.0;
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
-	idx_t maxgroups = 100000;
+	idx_t maxgroups = 1000;
 	idx_t numgroups = 0; // running tally of groups found
 	su_mpi_input input_l;
 	su_mpi_spike *inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
@@ -173,8 +173,12 @@ int main(int argc, char *argv[])
 						input_l.spikes = inputspikes;
 
 						// Run the trial...
-						su_mpi_runpgtrial(m, tp, &input_l, 1, sr, "test",
-										  commrank, commsize); 
+						//for (idx_t z=0; z <input_l.len; z++) {
+						//	printf("%lu @ %g\n", input_l.spikes[z].i,
+						//						 input_l.spikes[z].t);
+						//}
+						su_mpi_runpgtrial(m, tp, &input_l, 1, sr, in_name,
+										  numgroups*tp.dur, commrank, commsize); 
 
 						numgroups += 1; // change so only if group accepted
 						if (numgroups == maxgroups) {
@@ -184,15 +188,12 @@ int main(int argc, char *argv[])
 							i = numnodes_g;
 						}
 					}
-					if (globaldone)
-						break;
 				}
 
 				/* Find a new combination */
 				for (idx_t m=0; m<groupsize; m++)
 					positions_old[m] = positions[m];	
 				updateposition(positions, groupsize, groupsize-1, maxidx); 
-
 			}
 		}
 		dotrial=0;
@@ -202,6 +203,7 @@ int main(int argc, char *argv[])
 		free(positions);
 		free(positions_old);
 	} else {
+		idx_t numgroups = 0;
 		int notfinished; // 1 = run trial, 0 = stop loop
 		while (1) {
 			MPI_Bcast(&notfinished, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -212,7 +214,13 @@ int main(int argc, char *argv[])
 						  0, MPI_COMM_WORLD);
 				input_l.len = pruneinputtolocal(&inputspikes, groupsize, m);
 				input_l.spikes = inputspikes;
-				su_mpi_runpgtrial(m, tp, &input_l, 1, sr, "test", commrank, commsize); 
+				//for (idx_t z=0; z <input_l.len; z++) {
+				//	printf("%lu @ %g\n", input_l.spikes[z].i,
+				//						 input_l.spikes[z].t);
+				//}
+				su_mpi_runpgtrial(m, tp, &input_l, 1, sr, in_name,
+								  numgroups*tp.dur, commrank, commsize); 
+				numgroups += 1;
 			} else 
 				break;
 		}
@@ -221,33 +229,34 @@ int main(int argc, char *argv[])
 
 
 	/* Clean up */
-	if (commrank == 0) {
-		printf("Freeing misc allocations (%d)\n", commrank);
-		free(sourcenodes);
-		free(numbufferspernode);
-		free(weights);
-		free(delays);
-		printf("Freed misc allocations (%d)\n", commrank);
-	}
 
-	printf("Freeing inputspikes (%d)\n", commrank);
-	free(inputspikes);
-	printf("Freed inputspikes (%d)\n", commrank);
-
-	printf("Freeing spike records (%d)\n", commrank);
+	//printf("Freeing spike records (%d)\n", commrank);
 	char srfinalname[256];
 	strcpy(srfinalname, in_name);
 	strcat(srfinalname, "_spikes.txt");
 	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
-	printf("Freed spike records (%d)\n", commrank);
+	//printf("Freed spike records (%d)\n", commrank);
 
-	printf("Freeing the model (%d)\n", commrank);
+	if (commrank == 0) {
+		//printf("Freeing misc allocations (%d)\n", commrank);
+		free(sourcenodes);
+		free(numbufferspernode);
+		free(weights);
+		free(delays);
+		//printf("Freed misc allocations (%d)\n", commrank);
+	}
+
+	//printf("Freeing inputspikes (%d)\n", commrank);
+	free(inputspikes);
+	//printf("Freed inputspikes (%d)\n", commrank);
+
+	//printf("Freeing the model (%d)\n", commrank);
 	su_mpi_freemodel_l(m);
-	printf("Freed the model (%d)\n", commrank);
+	//printf("Freed the model (%d)\n", commrank);
 
-	printf("MPI_Finalize() (%d)\n", commrank);
+	//printf("MPI_Finalize() (%d)\n", commrank);
 	MPI_Finalize();
-	printf("MPI_Finalized() (%d)\n", commrank);
+	//printf("MPI_Finalized() (%d)\n", commrank);
 
 	return 0;
 }

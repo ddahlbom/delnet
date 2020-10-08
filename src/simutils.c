@@ -275,12 +275,13 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 
 	/* main simulation loop */
+	t = 0;
 	for (size_t i=0; i<numsteps; i++) {
 		if (profiling) totalticks_start = getticks(); 
 		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
-		t = dt*i;
+		t += dt;
 		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
@@ -589,6 +590,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 							su_mpi_input *inputs, idx_t numinputs,
 							spikerecord *sr, char *trialname,
+							data_t t0,
 							int commrank, int commsize)
 {
 
@@ -608,22 +610,23 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronevents = calloc(n_l, sizeof(idx_t));
 	unsigned long int numspikes = 0;
-	//unsigned long int numrandspikes = 0;
+	unsigned long int numrandspikes = 0;
 	FLOAT_T t;
 
 	/* initiate input */
+	tp.inputmode = INPUT_MODE_SINGLE_SHOT; // force single shot
 	idx_t input_idx = 0;
 	idx_t inputlen = 0;
 	su_mpi_spike *input = 0;
-	bool neednewinput = false;
+	//bool neednewinput = false;
 	FILE *inputtimesfile = 0;
 	char filename[MAX_NAME_LEN];
 	double t_max_l = 0.0;
 
-	if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM)
-		input_idx = getrandom(numinputs);
-	input = inputs[input_idx].spikes;
-	inputlen = inputs[input_idx].len;
+	// if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM)
+	// 	input_idx = getrandom(numinputs);
+	input = inputs[0].spikes;
+	inputlen = inputs[0].len;
 	sprintf(filename, "%s_instarttimes.txt", trialname);
 	for (int i=0; i<inputlen; i++)
 		if (input[i].t > t_max_l) t_max_l = input[i].t; // find last spike time on local rank
@@ -642,11 +645,13 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 
 	/* main simulation loop */
+	t = t0-dt;
+	FLOAT_T t_local = 0.0;
 	for (size_t i=0; i<numsteps; i++) {
 		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
-		t = dt*i;
+		t += dt;
 		//if (i%1000 == 0 && commrank == 0)
 		//	printf("Time: %f\n", t);
 
@@ -658,28 +663,28 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (PGDEBUG)printf("PGDEBUG: Did getinputs on %d\n", commrank);
 
 		/* ---------- put in forced input -- make this a function in kernels! ---------- */
-		neednewinput = sk_mpi_forcedinput(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
-										  &tp, commrank, commsize, inputtimesfile, nextrand ); 
-		if (neednewinput) {
-			if (commrank == 0) {
-				if (tp.multiinputmode == MULTI_INPUT_MODE_SEQUENTIAL) {
-					input_idx = (input_idx + 1) % numinputs;
-				}
-				else if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM) {
-					input_idx = getrandom(numinputs);
-				}
-				MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
-			} else {
-				MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
-			}
+		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
+										  &tp, commrank, commsize, inputtimesfile, nextrand, t_local); 
+		//if (neednewinput) {
+		//	if (commrank == 0) {
+		//		if (tp.multiinputmode == MULTI_INPUT_MODE_SEQUENTIAL) {
+		//			input_idx = (input_idx + 1) % numinputs;
+		//		}
+		//		else if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM) {
+		//			input_idx = getrandom(numinputs);
+		//		}
+		//		MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+		//	} else {
+		//		MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+		//	}
 
-			input = inputs[input_idx].spikes;
-			inputlen = inputs[input_idx].len;
-		}
+		//	input = inputs[input_idx].spikes;
+		//	inputlen = inputs[input_idx].len;
+		//}
 
 		/* ---------- put in random noise ---------- */
 
-		//numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
+		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
 
 
 		/* ---------- update neuron state ---------- */
