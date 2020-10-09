@@ -665,22 +665,6 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 		/* ---------- put in forced input -- make this a function in kernels! ---------- */
 		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
 										  &tp, commrank, commsize, inputtimesfile, nextrand, t_local); 
-		//if (neednewinput) {
-		//	if (commrank == 0) {
-		//		if (tp.multiinputmode == MULTI_INPUT_MODE_SEQUENTIAL) {
-		//			input_idx = (input_idx + 1) % numinputs;
-		//		}
-		//		else if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM) {
-		//			input_idx = getrandom(numinputs);
-		//		}
-		//		MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
-		//	} else {
-		//		MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
-		//	}
-
-		//	input = inputs[input_idx].spikes;
-		//	inputlen = inputs[input_idx].len;
-		//}
 
 		/* ---------- put in random noise ---------- */
 

@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		data_t threshold = 19.0;
+		data_t threshold = 18.0;
 		data_t totalweight = 0.0;
 
 		/* Iterate through nodes, test combinations of their contributors */
@@ -177,6 +177,15 @@ int main(int argc, char *argv[])
 						//	printf("%lu @ %g\n", input_l.spikes[z].i,
 						//						 input_l.spikes[z].t);
 						//}
+						
+						/* Reset states */
+						for(idx_t z=0; z<m->maxnode; z++) {
+							m->neurons[z].v = m->neurons[z].c;
+							m->neurons[z].u = m->neurons[z].b * m->neurons[z].c;
+						}
+						for(idx_t z=0; z<m->dn->numbufferstotal; z++)
+							dnf_bufinit(&m->dn->buffers[z], m->dn->buffers[z].delaylen);
+
 						su_mpi_runpgtrial(m, tp, &input_l, 1, sr, in_name,
 										  numgroups*tp.dur, commrank, commsize); 
 
@@ -218,6 +227,12 @@ int main(int argc, char *argv[])
 				//	printf("%lu @ %g\n", input_l.spikes[z].i,
 				//						 input_l.spikes[z].t);
 				//}
+				for(idx_t z=0; z<m->maxnode; z++) {
+					m->neurons[z].v = m->neurons[z].c;
+					m->neurons[z].u = m->neurons[z].b * m->neurons[z].c;
+				}
+				for(idx_t z=0; z<m->dn->numbufferstotal; z++)
+					dnf_bufinit(&m->dn->buffers[z], m->dn->buffers[z].delaylen);
 				su_mpi_runpgtrial(m, tp, &input_l, 1, sr, in_name,
 								  numgroups*tp.dur, commrank, commsize); 
 				numgroups += 1;

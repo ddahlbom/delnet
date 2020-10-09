@@ -136,15 +136,12 @@ FLOAT_T sk_mpi_forcedinputpg( su_mpi_model_l *m, su_mpi_spike *input, size_t nin
 						 int commrank, int commsize, FILE *inputtimesfile,
 						 FLOAT_T *nextrand, FLOAT_T t_local)
 {
-	static double nextinputtime = 0.0;
-	static bool waiting = true;
-
 	if ( t_local == 0.0 && commrank==0 )
 		fprintf(inputtimesfile, "%f  %lu\n", t, input_idx);
 	for (size_t k=0; k < ninput; k++) {
 		if (t_local <= input[k].t && input[k].t < t_local + dt) {
 			neuroninputs[input[k].i] += tp->inputweight; 
-			printf("Putting in input!\n");
+			//printf("Putting in input!\n");
 		}
 	}
 	t_local += dt;
@@ -212,10 +209,8 @@ unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
 	for (k=0; k<n; k++) {
 		neuronoutputs[k] = 0.0;
 		if (neurons[k].v >= 30.0) {
-			if( recordstart <= t && t < recordstop) {
+			if( recordstart <= t && t < recordstop) 
 				sr_save_spike(sr, k+offset, t);
-				printf("spiked!\n");
-			}
 			neuronoutputs[k] = 1.0;
 			neurons[k].v = neurons[k].c;
 			neurons[k].u += neurons[k].d;
