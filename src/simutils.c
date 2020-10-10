@@ -47,7 +47,7 @@ static __inline__ ticks getticks(void)
 
 
 #define SU_DEBUG 0
-#define PGDEBUG 0
+#define PGDEBUG 1
 
 
 
@@ -645,13 +645,12 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
 
 	/* main simulation loop */
-	t = t0-dt;
+	t = t0;
 	FLOAT_T t_local = 0.0;
 	for (size_t i=0; i<numsteps; i++) {
 		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
-		t += dt;
 		//if (i%1000 == 0 && commrank == 0)
 		//	printf("Time: %f\n", t);
 
@@ -663,12 +662,18 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (PGDEBUG)printf("PGDEBUG: Did getinputs on %d\n", commrank);
 
 		/* ---------- put in forced input -- make this a function in kernels! ---------- */
+
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (PGDEBUG) printf("PGDEBUG: Made it to forcedinputspg on %d\n", commrank);
 		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
 										  &tp, commrank, commsize, inputtimesfile, nextrand, t_local); 
+		if (PGDEBUG) printf("PGDEBUG: Did forcedinputspg on %d\n", commrank);
 
 		/* ---------- put in random noise ---------- */
 
+		if (PGDEBUG) printf("PGDEBUG: Made it to poisnoise on %d\n", commrank);
 		numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
+		if (PGDEBUG) printf("PGDEBUG: Did it poisnoise on %d\n", commrank);
 
 
 		/* ---------- update neuron state ---------- */
@@ -695,6 +700,9 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (PGDEBUG) printf("PGDEBUG: Made it to advance on %d\n", commrank);
 		dnf_advance(m->dn);
 		if (PGDEBUG) printf("PGDEBUG: Did advance on %d\n", commrank);
+
+		/* ---------- advance time ---------- */
+		t += dt;
 	}
 
 

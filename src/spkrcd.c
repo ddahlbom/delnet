@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <mpi.h>
+#include <errno.h>
 
 #include "spkrcd.h"
 
@@ -124,7 +125,14 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 	/* Set up MPI Datatype for spikes */
 	/* Each rank finishing writing its local file */		
 	FILE *spike_file;
+	errno = 0;
 	spike_file = fopen(sr->filename, sr->writemode);
+	if (spike_file == NULL) {
+		printf("Failed to open file on rank %d!\n", commrank);
+		printf("Tried file name: %s\n", sr->filename);
+		printf("Error number: %d\n", errno);
+		exit(-1);
+	}
 	for (int i=0; i < sr-> numspikes % sr->blocksize; i++) {
 		fprintf(spike_file, "%lf  %lu\n", 
 				sr->spikes[i].time,
@@ -133,22 +141,29 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 	fclose(spike_file);
 
 	/* Gather the numbers of neurons to read/write from each rank */
-	int *rankspikecount = 0;
+	size_t *rankspikecount = 0;
+	int *rankspikecount_int = 0;
 	int *spikeoffsets = 0;
 	int numspikestotal = 0;
 	spike *allspikes = 0;
 	spike *localspikes = malloc(sizeof(spike)*sr->numspikes);
 
-	if (commrank == 0)
-		rankspikecount = malloc(sizeof(int)*commsize);
+	if (commrank == 0) {
+		printf("allocating spike counts per rank\n");
+		rankspikecount = malloc(sizeof(size_t)*commsize);
+		rankspikecount_int = malloc(sizeof(int)*commsize);
+	}
 
-	MPI_Gather(&sr->numspikes, 1, MPI_INT,
-			   rankspikecount, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	printf("Gathering spike count (rank %d)\n", commrank);
+	MPI_Gather(&sr->numspikes, 1, MPI_UNSIGNED_LONG_LONG,
+			   rankspikecount, 1, MPI_UNSIGNED_LONG_LONG, 0, MPI_COMM_WORLD);
 
 	if (commrank == 0) {
-		spikeoffsets = len_to_offsets(rankspikecount, commsize);
+		for (unsigned int i=0; i<commsize; i++) 
+			rankspikecount_int[i] = (int) rankspikecount[i];
+		spikeoffsets = len_to_offsets(rankspikecount_int, commsize);
 		for (int i=0; i<commsize; i++)
-			numspikestotal += rankspikecount[i];
+			numspikestotal += rankspikecount_int[i];
 		allspikes = malloc(sizeof(spike)*numspikestotal);
 	}
 	
@@ -168,7 +183,7 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 
 	/* Gather all spikes on a single rank, sort and write (parallelize later) */
 	MPI_Gatherv(localspikes, sr->numspikes, mpi_spike_type, 
-				allspikes, rankspikecount, spikeoffsets,
+				allspikes, rankspikecount_int, spikeoffsets,
 				mpi_spike_type, 0, MPI_COMM_WORLD);
 
 	if (commrank == 0) {
@@ -185,6 +200,7 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 	free(localspikes);
 	if (commrank == 0) {
 		free(rankspikecount);
+		free(rankspikecount_int);
 		free(spikeoffsets);
 		free(allspikes);
 	}

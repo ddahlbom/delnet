@@ -136,12 +136,10 @@ FLOAT_T sk_mpi_forcedinputpg( su_mpi_model_l *m, su_mpi_spike *input, size_t nin
 						 int commrank, int commsize, FILE *inputtimesfile,
 						 FLOAT_T *nextrand, FLOAT_T t_local)
 {
-	if ( t_local == 0.0 && commrank==0 )
-		fprintf(inputtimesfile, "%f  %lu\n", t, input_idx);
-	for (size_t k=0; k < ninput; k++) {
-		if (t_local <= input[k].t && input[k].t < t_local + dt) {
-			neuroninputs[input[k].i] += tp->inputweight; 
-			//printf("Putting in input!\n");
+	if (t_local <= t_max) {
+		for (size_t k=0; k < ninput; k++) {
+			if (t_local <= input[k].t && input[k].t < t_local + dt) 
+				neuroninputs[input[k].i] += tp->inputweight; 
 		}
 	}
 	t_local += dt;

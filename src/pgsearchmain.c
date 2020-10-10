@@ -108,14 +108,13 @@ int main(int argc, char *argv[])
 
 	/* Iterate through combinations and test them */
 	idx_t groupsize = 3;
-	idx_t maxgroups = 1000;
+	idx_t maxgroups = 10000;
 	idx_t numgroups = 0; // running tally of groups found
 	su_mpi_input input_l;
 	su_mpi_spike *inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
 	data_t maxdelay = 0;
 
 	if (commrank == 0) {
-		threegroup *pgs = malloc(sizeof(threegroup)*maxgroups);
 		idx_t *positions = malloc(sizeof(idx_t)*groupsize);
 		idx_t *positions_old = malloc(sizeof(idx_t)*groupsize);
 
@@ -125,7 +124,7 @@ int main(int argc, char *argv[])
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		data_t threshold = 18.0;
+		data_t threshold = 20.0;
 		data_t totalweight = 0.0;
 
 		/* Iterate through nodes, test combinations of their contributors */
@@ -158,10 +157,8 @@ int main(int argc, char *argv[])
 						maxdelay = 0.0;
 						for (idx_t n=0; n<groupsize; n++) {
 							inputspikes[n].i = sourcenodes[offset+positions[n]];
-							inputspikes[n].t =
-								((data_t) delays[offset+positions[n]])/m->p.fs;
-							if (inputspikes[n].t > maxdelay)
-								maxdelay = inputspikes[n].t;
+							inputspikes[n].t = ((data_t) delays[offset+positions[n]])/m->p.fs;
+							if (inputspikes[n].t > maxdelay) maxdelay = inputspikes[n].t;
 						}
 						for (idx_t n=0; n<groupsize; n++)
 							inputspikes[n].t = maxdelay - inputspikes[n].t;
@@ -172,13 +169,14 @@ int main(int argc, char *argv[])
 						input_l.len = pruneinputtolocal(&inputspikes, groupsize, m);
 						input_l.spikes = inputspikes;
 
-						// Run the trial...
-						//for (idx_t z=0; z <input_l.len; z++) {
-						//	printf("%lu @ %g\n", input_l.spikes[z].i,
-						//						 input_l.spikes[z].t);
-						//}
+						MPI_Barrier(MPI_COMM_WORLD);
+						for (idx_t z=0; z <input_l.len; z++) {
+							printf("%lu @ %g (rank %d)\n", input_l.spikes[z].i,
+												 input_l.spikes[z].t, commrank);
+						}
+						MPI_Barrier(MPI_COMM_WORLD);
 						
-						/* Reset states */
+						/* Reset buffers and neuron states between trials */
 						for(idx_t z=0; z<m->maxnode; z++) {
 							m->neurons[z].v = m->neurons[z].c;
 							m->neurons[z].u = m->neurons[z].b * m->neurons[z].c;
@@ -186,8 +184,10 @@ int main(int argc, char *argv[])
 						for(idx_t z=0; z<m->dn->numbufferstotal; z++)
 							dnf_bufinit(&m->dn->buffers[z], m->dn->buffers[z].delaylen);
 
+						printf("Running trial %lu (%d)\n", numgroups, commrank);
 						su_mpi_runpgtrial(m, tp, &input_l, 1, sr, in_name,
 										  numgroups*tp.dur, commrank, commsize); 
+						printf("Ran trial %lu (%d)\n", numgroups, commrank);
 
 						numgroups += 1; // change so only if group accepted
 						if (numgroups == maxgroups) {
@@ -208,7 +208,6 @@ int main(int argc, char *argv[])
 		dotrial=0;
 		MPI_Bcast(&dotrial, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		printf("number of anchor groups: %lu\n", numgroups);
-		free(pgs);
 		free(positions);
 		free(positions_old);
 	} else {
@@ -223,10 +222,15 @@ int main(int argc, char *argv[])
 						  0, MPI_COMM_WORLD);
 				input_l.len = pruneinputtolocal(&inputspikes, groupsize, m);
 				input_l.spikes = inputspikes;
-				//for (idx_t z=0; z <input_l.len; z++) {
-				//	printf("%lu @ %g\n", input_l.spikes[z].i,
-				//						 input_l.spikes[z].t);
-				//}
+
+				MPI_Barrier(MPI_COMM_WORLD);
+				for (idx_t z=0; z <input_l.len; z++) {
+					printf("%lu @ %g (rank %d)\n", input_l.spikes[z].i,
+										 		   input_l.spikes[z].t, commrank);
+				}
+				MPI_Barrier(MPI_COMM_WORLD);
+				
+				/* Reset buffers and neuron states between trials */
 				for(idx_t z=0; z<m->maxnode; z++) {
 					m->neurons[z].v = m->neurons[z].c;
 					m->neurons[z].u = m->neurons[z].b * m->neurons[z].c;
@@ -245,12 +249,12 @@ int main(int argc, char *argv[])
 
 	/* Clean up */
 
-	//printf("Freeing spike records (%d)\n", commrank);
+	printf("Freeing spike records (%d)\n", commrank);
 	char srfinalname[256];
 	strcpy(srfinalname, in_name);
 	strcat(srfinalname, "_spikes.txt");
 	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
-	//printf("Freed spike records (%d)\n", commrank);
+	printf("Freed spike records (%d)\n", commrank);
 
 	if (commrank == 0) {
 		//printf("Freeing misc allocations (%d)\n", commrank);
