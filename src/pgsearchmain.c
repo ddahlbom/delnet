@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		data_t threshold = 20.0;
+		data_t threshold = 19.0;
 		data_t totalweight = 0.0;
 
 		/* Iterate through nodes, test combinations of their contributors */
@@ -170,7 +170,12 @@ int main(int argc, char *argv[])
 						input_l.spikes = inputspikes;
 
 						MPI_Barrier(MPI_COMM_WORLD);
-						for (idx_t z=0; z <input_l.len; z++) {
+						for (idx_t z=0; z<groupsize; z++) {
+							printf("%lu with weight %g\n",
+								   sourcenodes[offset+positions[z]],
+								   weights[offset+positions[z]]);
+						}
+						for (idx_t z=0; z<input_l.len; z++) {
 							printf("%lu @ %g (rank %d)\n", input_l.spikes[z].i,
 												 input_l.spikes[z].t, commrank);
 						}

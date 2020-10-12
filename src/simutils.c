@@ -47,7 +47,7 @@ static __inline__ ticks getticks(void)
 
 
 #define SU_DEBUG 0
-#define PGDEBUG 1
+#define PGDEBUG 0
 
 
 

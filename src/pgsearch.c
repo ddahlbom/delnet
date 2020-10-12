@@ -383,6 +383,7 @@ idx_t getcontributordelays(su_mpi_model_l *m,  delay_t **delays, int commrank, i
 }
 
 
+/* Advance through all combinations */
 idx_t *updateposition(idx_t *positions, idx_t numpositions,
 				      idx_t which, idx_t maxidx)
 {
