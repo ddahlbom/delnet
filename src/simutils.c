@@ -589,8 +589,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 /* quick-starting run for pg search */
 void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 							su_mpi_input *inputs, idx_t numinputs,
-							spikerecord *sr, char *trialname,
-							data_t t0,
+							spikerecord *sr, data_t t0,
 							int commrank, int commsize)
 {
 
@@ -627,7 +626,6 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	// 	input_idx = getrandom(numinputs);
 	input = inputs[0].spikes;
 	inputlen = inputs[0].len;
-	sprintf(filename, "%s_instarttimes.txt", trialname);
 	for (int i=0; i<inputlen; i++)
 		if (input[i].t > t_max_l) t_max_l = input[i].t; // find last spike time on local rank
 
