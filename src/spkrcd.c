@@ -149,12 +149,10 @@ void sr_collateandclose(spikerecord *sr, char *finalfilename,
 	spike *localspikes = malloc(sizeof(spike)*sr->numspikes);
 
 	if (commrank == 0) {
-		printf("allocating spike counts per rank\n");
 		rankspikecount = malloc(sizeof(size_t)*commsize);
 		rankspikecount_int = malloc(sizeof(int)*commsize);
 	}
 
-	printf("Gathering spike count (rank %d)\n", commrank);
 	MPI_Gather(&sr->numspikes, 1, MPI_UNSIGNED_LONG_LONG,
 			   rankspikecount, 1, MPI_UNSIGNED_LONG_LONG, 0, MPI_COMM_WORLD);
 

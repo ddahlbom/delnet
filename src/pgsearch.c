@@ -303,8 +303,8 @@ idx_t *pg_updateposition(idx_t *positions, idx_t numpositions,
 
 
 
-int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, spikerecord *sr,
-			   MPI_Datatype mpi_spike_type, int commrank, int commsize)
+int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, idx_t groupsize, data_t threshold, idx_t maxgroups,
+				spikerecord *sr, MPI_Datatype mpi_spike_type, int commrank, int commsize)
 {
 	/* Make list of contributing neurons */
 	idx_t *sourcenodes = 0, *numbufferspernode = 0;
@@ -321,8 +321,8 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, spikerecord *sr,
 	pg_getcontributordelays(m, &delays, commrank, commsize);
 
 	/* Iterate through combinations and test them */
-	idx_t groupsize = 3;
-	idx_t maxgroups = 100;
+	// idx_t groupsize = 3;
+	// idx_t maxgroups = 100;
 	idx_t numgroups = 0; // running tally of groups found
 	su_mpi_input input_l;
 	su_mpi_spike *inputspikes = 0;
@@ -336,7 +336,7 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, spikerecord *sr,
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		data_t threshold = 19.0;
+		//data_t threshold = 19.0;
 		data_t totalweight = 0.0;
 
 		idx_t *positions = malloc(sizeof(idx_t)*groupsize);
@@ -401,10 +401,10 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, spikerecord *sr,
 						for(idx_t z=0; z<m->dn->numbufferstotal; z++)
 							dnf_bufinit(&m->dn->buffers[z], m->dn->buffers[z].delaylen);
 
-						printf("Running trial %lu (%d)\n", numgroups, commrank);
+						if (numgroups % 100 == 0)
+							printf("Group %lu\n", numgroups );
 						su_mpi_runpgtrial(m, tp, &input_l, 1, sr,
 										  numgroups*tp.dur, commrank, commsize); 
-						printf("Ran trial %lu (%d)\n", numgroups, commrank);
 
 						numgroups += 1; // change so only if group accepted
 						free(inputspikes);

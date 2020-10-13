@@ -7,16 +7,8 @@
 #include <mpi.h>
 
 #include "delnet.h"
-#include "simutils.h"
 #include "spkrcd.h"
 #include "pgsearch.h"
-#include "inputs.h"
-
-#define PROFILING 1
-#define PG_MAIN_DEBUG 1
-
-#define DN_TRIALTYPE_NEW 0
-#define DN_TRIALTYPE_RESUME 1
 
 #define MAX_NAME_LEN 512
 
@@ -32,34 +24,30 @@ int main(int argc, char *argv[])
 	MPI_Init(&argc, &argv);	
 	MPI_Comm_size(MPI_COMM_WORLD, &commsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &commrank);
-	printf("Rank: %d\n", commrank);
 
 	/* Set up MPI Datatype for spikes */
 	MPI_Datatype mpi_spike_type = sr_commitmpispiketype();
 
 	/* Check number of inputs (needs one) */
-	if (argc != 2) {
-		printf("No model name given. Exiting...\n");
+	if (argc != 6) {
+		printf("Need five arguments: (1) model name; (2) base size; (3) threshold; (4) duration; (5) max number of groups.\n");
 		exit(-1);
 	}
 
 	char *in_name = argv[1];
-	printf("name: %s\n", in_name);
 
 	/* Load model */
-	if (PG_MAIN_DEBUG) printf("Loading model on process %d\n", commrank);
 	m = su_mpi_globalload(in_name, commrank, commsize);
-	if (PG_MAIN_DEBUG) printf("Loaded model on process %d\n", commrank);
 
 	/* Set up trial parameters */
 	su_mpi_trialparams tp;
-	tp.dur = 0.07; // make parameter of executable
+	tp.dur = atof(argv[4]); // make parameter of executable
 	tp.lambda = 0.01; 
 	tp.randspikesize = 0.0;
 	tp.randinput = 1.0;
 	tp.inhibition = 1.0;
 	tp.inputmode = 1.0;
-	tp.multiinputmode = 4.0;
+	tp.multiinputmode = 4.0; // one-shot input at start
 	tp.inputweight = 20.0;
 	tp.recordstart = 0.0;
 	tp.recordstop = 1000.0;
@@ -76,7 +64,7 @@ int main(int argc, char *argv[])
 	spikerecord *sr = sr_init(srname, SPIKE_BLOCK_SIZE);
 
 	/* perform the search */
-	pg_findpgs(m, tp, sr, mpi_spike_type, commrank, commsize);
+	pg_findpgs(m, tp, atoi(argv[2]), atof(argv[3]), atoi(argv[5]), sr, mpi_spike_type, commrank, commsize);
 
 	/* Clean up */
 	char srfinalname[256];
