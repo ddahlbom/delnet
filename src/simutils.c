@@ -281,7 +281,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		numevents = 0;
 
 		/* ---------- calculate time update ---------- */
-		t += dt;
 		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
@@ -398,6 +397,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (profiling) ticks_start = getticks();
 
 		dnf_advance(m->dn);
+		t += dt;
 
 		if (profiling) {
 			ticks_finish = getticks();

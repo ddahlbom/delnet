@@ -321,8 +321,6 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, idx_t groupsize, data_t
 	pg_getcontributordelays(m, &delays, commrank, commsize);
 
 	/* Iterate through combinations and test them */
-	// idx_t groupsize = 3;
-	// idx_t maxgroups = 100;
 	idx_t numgroups = 0; // running tally of groups found
 	su_mpi_input input_l;
 	su_mpi_spike *inputspikes = 0;
@@ -336,7 +334,6 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, idx_t groupsize, data_t
 		idx_t new = 0;
 		idx_t offset = 0;
 		idx_t maxidx = 0;
-		//data_t threshold = 19.0;
 		data_t totalweight = 0.0;
 
 		idx_t *positions = malloc(sizeof(idx_t)*groupsize);
@@ -376,6 +373,11 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, idx_t groupsize, data_t
 					for (idx_t l=0; l<groupsize; l++) 
 						totalweight += weights[offset+positions[l]];
 					if (totalweight > threshold) {
+						for (idx_t z=0; z<groupsize; z++) 
+							printf("Delay %lu: %hu, %g\n", z,
+									delays[offset+positions[z]],
+									weights[offset+positions[z]]);
+						printf("\n");
 						/* here run partial simulation with group as input */
 						inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
 						maxdelay = 0.0;
@@ -440,8 +442,7 @@ int pg_findpgs(su_mpi_model_l *m, su_mpi_trialparams tp, idx_t groupsize, data_t
 			MPI_Bcast(&notfinished, 1, MPI_INT, 0, MPI_COMM_WORLD);
 			if (notfinished) {
 				inputspikes = malloc(sizeof(su_mpi_spike)*groupsize);
-				MPI_Bcast(inputspikes, groupsize, mpi_spike_type,
-						  0, MPI_COMM_WORLD);
+				MPI_Bcast(inputspikes, groupsize, mpi_spike_type, 0, MPI_COMM_WORLD);
 				input_l.len = pruneinputtolocal(&inputspikes, groupsize, m);
 				input_l.spikes = inputspikes;
 

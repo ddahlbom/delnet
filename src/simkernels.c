@@ -83,7 +83,6 @@ bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
 		for (size_t k=0; k < ninput; k++) {
 			if (t_local <= input[k].t && input[k].t < t_local + dt) {
 				neuroninputs[input[k].i] += tp->inputweight; 
-				printf("Putting in input!\n");
 			}
 		}
 		t_local += dt;
@@ -257,10 +256,10 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 	for (k=0; k<dn->numnodes; k++) 
 	for (j=0; j < dn->numbuffers[k]; j++) {
 		// only update excitatory synapses
-		if (synapses[dn->nodebufferoffsets[k]+j] > 0) {
+		if (synapses[dn->nodebufferoffsets[k]+j] >= 0) {
 			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] +
-					dt * (mp->a_post * traces_syn[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
-						  mp->a_pre * traces_neu[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
+					dt * (mp->a_pre * traces_syn[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
+						  mp->a_post * traces_neu[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
 			// clamp value	
 			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] < 0.0 ? 
 										0.0 : synapses[dn->nodebufferoffsets[k]+j];
@@ -268,5 +267,4 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 										mp->synmax : synapses[dn->nodebufferoffsets[k]+j];
 		}
 	}
-	
 }
