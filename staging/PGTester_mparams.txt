@@ -1,0 +1,10 @@
+fs			2000.0
+num_neurons		1000.0
+p_contact		0.15
+p_exc			0.8
+maxdelay		20.0
+synmax			10.0
+tau_pre			0.02
+tau_post		0.02
+a_pre			1.2
+a_post			1.0
