@@ -600,14 +600,12 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 
 	/* local state for simulation */
 	FLOAT_T *neuroninputs, *neuronoutputs;
-	//FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
 	idx_t *neuronevents;
 	idx_t numevents = 0;
 	neuroninputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
 	neuronevents = calloc(n_l, sizeof(idx_t));
 	unsigned long int numspikes = 0;
-	//unsigned long int numrandspikes = 0;
 	FLOAT_T t;
 
 	/* initiate input */
@@ -629,57 +627,34 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	for (idx_t i=0; i<commsize; i++) 
 		if (t_maxs[i] > t_max) t_max = t_maxs[i];
 	
-	/* initialize random input states */
-	//for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
-
 	/* main simulation loop */
 	t = t0;
 	FLOAT_T t_local = 0.0;
 	for (size_t i=0; i<numsteps; i++) {
 		numevents = 0;
 
-		/* ---------- inputs ---------- */
-		/* get inputs from delay net */
-		if (PGDEBUG) printf("PGDEBUG: Made it to getinputs on %d\n", commrank);
+		/* ---------- get inputs from delay lines ---------- */
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
-		if (PGDEBUG)printf("PGDEBUG: Did getinputs on %d\n", commrank);
 
 		/* ---------- put in forced input -- make this a function in kernels! ---------- */
-		if (PGDEBUG) printf("PGDEBUG: Made it to forcedinputspg on %d\n", commrank);
 		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
 										  &tp, commrank, commsize, t_local); 
-		if (PGDEBUG) printf("PGDEBUG: Did forcedinputspg on %d\n", commrank);
-
-		/* ---------- put in random noise ---------- */
-		//if (PGDEBUG) printf("PGDEBUG: Made it to poisnoise on %d\n", commrank);
-		//numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
-		//if (PGDEBUG) printf("PGDEBUG: Did it poisnoise on %d\n", commrank);
-
-
+		
 		/* ---------- update neuron state ---------- */
-		if (PGDEBUG) printf("PGDEBUG: Made it to updateneurons on %d\n", commrank);
 		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, m->p.fs);
-		if (PGDEBUG) printf("PGDEBUG: Did updateneurons on %d\n", commrank);
 
 		/* ---------- calculate neuron outputs ---------- */
-		if (PGDEBUG) printf("PGDEBUG: Made it to checkspiking on %d\n", commrank);
 		numevents = sk_mpi_checkspiking(m->neurons, neuronoutputs,
 										neuronevents, n_l, t,
 										sr, m->dn->nodeoffsetglobal,
 										tp.recordstart, tp.recordstop);
-		if (PGDEBUG) printf("PGDEBUG: Did checkspiking on %d\n", commrank);
 		numspikes += numevents;
 
 		/* ---------- push the neuron output into the buffer ---------- */
-		if (PGDEBUG) printf("PGDEBUG: Made it to pushevents on %d\n", commrank);
 		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
-		if (PGDEBUG) printf("PGDEBUG: Did pushevents on %d\n", commrank);
-
 
 		/* ---------- advance the buffer ---------- */
-		if (PGDEBUG) printf("PGDEBUG: Made it to advance on %d\n", commrank);
 		dnf_advance(m->dn);
-		if (PGDEBUG) printf("PGDEBUG: Did advance on %d\n", commrank);
 
 		/* ---------- advance time ---------- */
 		t += dt;
@@ -689,7 +664,6 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	free(neuroninputs);
 	free(neuronoutputs);
 	free(neuronevents); 
-	//free(nextrand);
 	free(t_maxs);
 }
 
