@@ -230,8 +230,7 @@ void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 			neuroninputs = dnf_getinputaddress(dn, k);
 			spike_pre[dn->nodebufferoffsets[k] +j] = neuroninputs[j];
 			traces_syn[dn->nodebufferoffsets[k] +j] =
-				traces_syn[dn->nodebufferoffsets[k]+j]*(1.0 - (dt/mp->tau_pre)) +
-				spike_pre[dn->nodebufferoffsets[k] +j];
+				traces_syn[dn->nodebufferoffsets[k]+j]*(1.0-(dt/mp->tau_pre)) + spike_pre[dn->nodebufferoffsets[k]+j];
 		}
 	}
 }
@@ -242,7 +241,7 @@ void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_
 {
 	size_t k;
 	for (k=0; k<n; k++) { 		
-		traces_neu[k] = traces_neu[k]*(1.0 - (dt/mp->tau_post)) + neuronoutputs[k];
+		traces_neu[k] = traces_neu[k]*(1.0-(dt/mp->tau_post)) + neuronoutputs[k];
 	}
 }
 

@@ -284,6 +284,37 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
+		/* ---------- update synapse traces ---------- */
+		if (profiling) ticks_start = getticks();
+
+		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->nodeinputbuf, m->dn, dt, &m->p);
+
+		if (profiling) {
+			ticks_finish = getticks();
+			updatingsyntraces += (ticks_finish - ticks_start);
+		}
+
+		/* ---------- update neuron traces ---------- */
+		if (profiling) ticks_start = getticks();
+
+		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
+
+		if (profiling) {
+			ticks_finish = getticks();
+			updatingneutraces += (ticks_finish - ticks_start);
+		}
+
+		/* ---------- update synapses ---------- */
+		if (profiling) ticks_start = getticks();
+
+		sk_mpi_updatesynapses(m->synapses, m->traces_syn,
+								m->traces_neu, neuronoutputs,
+								m->dn, dt, &m->p);
+
+		if (profiling) {
+			ticks_finish = getticks();
+			updatingsynstrengths += (ticks_finish - ticks_start);
+		}
 
 		/* ---------- inputs ---------- */
 		if (profiling) ticks_start = getticks();
@@ -358,40 +389,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 			pushingoutput += (ticks_finish - ticks_start);
 		}
 
-
-		/* ---------- update synapse traces ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->nodeinputbuf, m->dn, dt, &m->p);
-
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingsyntraces += (ticks_finish - ticks_start);
-		}
-
-
-		/* ---------- update neuron traces ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
-
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingneutraces += (ticks_finish - ticks_start);
-		}
-
-		/* ---------- update synapses ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updatesynapses(m->synapses, m->traces_syn,
-								m->traces_neu, neuronoutputs,
-								m->dn, dt, &m->p);
-
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingsynstrengths += (ticks_finish - ticks_start);
-		}
-
+		/* synapses were originally updated here -- didn't seem to work for LTP */
 
 		/* advance the buffer */
 		if (profiling) ticks_start = getticks();
