@@ -132,8 +132,7 @@ bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
 FLOAT_T sk_mpi_forcedinputpg( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, idx_t input_idx,
 						 FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
 						 double t_max, su_mpi_trialparams *tp,
-						 int commrank, int commsize, FILE *inputtimesfile,
-						 FLOAT_T *nextrand, FLOAT_T t_local)
+						 int commrank, int commsize, FLOAT_T t_local)
 {
 	if (t_local <= t_max) {
 		for (size_t k=0; k < ninput; k++) {

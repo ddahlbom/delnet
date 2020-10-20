@@ -8,7 +8,7 @@ optim: main
 sanitize: CFLAGS += -fsanitize=address
 sanitize: pgsearch-exec
 debug: main
-pg-debug: CFLAGS += -O1
+# pg-debug: CFLAGS += -O1
 pg-debug: pgsearch-exec
 pg: CFLAGS += -O3
 pg: pgsearch-exec
