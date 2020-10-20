@@ -407,6 +407,9 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		}
 	}
 
+	if (commrank == 0)
+		fclose(inputtimesfile);
+
 
 	/* -------------------- Performance Analysis -------------------- */
 	if (profiling) {
@@ -614,7 +617,6 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	idx_t inputlen = 0;
 	su_mpi_spike *input = 0;
 	double t_max_l = 0.0;
-
 	input = inputs[0].spikes;
 	inputlen = inputs[0].len;
 	for (int i=0; i<inputlen; i++)
@@ -630,44 +632,27 @@ void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
 	/* main simulation loop */
 	t = t0;
 	FLOAT_T t_local = 0.0;
-	for (size_t i=0; i<numsteps; i++) {
+	while (numsteps--) {
 		numevents = 0;
-
-		/* ---------- get inputs from delay lines ---------- */
 		sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
-
-		/* ---------- put in forced input -- make this a function in kernels! ---------- */
-		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
-										  &tp, commrank, commsize, t_local); 
-		
-		/* ---------- update neuron state ---------- */
+		t_local = sk_mpi_forcedinputpg(m, input, inputlen, input_idx, neuroninputs,
+									   t, dt, t_max, &tp, commrank, commsize, t_local); 
 		sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, m->p.fs);
-
-		/* ---------- calculate neuron outputs ---------- */
 		numevents = sk_mpi_checkspiking(m->neurons, neuronoutputs,
 										neuronevents, n_l, t,
 										sr, m->dn->nodeoffsetglobal,
 										tp.recordstart, tp.recordstop);
 		numspikes += numevents;
-
-		/* ---------- push the neuron output into the buffer ---------- */
 		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
-
-		/* ---------- advance the buffer ---------- */
 		dnf_advance(m->dn);
-
-		/* ---------- advance time ---------- */
 		t += dt;
 	}
 
-	/* -------------------- Clean up -------------------- */
 	free(neuroninputs);
 	free(neuronoutputs);
 	free(neuronevents); 
 	free(t_maxs);
 }
-
-
 
 
 double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
@@ -682,10 +667,8 @@ double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
 	if (m->commrank == 0) {
 		FILE *f;
 		size_t loadsize;
-
 		f = fopen(filename, "rb");
 		checkfileload(f, filename);
-
 		loadsize = fread(&dim, sizeof(long int), 1, f);
 		if (loadsize != 1) {printf("Failed to load syngraph.\n"); exit(-1);}
 		if (dim != (long int) m->p.num_neurons) {
