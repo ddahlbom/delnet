@@ -28,15 +28,15 @@ v_default = -65.0
 u_default = -13.0
 
 synmax = 10.0
-J_exc = 60.00
-J_inh = -50.0
+J_exc = 45.00
+J_inh = -60.0
 w_exc = J_exc/√(p_contact*num_neurons)
 w_inh = J_inh/√(p_contact*num_neurons)
 
 tau_pre = 0.02
 tau_post = 0.02
-a_pre  = 1.2
-a_post = 1.0
+a_pre  = 1.2*10.0
+a_post = 1.0*10.0
 
 ## I think these are from Masquelier, Thorpe et al.
 # tau_post = 0.03125
@@ -48,9 +48,9 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 synmax, tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 5*60.0 ; doplotting = true
-recorddur = 100.0
-λ_noise = 3.00
+dur = 600.0 ; doplotting = true
+recorddur = 10.0
+λ_noise = 3.0
 randspikesize = 20.0
 randinput = 1
 inhibition = 1
@@ -69,8 +69,10 @@ tp1 = TrialParams(dur, λ_noise, randspikesize, randinput, inhibition,
 
 
 # Make the neurons
-neurontypes = vcat([SimpleNeuronType("rs") for _ ∈ 1:800],
-			 	   [SimpleNeuronType("fs") for _ ∈ 1:200])
+num_exc = Int(round(p_exc * num_neurons))
+num_inh = 1000 - num_exc 
+neurontypes = vcat([SimpleNeuronType("rs") for _ ∈ 1:num_exc],
+			 	   [SimpleNeuronType("fs") for _ ∈ 1:num_inh])
 type_exc = SimpleNeuronType("rs")
 type_inh = SimpleNeuronType("fs")
 numexc = length(filter(n->n==type_exc,neurontypes))
@@ -82,22 +84,39 @@ idcs_inh = findall(x -> x == type_inh, neurontypes)
 delgraph = zeros(Int64,Int(num_neurons),Int(num_neurons))
 possibledelays = 1:1:20  # in ms
 possibledelays = Int64.(fs .* (possibledelays ./ 1000.0))
+p_contact_inh = 1.125*p_contact 
+# for r ∈ 1:Int(num_neurons)
+# 	for c ∈ 1:Int(num_neurons)
+# 		if rand() < p_contact && r != c
+# 			if neurontypes[r] == type_inh && neurontypes[c] == type_inh
+# 				delgraph[r,c] = 0	
+# 			else	
+# 				if neurontypes[r] == type_exc
+# 					delgraph[r,c] =  rand(possibledelays) 
+# 				elseif neurontypes[r] == type_inh
+# 					delgraph[r,c] = 1
+# 				end
+# 			end
+# 		end
+# 	end
+# end
 for r ∈ 1:Int(num_neurons)
 	for c ∈ 1:Int(num_neurons)
-		if rand() < p_contact && r != c
-			if neurontypes[r] == type_inh && neurontypes[c] == type_inh
+		if neurontypes[r] == type_inh
+			if neurontypes[c] == type_inh
 				delgraph[r,c] = 0	
-			else	
-				if neurontypes[r] == type_exc
-					delgraph[r,c] =  rand(possibledelays) 
-				elseif neurontypes[r] == type_inh
+			else
+				if rand() < p_contact_inh && r != c
 					delgraph[r,c] = 1
 				end
+			end
+		else	
+			if rand() < p_contact && r != c
+				delgraph[r,c] =  rand(possibledelays) 
 			end
 		end
 	end
 end
-
 
 # Generate the synapse graph
 syngraph = zeros(Float64, size(delgraph))
@@ -175,7 +194,7 @@ if doplotting
 								 results_trial.tp.recordstop,
 								 mp.fs;
 								 numneurons=Int(num_neurons),
-								 windowdur=0.02)
+								 windowdur=0.001)
 	p_syn = bar(delays, strengths)
 	plot!(p_syn, delays, w_exc .* ones(length(strengths)); ls=:dash)
 	p1 = plot(p_spikes, p_syn, layout=@layout [a{0.93h}; b])

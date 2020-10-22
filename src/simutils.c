@@ -284,37 +284,42 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
-		/* ---------- update synapse traces ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updatesynapsetraces(m->traces_syn, m->dn->nodeinputbuf, m->dn, dt, &m->p);
-
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingsyntraces += (ticks_finish - ticks_start);
-		}
-
-		/* ---------- update neuron traces ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updateneurontraces(m->traces_neu, neuronoutputs, n_l, dt, &m->p);
-
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingneutraces += (ticks_finish - ticks_start);
-		}
-
-		/* ---------- update synapses ---------- */
-		if (profiling) ticks_start = getticks();
-
-		sk_mpi_updatesynapses(m->synapses, m->traces_syn,
-								m->traces_neu, neuronoutputs,
+		sk_mpi_updatesynapses(m->synapses, m->traces_pre,
+								m->traces_post, neuronoutputs,
 								m->dn, dt, &m->p);
+		sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
+		//sk_mpi_ltd(m->synapses, m->traces_post, m->dn, dt, &m->p);
+		///* ---------- update synapse traces ---------- */
+		//if (profiling) ticks_start = getticks();
 
-		if (profiling) {
-			ticks_finish = getticks();
-			updatingsynstrengths += (ticks_finish - ticks_start);
-		}
+		//sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
+
+		//if (profiling) {
+		//	ticks_finish = getticks();
+		//	updatingsyntraces += (ticks_finish - ticks_start);
+		//}
+
+		///* ---------- update neuron traces ---------- */
+		//if (profiling) ticks_start = getticks();
+
+		//sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+
+		//if (profiling) {
+		//	ticks_finish = getticks();
+		//	updatingneutraces += (ticks_finish - ticks_start);
+		//}
+
+		///* ---------- update synapses ---------- */
+		//if (profiling) ticks_start = getticks();
+
+		//sk_mpi_updatesynapses(m->synapses, m->traces_pre,
+		//						m->traces_post, neuronoutputs,
+		//						m->dn, dt, &m->p);
+
+		//if (profiling) {
+		//	ticks_finish = getticks();
+		//	updatingsynstrengths += (ticks_finish - ticks_start);
+		//}
 
 		/* ---------- inputs ---------- */
 		if (profiling) ticks_start = getticks();
@@ -363,7 +368,6 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 			updatingneurons += (ticks_finish - ticks_start);
 		}
 
-
 		/* ---------- calculate neuron outputs ---------- */
 		if (profiling) ticks_start = getticks();
 
@@ -377,6 +381,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 			ticks_finish = getticks();
 			spikechecking += (ticks_finish - ticks_start);
 		}
+
+		sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+		//sk_mpi_ltp(m->synapses, m->traces_post, neuronoutputs,
+		//		   m->dn, dt, &m->p);
 
 		/* ---------- push the neuron output into the buffer ---------- */
 		if (profiling) ticks_start = getticks(); 
@@ -929,9 +937,9 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 	neurons = su_mpi_loadlocalneurons(name, m);
 
 	/* set up synapse traces */ 
-	FLOAT_T *traces_neu 	= calloc(maxnode, sizeof(FLOAT_T));
-	FLOAT_T *traces_syn; 	
-	traces_syn = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));		
+	FLOAT_T *traces_post 	= calloc(maxnode, sizeof(FLOAT_T));
+	FLOAT_T *traces_pre; 	
+	traces_pre = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));		
 
 	/* set up synapses */
 	//FLOAT_T *synapses_local = calloc(m->dn->numbufferstotal, sizeof(FLOAT_T));
@@ -953,8 +961,8 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int commrank, int commsize
 	*/
 	
 	m->neurons = neurons;
-	m->traces_neu = traces_neu;
-	m->traces_syn = traces_syn;
+	m->traces_post = traces_post;
+	m->traces_pre = traces_pre;
 	m->synapses = synapses_local;
 
 	//free(synapses);
@@ -1087,8 +1095,8 @@ void su_mpi_savelocalmodel(su_mpi_model_l *m, FILE *f)
 	//fwrite(&m->numsyn, sizeof(IDX_T), 1, f);
 	fwrite(&m->p, sizeof(su_mpi_modelparams), 1, f);
 	fwrite(m->neurons, sizeof(su_mpi_neuron), m->dn->numnodes, f);
-	fwrite(m->traces_neu, sizeof(FLOAT_T), m->dn->numnodes, f);
-	fwrite(m->traces_syn, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
+	fwrite(m->traces_post, sizeof(FLOAT_T), m->dn->numnodes, f);
+	fwrite(m->traces_pre, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
 	fwrite(m->synapses, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
 }
 
@@ -1122,12 +1130,12 @@ su_mpi_model_l *su_mpi_loadlocalmodel(FILE *f)
 	loadsize = fread(m->neurons, sizeof(su_mpi_neuron), m->dn->numnodes, f);
 	if (loadsize != m->dn->numnodes) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_neu = malloc(sizeof(FLOAT_T)*m->dn->numnodes);
-	loadsize = fread(m->traces_neu, sizeof(FLOAT_T), m->dn->numnodes, f);
+	m->traces_post = malloc(sizeof(FLOAT_T)*m->dn->numnodes);
+	loadsize = fread(m->traces_post, sizeof(FLOAT_T), m->dn->numnodes, f);
 	if (loadsize != m->dn->numnodes) { printf("Failed to load model.\n"); exit(-1); }
 
-	m->traces_syn = malloc(sizeof(FLOAT_T)*m->dn->numbufferstotal);
-	loadsize = fread(m->traces_syn, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
+	m->traces_pre = malloc(sizeof(FLOAT_T)*m->dn->numbufferstotal);
+	loadsize = fread(m->traces_pre, sizeof(FLOAT_T), m->dn->numbufferstotal, f);
 	if (loadsize != m->dn->numbufferstotal) { printf("Failed to load model.\n"); exit(-1); }
 
 	m->synapses = malloc(sizeof(FLOAT_T)*m->dn->numbufferstotal);
@@ -1258,8 +1266,8 @@ su_mpi_model_l *su_mpi_globalload(char *name, int commrank, int commsize)
 void su_mpi_freemodel_l(su_mpi_model_l *m) {
 	dnf_freedelaynet(m->dn);
 	free(m->neurons);
-	free(m->traces_neu);
-	free(m->traces_syn);
+	free(m->traces_post);
+	free(m->traces_pre);
 	free(m->synapses);
 	free(m);
 }

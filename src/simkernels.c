@@ -218,7 +218,7 @@ unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
 }
 
 
-void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
+void sk_mpi_updatepretraces(FLOAT_T *traces_pre, FLOAT_T *spike_pre,
 								dnf_delaynet *dn, FLOAT_T dt,
 								su_mpi_modelparams *mp)
 {
@@ -229,23 +229,21 @@ void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 		for (j=0; j < dn->numbuffers[k]; j++) {
 			neuroninputs = dnf_getinputaddress(dn, k);
 			spike_pre[dn->nodebufferoffsets[k] +j] = neuroninputs[j];
-			traces_syn[dn->nodebufferoffsets[k] +j] =
-				traces_syn[dn->nodebufferoffsets[k]+j]*(1.0-(dt/mp->tau_pre)) + spike_pre[dn->nodebufferoffsets[k]+j];
+			traces_pre[dn->nodebufferoffsets[k] +j] =
+				traces_pre[dn->nodebufferoffsets[k]+j]*(1.0-(dt/mp->tau_pre)) + spike_pre[dn->nodebufferoffsets[k]+j];
 		}
 	}
 }
 
 
-void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
+void sk_mpi_updateposttraces(FLOAT_T *traces_post, FLOAT_T *neuronoutputs, IDX_T n,
 								FLOAT_T dt, su_mpi_modelparams *mp) 
 {
-	size_t k;
-	for (k=0; k<n; k++) { 		
-		traces_neu[k] = traces_neu[k]*(1.0-(dt/mp->tau_post)) + neuronoutputs[k];
-	}
+	for (size_t k=0; k<n; k++) 
+		traces_post[k] = traces_post[k]*(1.0-(dt/mp->tau_post)) + neuronoutputs[k];
 }
 
-void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
+void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_pre, FLOAT_T *traces_post, 
 							FLOAT_T *neuronoutputs, dnf_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp)
 {
@@ -256,11 +254,41 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *trac
 		// only update excitatory synapses
 		if (synapses[dn->nodebufferoffsets[k]+j] >= 0) {
 			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] +
-					dt * (mp->a_pre * traces_syn[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
-						  mp->a_post * traces_neu[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
+					dt * (mp->a_pre * traces_pre[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
+						  mp->a_post * traces_post[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
 			// clamp value	
 			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] < 0.0 ? 
 										0.0 : synapses[dn->nodebufferoffsets[k]+j];
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] > mp->synmax ?
+										mp->synmax : synapses[dn->nodebufferoffsets[k]+j];
+		}
+	}
+}
+
+void sk_mpi_ltd(FLOAT_T *synapses, FLOAT_T *traces_post, 
+				dnf_delaynet *dn, FLOAT_T dt, su_mpi_modelparams *mp)
+{
+	FLOAT_T *presynapticspikes = dn->nodeinputbuf;
+	for (size_t k=0; k<dn->numnodes; k++) 
+	for (size_t j=0; j<dn->numbuffers[k]; j++) {
+		if (synapses[dn->nodebufferoffsets[k]+j] >= 0) { // excitatory only
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] -
+					dt*(mp->a_post * traces_post[k] * presynapticspikes[dn->nodebufferoffsets[k]+j]);
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] < 0.0 ? 
+										0.0 : synapses[dn->nodebufferoffsets[k]+j];
+		}
+	}
+}
+
+void sk_mpi_ltp(FLOAT_T *synapses, FLOAT_T *traces_pre, 
+				FLOAT_T *neuronoutputs, dnf_delaynet *dn, 
+				FLOAT_T dt, su_mpi_modelparams *mp)
+{
+	for (size_t k=0; k<dn->numnodes; k++) 
+	for (size_t j=0; j < dn->numbuffers[k]; j++) {
+		if (synapses[dn->nodebufferoffsets[k]+j] >= 0) {
+			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] +
+					dt * (mp->a_pre * traces_pre[dn->nodebufferoffsets[k]+j] * neuronoutputs[k]);
 			synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] > mp->synmax ?
 										mp->synmax : synapses[dn->nodebufferoffsets[k]+j];
 		}

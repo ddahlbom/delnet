@@ -30,12 +30,17 @@ unsigned long sk_mpi_checkspiking(su_mpi_neuron *neurons,
 									unsigned int offset, FLOAT_T recordstart,
 									FLOAT_T recordstop);
 
-void sk_mpi_updatesynapsetraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
+void sk_mpi_updatepretraces(FLOAT_T *traces_syn, FLOAT_T *spike_pre,
 								dnf_delaynet *dn, FLOAT_T dt,
 								su_mpi_modelparams *mp);
-void sk_mpi_updateneurontraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
+void sk_mpi_updateposttraces(FLOAT_T *traces_neu, FLOAT_T *neuronoutputs, IDX_T n,
 								FLOAT_T dt, su_mpi_modelparams *mp);
 void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_syn, FLOAT_T *traces_neu, 
 							FLOAT_T *neuronoutputs, dnf_delaynet *dn, 
 							FLOAT_T dt, su_mpi_modelparams *mp);
+void sk_mpi_ltd(FLOAT_T *synapses, FLOAT_T *traces_post, 
+				dnf_delaynet *dn, FLOAT_T dt, su_mpi_modelparams *mp);
+void sk_mpi_ltp(FLOAT_T *synapses, FLOAT_T *traces_pre, 
+				FLOAT_T *neuronoutputs, dnf_delaynet *dn, 
+				FLOAT_T dt, su_mpi_modelparams *mp);
 #endif

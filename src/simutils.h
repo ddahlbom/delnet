@@ -88,8 +88,8 @@ typedef struct su_mpi_model_l_s {
 	su_mpi_modelparams p;
 	dnf_delaynet *dn;
 	su_mpi_neuron  *neurons;
-	FLOAT_T *traces_neu;
-	FLOAT_T *traces_syn;
+	FLOAT_T *traces_post;
+	FLOAT_T *traces_pre;
 	FLOAT_T *synapses;
 } su_mpi_model_l;
 
