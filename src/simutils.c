@@ -284,11 +284,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		if (i%1000 == 0 && commrank == 0)
 			printf("Time: %f\n", t);
 
-		sk_mpi_updatesynapses(m->synapses, m->traces_pre,
-								m->traces_post, neuronoutputs,
-								m->dn, dt, &m->p);
-		sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
 		//sk_mpi_ltd(m->synapses, m->traces_post, m->dn, dt, &m->p);
+		//sk_mpi_ltp(m->synapses, m->traces_post, neuronoutputs, m->dn, dt, &m->p);
 		///* ---------- update synapse traces ---------- */
 		//if (profiling) ticks_start = getticks();
 
@@ -298,11 +295,16 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		//	ticks_finish = getticks();
 		//	updatingsyntraces += (ticks_finish - ticks_start);
 		//}
+		sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
+		sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+		sk_mpi_updatesynapses(m->synapses, m->traces_pre,
+								m->traces_post, neuronoutputs,
+								m->dn, dt, &m->p);
+
 
 		///* ---------- update neuron traces ---------- */
 		//if (profiling) ticks_start = getticks();
 
-		//sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
 
 		//if (profiling) {
 		//	ticks_finish = getticks();
@@ -383,12 +385,9 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 		}
 
 		sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
-		//sk_mpi_ltp(m->synapses, m->traces_post, neuronoutputs,
-		//		   m->dn, dt, &m->p);
 
 		/* ---------- push the neuron output into the buffer ---------- */
 		if (profiling) ticks_start = getticks(); 
-
 		//for (size_t k=0; k<n_l; k++)
 		dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
 

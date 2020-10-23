@@ -33,8 +33,8 @@ w_inh = J_inh/√(p_contact*num_neurons)
 
 tau_pre = 0.02
 tau_post = 0.02
-a_pre  = 1.2*10.0
-a_post = 1.0*10.0
+a_pre  = 1.2
+a_post = 1.0
 
 ## I think these are from Masquelier, Thorpe et al.
 # tau_post = 0.03125
@@ -46,7 +46,7 @@ mp = ModelParams(fs, num_neurons, p_contact, p_exc, maxdelay,
 				 synmax, tau_pre, tau_post, a_pre, a_post)
 
 # Training trial Parameters
-dur = 600.0 ; doplotting = true
+dur = 2*60.0*60.0 ; doplotting = true
 recorddur = 10.0
 λ_noise = 3.0
 randspikesize = 20.0

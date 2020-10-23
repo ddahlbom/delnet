@@ -35,8 +35,8 @@ w_inh = J_inh/√(p_contact*num_neurons)
 
 tau_pre = 0.02
 tau_post = 0.02
-a_pre  = 1.2*10.0
-a_post = 1.0*10.0
+a_pre  = 1.2
+a_post = 1.0
 
 ## I think these are from Masquelier, Thorpe et al.
 # tau_post = 0.03125
