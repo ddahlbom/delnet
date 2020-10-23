@@ -6,5 +6,5 @@ maxdelay		20.0
 synmax			10.0
 tau_pre			0.02
 tau_post		0.016666666666666666
-a_pre			10.0
-a_post			12.0
+a_pre			1.0
+a_post			1.2
