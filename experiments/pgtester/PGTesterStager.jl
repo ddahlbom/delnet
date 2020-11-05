@@ -35,8 +35,8 @@ w_inh = J_inh/√(p_contact*num_neurons)
 # tau_post = 0.02
 # a_pre  = 1.2
 # a_post = 1.0
-a_pre  = 1.0*10
-a_post = 1.2*10
+a_pre  = 1.0 # (A_{+} in Gerstern (postsynaptice, alter firing) -- I think A_{-} in Izhikevich)
+a_post = 1.2 # (A_{-} in Gerstern (postsynaptice, alter firing) -- I think A_{+} in Izhikevich)
 tau_pre = 0.02
 tau_post = (a_pre/a_post)*tau_pre
 
