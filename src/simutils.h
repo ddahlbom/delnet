@@ -10,7 +10,7 @@
 
 #define INPUT_MODE_PERIODIC 1
 #define INPUT_MODE_POISSON 2
-#define INPUT_MODE_POISSON_EXCLUSIVE 3 		// cuts random noise during input
+#define INPUT_MODE_POISSON_EXCLUSIVE 3      // cuts random noise during input
 #define INPUT_MODE_SINGLE_SHOT 4
 
 #define MULTI_INPUT_MODE_SEQUENTIAL 1
@@ -24,73 +24,73 @@
  *  Structs
  *************************************************************/
 typedef struct su_mpi_spike_s {
-	unsigned long i;
-	double t;
+    unsigned long i;
+    double t;
 } su_mpi_spike;
 
 typedef struct su_mpi_neuron_s {
-	double v;
-	double u;
-	double a;
-	double b;
-	double c;
-	double d;
+    double v;
+    double u;
+    double a;
+    double b;
+    double c;
+    double d;
 } su_mpi_neuron;
 
 typedef struct su_mpi_modelparams_s {
-	double fs; 				
+    double fs;              
 
-	// Graph -- legacy issues, revise and remove later
-	double num_neurons; 	
-	double p_contact; 		
-	double p_exc; 			
-	double maxdelay; 		
+    // Graph -- legacy issues, revise and remove later
+    double num_neurons;     
+    double p_contact;       
+    double p_exc;           
+    double maxdelay;        
 
-	// Synapses
-	double synmax; 			
-	//double w_exc; 			
-	//double w_inh; 			
+    // Synapses
+    double synmax;          
+    //double w_exc;             
+    //double w_inh;             
 
-	// STDP
-	double tau_pre; 		
-	double tau_post; 		
-	double a_pre; 			
-	double a_post; 			
+    // STDP
+    double tau_pre;         
+    double tau_post;        
+    double a_pre;           
+    double a_post;          
 
 } su_mpi_modelparams;
 
 typedef struct su_mpi_trialparams_s {
-	double dur; 			
-	double lambda; 			
-	double randspikesize; 	
-	bool randinput;
-	bool inhibition;
-	IDX_T inputmode;
-	idx_t multiinputmode;
-	double inputweight;
-	double recordstart;
-	double recordstop;
-	double lambdainput;
-	double inputrefractorytime;
+    double dur;             
+    double lambda;          
+    double randspikesize;   
+    bool randinput;
+    bool inhibition;
+    IDX_T inputmode;
+    idx_t multiinputmode;
+    double inputweight;
+    double recordstart;
+    double recordstop;
+    double lambdainput;
+    double inputrefractorytime;
 } su_mpi_trialparams;
 
 typedef struct su_mpi_input_s {
-	idx_t len;
-	su_mpi_spike *spikes;
+    idx_t len;
+    su_mpi_spike *spikes;
 } su_mpi_input;
 
 typedef struct su_mpi_model_l_s {
-	int commrank;
-	int commsize;
-	size_t maxnode;
-	size_t nodeoffset;
-	//IDX_T numsyn;
-	su_mpi_modelparams p;
-	dnf_delaynet *dn;
-	su_mpi_neuron  *neurons;
-	FLOAT_T *traces_post;
-	FLOAT_T *traces_pre;
-	FLOAT_T *synapses;
+    int commrank;
+    int commsize;
+    size_t maxnode;
+    size_t nodeoffset;
+    //IDX_T numsyn;
+    su_mpi_modelparams p;
+    dnf_delaynet *dn;
+    su_mpi_neuron  *neurons;
+    FLOAT_T *traces_post;
+    FLOAT_T *traces_pre;
+    FLOAT_T *synapses;
 } su_mpi_model_l;
 
 
@@ -105,7 +105,7 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *filename);
 void su_mpi_readtparameters(su_mpi_trialparams *p, char *filename);
 void su_mpi_printmparameters(su_mpi_modelparams p);
 void su_mpi_analyzeconnectivity(unsigned int *g, unsigned int n,
-							unsigned int n_exc, FLOAT_T fs);
+                            unsigned int n_exc, FLOAT_T fs);
 
 /* graph generation*/
 unsigned int *su_mpi_iblobgraph(su_mpi_modelparams *p);
@@ -128,18 +128,18 @@ su_mpi_model_l *su_mpi_izhimodelfromgraph(char *name, int rank, int size);
 
 /*
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
-							su_mpi_spike *input, size_t inputlen,
-							spikerecord *sr, char *trialname,
-							int commrank, int commsize, bool profiling);
+                            su_mpi_spike *input, size_t inputlen,
+                            spikerecord *sr, char *trialname,
+                            int commrank, int commsize, bool profiling);
 */
 void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
-							su_mpi_input *inputs, idx_t numinputs, 
-							spikerecord *sr, char *trialname,
-							int commrank, int commsize, bool profiling);
+                            su_mpi_input *inputs, idx_t numinputs, 
+                            spikerecord *sr, char *trialname,
+                            int commrank, int commsize, bool profiling);
 
 void su_mpi_runpgtrial(su_mpi_model_l *m, su_mpi_trialparams tp,
-							su_mpi_input *inputs, idx_t numinputs,
-							spikerecord *sr,
-							data_t t0,
-							int commrank, int commsize);
+                            su_mpi_input *inputs, idx_t numinputs,
+                            spikerecord *sr,
+                            data_t t0,
+                            int commrank, int commsize);
 #endif

@@ -8,14 +8,14 @@
 
 /* -------------------- Structures -------------------- */
 typedef struct paramnode_s {
-	char name[MAX_PARAM_NAME_LEN];
-	double value;	
-	struct paramnode_s *next;
+    char name[MAX_PARAM_NAME_LEN];
+    double value;   
+    struct paramnode_s *next;
 } paramnode;
 
 typedef struct paramlist_s {
-	unsigned int count;
-	paramnode *head;
+    unsigned int count;
+    paramnode *head;
 } paramlist;
 
 

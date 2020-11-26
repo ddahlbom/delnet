@@ -9,17 +9,17 @@
  * -------------------- Structures --------------------
  */
 typedef struct spike_s {
-	unsigned long neuron;
-	double time;
+    unsigned long neuron;
+    double time;
 } spike;
 
 typedef struct spikerecord_s {
-	spike *spikes;	
-	char *filename;
-	char *writemode;
-	size_t blockcount;
-	size_t numspikes;
-	size_t blocksize;
+    spike *spikes;  
+    char *filename;
+    char *writemode;
+    size_t blockcount;
+    size_t numspikes;
+    size_t blocksize;
 } spikerecord;
 
 
