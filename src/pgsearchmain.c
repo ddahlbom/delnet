@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	/* Clean up */
 	char srfinalname[256];
 	strcpy(srfinalname, in_name);
-	strcat(srfinalname, "_spikes.txt");
+	strcat(srfinalname, "pg_spikes.txt");
 	sr_collateandclose(sr, srfinalname, commrank, commsize, mpi_spike_type);
 
 	su_mpi_freemodel_l(m);
