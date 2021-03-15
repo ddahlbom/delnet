@@ -26,7 +26,7 @@ static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T b) {
     return a*(b*v - u);
 }
 
-void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
+static inline void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
                       FLOAT_T input, FLOAT_T h) {
     FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
 
@@ -45,10 +45,16 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
     K4 = f1(*v + h*K3, *u + h*L3, 0.0);
     L4 = f2(*v + h*K3, *u + h*L3, a, b);
 
-    *v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + input;
+    *v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + h*input;
     *u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
 }
 
+
+void neuronupdate_euler(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
+                        FLOAT_T input, FLOAT_T h) {
+    *v = *v + h*((0.04*(*v) + 5.0)*(*v) + 140.0 - *u + input);
+    *u = *u + h*(a*(b*(*v) - *u)); 
+}
 
 /*-------------------- Kernels -------------------- */
 void sk_mpi_getinputs(FLOAT_T *neuroninputs, dnf_delaynet *dn, FLOAT_T *synapses)
