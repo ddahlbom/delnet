@@ -7,7 +7,7 @@
 #include "simutils.h"
 #include "simkernels.h"
 
-#define MAX_INPUT 80.0
+#define MAX_INPUT 20.0
 
 /* -------------------- Random Sampling -------------------- */
 double sk_mpi_expsampl(double lambda)
@@ -18,6 +18,7 @@ double sk_mpi_expsampl(double lambda)
 
 
 /* -------------------- Neuron Equations -------------------- */
+
 static inline FLOAT_T f1(FLOAT_T v, FLOAT_T u, FLOAT_T input) {
     return (0.04*v + 5.0)*v + 140.0 - u + input;
 }
@@ -26,7 +27,8 @@ static inline FLOAT_T f2(FLOAT_T v, FLOAT_T u, FLOAT_T a, FLOAT_T b) {
     return a*(b*v - u);
 }
 
-static inline void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
+static inline
+void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
                       FLOAT_T input, FLOAT_T h) {
     FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
 
@@ -45,13 +47,13 @@ static inline void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b
     K4 = f1(*v + h*K3, *u + h*L3, 0.0);
     L4 = f2(*v + h*K3, *u + h*L3, a, b);
 
-    *v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + h*input;
+    *v = *v + sixth_h * (K1 + 2*K2 + 2*K3 + K4) + input;
     *u = *u + sixth_h * (L1 + 2*L2 + 2*L3 + L4); 
 }
 
-
-void neuronupdate_euler(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
-                        FLOAT_T input, FLOAT_T h) {
+static inline
+void neuronupdate_euler(FLOAT_T *v, FLOAT_T *u, FLOAT_T a,
+                        FLOAT_T b, FLOAT_T input, FLOAT_T h) {
     *v = *v + h*((0.04*(*v) + 5.0)*(*v) + 140.0 - *u + input);
     *u = *u + h*(a*(b*(*v) - *u)); 
 }
@@ -73,11 +75,12 @@ void sk_mpi_getinputs(FLOAT_T *neuroninputs, dnf_delaynet *dn, FLOAT_T *synapses
     }
 }
 
-bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, idx_t input_idx,
-                         FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
-                         double t_max, su_mpi_trialparams *tp,
-                         int commrank, int commsize, FILE *inputtimesfile,
-                         FLOAT_T *nextrand)
+bool sk_mpi_forcedinput(su_mpi_model_l *m, su_mpi_spike *input, double *weights,
+                        size_t ninput, idx_t input_idx,
+                        FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
+                        double t_max, su_mpi_trialparams *tp,
+                        int commrank, int commsize, FILE *inputtimesfile,
+                        FLOAT_T *nextrand)
 {
     static double t_local = 0.0;
     static double nextinputtime = 0.0;
@@ -88,7 +91,8 @@ bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
             fprintf(inputtimesfile, "%f  %lu\n", t, input_idx);
         for (size_t k=0; k < ninput; k++) {
             if (t_local <= input[k].t && input[k].t < t_local + dt) {
-                neuroninputs[input[k].i] += tp->inputweight; 
+                // neuroninputs[input[k].i] += tp->inputweight; 
+                neuroninputs[input[k].i] += weights[k]; 
             }
         }
         t_local += dt;
@@ -97,7 +101,8 @@ bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
             fprintf(inputtimesfile, "%f  %lu\n", t, input_idx);
         for (size_t k=0; k < ninput; k++) {
             if (t_local <= input[k].t && input[k].t < t_local + dt) 
-                neuroninputs[input[k].i] += tp->inputweight; 
+                // neuroninputs[input[k].i] += tp->inputweight; 
+                neuroninputs[input[k].i] += weights[k]; 
         }
         t_local += dt;
         if (t_local > t_max)
@@ -117,7 +122,8 @@ bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, 
         if (!waiting) {
             for (size_t k=0; k < ninput; k++) {
                 if (t_local <= input[k].t && input[k].t < t_local + dt) 
-                    neuroninputs[input[k].i] += tp->inputweight; 
+                    //neuroninputs[input[k].i] += tp->inputweight; 
+                    neuroninputs[input[k].i] += weights[k]; 
             }
             t_local += dt;
             if (t_local > t_max) {
@@ -168,12 +174,12 @@ unsigned int sk_mpi_poisnoise(FLOAT_T *neuroninputs, FLOAT_T *nextrand, FLOAT_T 
 void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
                           IDX_T num_neurons, FLOAT_T fs)
 {
-    size_t k;
-    for (k=0; k<num_neurons; k++) {
-        neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
-                         neurons[k].a, neurons[k].b, neuroninputs[k],
-                         1000.0/fs);
-    }
+    for (size_t k=0; k<num_neurons; k++)
+        neuronupdate_rk4(&neurons[k].v, &neurons[k].u, neurons[k].a,
+                           neurons[k].b, neuroninputs[k], 1000.0/fs);
+        //neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
+        //                 neurons[k].a, neurons[k].b, neuroninputs[k],
+        //                 1000.0/fs);
 }
 
 /*

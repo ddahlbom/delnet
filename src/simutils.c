@@ -248,6 +248,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
     idx_t input_idx = 0;
     idx_t inputlen = 0;
     su_mpi_spike *input = 0;
+    double *input_weights = 0;
     bool neednewinput = false;
     FILE *inputtimesfile = 0;
     char filename[MAX_NAME_LEN];
@@ -256,6 +257,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
     if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM)
         input_idx = getrandom(numinputs);
     input = inputs[input_idx].spikes;
+    input_weights = inputs[input_idx].weights;
     inputlen = inputs[input_idx].len;
     sprintf(filename, "%s_instarttimes.txt", trialname);
     for (int i=0; i<inputlen; i++)
@@ -330,8 +332,9 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
 
         /* put in forced input -- make this a function in kernels! */
-        neednewinput = sk_mpi_forcedinput(m, input, inputlen, input_idx, neuroninputs, t, dt, t_max,
-                                          &tp, commrank, commsize, inputtimesfile, nextrand ); 
+        neednewinput = sk_mpi_forcedinput(m, input, input_weights,
+                inputlen, input_idx, neuroninputs, t, dt, t_max,
+                &tp, commrank, commsize, inputtimesfile, nextrand ); 
         if (neednewinput) {
             if (commrank == 0) {
                 if (tp.multiinputmode == MULTI_INPUT_MODE_SEQUENTIAL) {
@@ -346,6 +349,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
             }
 
             input = inputs[input_idx].spikes;
+            input_weights = inputs[input_idx].weights;
             inputlen = inputs[input_idx].len;
         }
 

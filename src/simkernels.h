@@ -4,12 +4,13 @@
 double sk_mpi_expsampl(double lambda);
 
 void sk_mpi_getinputs(FLOAT_T *neuroninputs, dnf_delaynet *dn, FLOAT_T *synapses);
-bool sk_mpi_forcedinput( su_mpi_model_l *m, su_mpi_spike *input,
-                         size_t ninput, idx_t input_idx,
-                         FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
-                         double t_max, su_mpi_trialparams *tp,
-                         int commrank, int commsize, FILE *inputtimesfile,
-                         FLOAT_T *nextrand);
+
+bool sk_mpi_forcedinput(su_mpi_model_l *m, su_mpi_spike *input, double *weights,
+                        size_t ninput, idx_t input_idx,
+                        FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,
+                        double t_max, su_mpi_trialparams *tp,
+                        int commrank, int commsize, FILE *inputtimesfile,
+                        FLOAT_T *nextrand);
 
 FLOAT_T sk_mpi_forcedinputpg( su_mpi_model_l *m, su_mpi_spike *input, size_t ninput, idx_t input_idx,
                          FLOAT_T *neuroninputs, FLOAT_T t, FLOAT_T dt,

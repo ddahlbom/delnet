@@ -77,6 +77,7 @@ typedef struct su_mpi_trialparams_s {
 typedef struct su_mpi_input_s {
     idx_t len;
     su_mpi_spike *spikes;
+    double *weights;
 } su_mpi_input;
 
 typedef struct su_mpi_model_l_s {

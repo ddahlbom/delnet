@@ -5,33 +5,41 @@
 
 #include "inputs.h"
 
-long int pruneinputtolocal(su_mpi_spike **forced_input, idx_t inputlen, su_mpi_model_l *m) {
+long int pruneinputtolocal(su_mpi_spike **spikes, double **weights,
+                           idx_t inputlen, su_mpi_model_l *m)
+{
     idx_t nlocal=0;
     idx_t i1, i2;
     i1 = m->dn->nodeoffsetglobal;
     i2 = i1 + m->dn->numnodes;
 
     for (idx_t n=0; n<inputlen; n++) 
-        if (i1 <= (*forced_input)[n].i && (*forced_input)[n].i < i2) nlocal += 1;
+        if (i1 <= (*spikes)[n].i && (*spikes)[n].i < i2) nlocal += 1;
 
-    su_mpi_spike *input_local = 0;
+    su_mpi_spike *spikes_local = 0;
+    double *weights_local = 0;
     idx_t c = 0;
-    input_local = malloc(sizeof(su_mpi_spike)*nlocal);
+    spikes_local = malloc(sizeof(su_mpi_spike)*nlocal);
+    weights_local = malloc(sizeof(double)*nlocal);
     for (idx_t n=0; n<inputlen; n++) {
-        if (i1 <= (*forced_input)[n].i && (*forced_input)[n].i < i2) {
-            input_local[c].i = (*forced_input)[n].i-i1; // ... - i1: put into local indexing basis
-            input_local[c].t = (*forced_input)[n].t;
+        if (i1 <= (*spikes)[n].i && (*spikes)[n].i < i2) {
+            spikes_local[c].i = (*spikes)[n].i-i1; // ... - i1: put into local indexing basis
+            spikes_local[c].t = (*spikes)[n].t;
+            weights_local[c] = (*weights)[n];
             c++;
         }
     }
-    free(*forced_input);
-    *forced_input = input_local;
+    free(*spikes);
+    free(*weights);
+    *spikes = spikes_local;
+    *weights = weights_local;
     
     return nlocal;
 }
 
 
-long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi_spike_type, su_mpi_model_l *m, int commrank)
+long int loadinputs(char *in_name, su_mpi_input **forced_input,
+                    MPI_Datatype mpi_spike_type, su_mpi_model_l *m, int commrank)
 {
     FILE *infile;
     long int inputlen;
@@ -59,15 +67,21 @@ long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi
             if (loadsize != 1) {printf("Failed to load input\n"); exit(-1); }
             (*forced_input)[n].len = inputlen; 
             (*forced_input)[n].spikes = malloc(sizeof(su_mpi_spike)*inputlen);
+            (*forced_input)[n].weights = malloc(sizeof(double)*inputlen);
 
-            /* broadcast input */
+            /* load input spikes and weights */
             loadsize = fread((*forced_input)[n].spikes, sizeof(su_mpi_spike), inputlen, infile);
-            if (loadsize != inputlen) {printf("Failed to load input\n"); exit(-1); }
+            if (loadsize != inputlen) {printf("Failed to load input spikes\n"); exit(-1); }
+            loadsize = fread((*forced_input)[n].weights, sizeof(double), inputlen, infile);
+            if (loadsize != inputlen) {printf("Failed to load input weights\n"); exit(-1); }
 
             /* Broadcast to all ranks */
             MPI_Bcast( &inputlen, 1, MPI_LONG, 0, MPI_COMM_WORLD);
             MPI_Bcast( (*forced_input)[n].spikes, inputlen, mpi_spike_type, 0, MPI_COMM_WORLD);
-            prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes, (*forced_input)[n].len, m);
+            MPI_Bcast( (*forced_input)[n].weights, inputlen, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes,
+                                          &(*forced_input)[n].weights,
+                                          (*forced_input)[n].len, m);
             (*forced_input)[n].len = prunedlen;
         }
         fclose(infile);
@@ -81,8 +95,12 @@ long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi
             MPI_Bcast( &inputlen, 1, MPI_LONG, 0, MPI_COMM_WORLD);
             (*forced_input)[n].len = inputlen;
             (*forced_input)[n].spikes = malloc(sizeof(su_mpi_spike)*inputlen);
+            (*forced_input)[n].weights = malloc(sizeof(double)*inputlen);
             MPI_Bcast( (*forced_input)[n].spikes, inputlen, mpi_spike_type, 0, MPI_COMM_WORLD);
-            prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes, (*forced_input)[n].len, m);
+            MPI_Bcast( (*forced_input)[n].weights, inputlen, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            prunedlen = pruneinputtolocal(&(*forced_input)[n].spikes,
+                                          &(*forced_input)[n].weights,
+                                          (*forced_input)[n].len, m);
             (*forced_input)[n].len = prunedlen;
         }
     }
@@ -90,8 +108,12 @@ long int loadinputs(char *in_name, su_mpi_input **forced_input, MPI_Datatype mpi
     return numinputs;
 }
 
-void freeinputs(su_mpi_input **forced_input, idx_t numinputs) {
-    for (idx_t n=0; n<numinputs; n++) 
+
+void freeinputs(su_mpi_input **forced_input, idx_t numinputs)
+{
+    for (idx_t n=0; n<numinputs; n++)  {
         free((*forced_input)[n].spikes);
+        free((*forced_input)[n].weights);
+    }
     free(*forced_input);
 }
