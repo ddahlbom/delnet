@@ -258,6 +258,8 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         input_idx = getrandom(numinputs);
     input = inputs[input_idx].spikes;
     input_weights = inputs[input_idx].weights;
+    // for (size_t p=0; p<100; p++)
+    //     printf("weight: %g\n", input_weights[p]);
     inputlen = inputs[input_idx].len;
     sprintf(filename, "%s_instarttimes.txt", trialname);
     for (int i=0; i<inputlen; i++)

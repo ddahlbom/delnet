@@ -5,7 +5,7 @@ permits general models with Izhikevich neurons connected together with conductio
 spike-timing dependent plasticity for synapse strengths. This permits simulation of networks of the type
 described by Izhikevich (2006) (code [here](http://www.izhikevich.org/publications/spnet.htm)), but it is a much more general framework supporting arbitrary network
 topologies.  It requires a series of binary configuration files to run.  These can be set up with the
-[companion framework](https://github.com/analogouscircuit/DelNetExperiment) written in Julia.  This framework is specifically designed to be run on a distributed
+[companion framework](https://github.com/analogouscircuit/DelayNetTools) written in Julia.  This framework is specifically designed to be run on a distributed
 (MPI) system.
 
 
