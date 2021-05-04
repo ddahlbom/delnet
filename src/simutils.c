@@ -95,16 +95,6 @@ void su_mpi_readmparameters(su_mpi_modelparams *p, char *name)
     p->synmax = pl_getvalue(pl, "synmax");
     p->maxdelay = pl_getvalue(pl, "maxdelay");
 
-    // All parameters below now loaded directly
-    //p->w_exc  = pl_getvalue(pl, "w_exc");
-    //p->w_inh = pl_getvalue(pl, "w_inh");
-    //p->a_exc = pl_getvalue(pl, "a_exc");
-    //p->d_exc = pl_getvalue(pl, "d_exc");
-    //p->a_inh = pl_getvalue(pl, "a_inh");
-    //p->d_inh = pl_getvalue(pl, "d_inh");
-    //p->v_default = pl_getvalue(pl, "v_default");
-    //p->u_default = pl_getvalue(pl, "u_default");
-
     pl_free(pl);
 }
 
@@ -121,6 +111,7 @@ void su_mpi_readtparameters(su_mpi_trialparams *p, char *name)
     p->randspikesize = pl_getvalue(pl, "randspikesize");
     p->randinput = (bool) pl_getvalue(pl, "randinput");
     p->inhibition = (bool) pl_getvalue(pl, "inhibition");
+    p->stdp = (bool) pl_getvalue(pl, "inhibition");
     p->inputmode = (idx_t) pl_getvalue(pl, "inputmode");
     p->multiinputmode = (idx_t)  pl_getvalue(pl, "multiinputmode");
     p->inputweight = pl_getvalue(pl, "inputweight");
@@ -258,8 +249,10 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         input_idx = getrandom(numinputs);
     input = inputs[input_idx].spikes;
     input_weights = inputs[input_idx].weights;
-    // for (size_t p=0; p<100; p++)
-    //     printf("weight: %g\n", input_weights[p]);
+    //for (size_t p=0; p<inputs[input_idx].len; p++) {
+    //    if (input_weights[p] > 20.0)
+    //        printf("weight: %g\n", input_weights[p]);
+    //}
     inputlen = inputs[input_idx].len;
     sprintf(filename, "%s_instarttimes.txt", trialname);
     for (int i=0; i<inputlen; i++)
@@ -290,7 +283,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
 
         //sk_mpi_ltd(m->synapses, m->traces_post, m->dn, dt, &m->p);
         //sk_mpi_ltp(m->synapses, m->traces_post, neuronoutputs, m->dn, dt, &m->p);
-        ///* ---------- update synapse traces ---------- */
+        /* ---------- update synapse traces ---------- */
         //if (profiling) ticks_start = getticks();
 
         //sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
@@ -299,14 +292,17 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         //  ticks_finish = getticks();
         //  updatingsyntraces += (ticks_finish - ticks_start);
         //}
-        sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf, m->dn, dt, &m->p);
-        sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
-        sk_mpi_updatesynapses(m->synapses, m->traces_pre,
-                                m->traces_post, neuronoutputs,
-                                m->dn, dt, &m->p);
+        if (tp.stdp != 0) {
+            sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf,
+                                   m->dn, dt, &m->p);
+            sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+            sk_mpi_updatesynapses(m->synapses, m->traces_pre,
+                                  m->traces_post, neuronoutputs,
+                                  m->dn, dt, &m->p);
+        }
 
 
-        ///* ---------- update neuron traces ---------- */
+        /* ---------- update neuron traces ---------- */
         //if (profiling) ticks_start = getticks();
 
 
@@ -315,7 +311,7 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         //  updatingneutraces += (ticks_finish - ticks_start);
         //}
 
-        ///* ---------- update synapses ---------- */
+        /* ---------- update synapses ---------- */
         //if (profiling) ticks_start = getticks();
 
         //sk_mpi_updatesynapses(m->synapses, m->traces_pre,
@@ -681,21 +677,22 @@ double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
         f = fopen(filename, "rb");
         checkfileload(f, filename);
         loadsize = fread(&dim, sizeof(long int), 1, f);
+        printf("Number of synapses: %ld\n", dim);
         if (loadsize != 1) {printf("Failed to load syngraph.\n"); exit(-1);}
-        if (dim != (long int) m->p.num_neurons) {
+        if (dim != (long int) m->p.num_neurons*m->p.num_neurons) {
             printf("Synapse graph size doesn't match parameter file!\n");
             exit(-1);
         }
-        syngraph = malloc(sizeof(double)*dim*dim);
-        loadsize = fread(syngraph, sizeof(double), dim*dim, f);
-        if (loadsize != dim*dim) {printf("Failed to load syngraph.\n"); exit(-1);}
+        syngraph = malloc(sizeof(double)*dim);
+        loadsize = fread(syngraph, sizeof(double), dim, f);
+        if (loadsize != dim) {printf("Failed to load syngraph.\n"); exit(-1);}
         fclose(f);
         
         if (MPI_SUCCESS != MPI_Bcast(&dim, 1, MPI_LONG, 0, MPI_COMM_WORLD)) {
             printf("MPI Broadcast failure (syngraph len loading).\n");
             exit(-1);
         }
-        if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
+        if (MPI_SUCCESS != MPI_Bcast(syngraph, dim, MPI_DOUBLE,
                                      0, MPI_COMM_WORLD)) {
             printf("MPI Broadcast failure (syngraph loading).\n");
             exit(-1);
@@ -707,8 +704,8 @@ double *su_mpi_loadsyngraph(char *name, su_mpi_model_l *m)
             printf("MPI Broadcast failure (syngraph len loading).\n");
             exit(-1);
         }
-        syngraph = malloc(sizeof(double)*dim*dim);
-        if (MPI_SUCCESS != MPI_Bcast(syngraph, dim*dim, MPI_DOUBLE,
+        syngraph = malloc(sizeof(double)*dim);
+        if (MPI_SUCCESS != MPI_Bcast(syngraph, dim, MPI_DOUBLE,
                                      0, MPI_COMM_WORLD)) {
             printf("MPI Broadcast failure (syngraph loading).\n");
             exit(-1);

@@ -65,6 +65,7 @@ typedef struct su_mpi_trialparams_s {
     double randspikesize;   
     bool randinput;
     bool inhibition;
+    bool stdp;
     IDX_T inputmode;
     idx_t multiinputmode;
     double inputweight;

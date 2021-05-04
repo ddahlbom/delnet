@@ -54,7 +54,7 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
 static inline
 void neuronupdate_euler(FLOAT_T *v, FLOAT_T *u, FLOAT_T a,
                         FLOAT_T b, FLOAT_T input, FLOAT_T h) {
-    FLOAT_T h2 = h*0.0005;
+    FLOAT_T h2 = h/2.0;
     // FLOAT_T input2 = input*0.5;
 
     *v = *v + h2*((0.04*(*v) + 5.0)*(*v) + 140.0 - *u);
@@ -106,9 +106,10 @@ bool sk_mpi_forcedinput(su_mpi_model_l *m, su_mpi_spike *input, double *weights,
         if ( t_local == 0.0 && commrank==0 )
             fprintf(inputtimesfile, "%f  %lu\n", t, input_idx);
         for (size_t k=0; k < ninput; k++) {
-            if (t_local <= input[k].t && input[k].t < t_local + dt) 
+            if (t_local <= input[k].t && input[k].t < t_local + dt) {
                 // neuroninputs[input[k].i] += tp->inputweight; 
                 neuroninputs[input[k].i] += weights[k]; 
+            }
         }
         t_local += dt;
         if (t_local > t_max)
@@ -127,9 +128,10 @@ bool sk_mpi_forcedinput(su_mpi_model_l *m, su_mpi_spike *input, double *weights,
         }
         if (!waiting) {
             for (size_t k=0; k < ninput; k++) {
-                if (t_local <= input[k].t && input[k].t < t_local + dt) 
+                if (t_local <= input[k].t && input[k].t < t_local + dt) {
                     //neuroninputs[input[k].i] += tp->inputweight; 
                     neuroninputs[input[k].i] += weights[k]; 
+                }
             }
             t_local += dt;
             if (t_local > t_max) {
@@ -181,11 +183,11 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
                           IDX_T num_neurons, FLOAT_T fs)
 {
     for (size_t k=0; k<num_neurons; k++)
-        //neuronupdate_euler(&neurons[k].v, &neurons[k].u, neurons[k].a,
-        //                   neurons[k].b, neuroninputs[k], 1.0/fs);
-        neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
-                         neurons[k].a, neurons[k].b, neuroninputs[k],
-                         1000.0/fs);
+        neuronupdate_euler(&neurons[k].v, &neurons[k].u, neurons[k].a,
+                           neurons[k].b, neuroninputs[k], 1.0/fs);
+        //neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
+        //                 neurons[k].a, neurons[k].b, neuroninputs[k],
+        //                  (1000.0/fs));
 }
 
 /*

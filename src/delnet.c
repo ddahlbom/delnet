@@ -240,15 +240,15 @@ void dnf_pushevents(dnf_delaynet *dn, idx_t *eventnodes, idx_t numevents,
 		if (r != commrank) {
 			for (idx_t n=0; n<incounts[r]; n++) {
 				e = dnf_recordevent(&dn->buffers[dn->recvblocks[r][n]]);
-				if (e == DNF_BUFFER_OVERFLOW)
-					printf("Buffer full!\n");
+				//if (e == DNF_BUFFER_OVERFLOW)
+				//	printf("Buffer full!\n");
 			}
 		}
 		else {
 			for (idx_t n=0; n<outcounts[commrank]; n++) {
 				e = dnf_recordevent(&dn->buffers[dn->sendblocks[commrank][n]]);
-				if (e == DNF_BUFFER_OVERFLOW)
-					printf("Buffer full!\n");
+				//if (e == DNF_BUFFER_OVERFLOW)
+				//	printf("Buffer full!\n");
 			}
 		}
 	}
