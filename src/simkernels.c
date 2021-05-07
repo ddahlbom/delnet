@@ -7,7 +7,7 @@
 #include "simutils.h"
 #include "simkernels.h"
 
-#define MAX_INPUT 100.0
+#define MAX_INPUT 50.0
 
 /* -------------------- Random Sampling -------------------- */
 double sk_mpi_expsampl(double lambda)
@@ -32,7 +32,9 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
                       FLOAT_T input, FLOAT_T h) {
     FLOAT_T K1, K2, K3, K4, L1, L2, L3, L4, half_h, sixth_h;
 
-    half_h = h*0.5;
+    //half_h = h*0.5;
+    h *= 1000.0;
+    half_h = h/2.0;
     sixth_h = h/6.0;
     
     K1 = f1(*v, *u, 0.0);
@@ -54,7 +56,7 @@ void neuronupdate_rk4(FLOAT_T *v, FLOAT_T *u, FLOAT_T a, FLOAT_T b,
 static inline
 void neuronupdate_euler(FLOAT_T *v, FLOAT_T *u, FLOAT_T a,
                         FLOAT_T b, FLOAT_T input, FLOAT_T h) {
-    FLOAT_T h2 = h/2.0;
+    FLOAT_T h2 = 1000.0*h/2.0;
     // FLOAT_T input2 = input*0.5;
 
     *v = *v + h2*((0.04*(*v) + 5.0)*(*v) + 140.0 - *u);
@@ -183,11 +185,11 @@ void sk_mpi_updateneurons(su_mpi_neuron *neurons, FLOAT_T *neuroninputs,
                           IDX_T num_neurons, FLOAT_T fs)
 {
     for (size_t k=0; k<num_neurons; k++)
-        neuronupdate_euler(&neurons[k].v, &neurons[k].u, neurons[k].a,
-                           neurons[k].b, neuroninputs[k], 1.0/fs);
-        //neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
-        //                 neurons[k].a, neurons[k].b, neuroninputs[k],
-        //                  (1000.0/fs));
+        //neuronupdate_euler(&neurons[k].v, &neurons[k].u, neurons[k].a,
+        //                   neurons[k].b, neuroninputs[k], 1.0/fs);
+        neuronupdate_rk4(&neurons[k].v, &neurons[k].u,
+                         neurons[k].a, neurons[k].b, neuroninputs[k],
+                          (1.0/fs));
 }
 
 /*

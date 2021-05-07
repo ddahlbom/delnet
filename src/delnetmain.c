@@ -6,8 +6,6 @@
 #include <stddef.h>
 #include <mpi.h>
 
-//#include "delnet.h"
-//#include "delnetfixed.h"
 #include "simutils.h"
 #include "spkrcd.h"
 #include "inputs.h"
@@ -85,8 +83,14 @@ int main(int argc, char *argv[])
 
     /* run simulation */
     if (DN_MAIN_DEBUG) printf("Running simulation on rank %d\n", commrank);
-    su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
+    if (tp.stdp) {
+        su_mpi_runstdpmodel(m, tp, forced_inputs, numinputs,
+                            sr, out_name, commrank, commsize, PROFILING);
+    }
+    else {
+        su_mpi_runmodel(m, tp, forced_inputs, numinputs,
                         sr, out_name, commrank, commsize, PROFILING);
+    }
 
 
     /* save resulting model state */

@@ -292,14 +292,12 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         //  ticks_finish = getticks();
         //  updatingsyntraces += (ticks_finish - ticks_start);
         //}
-        if (tp.stdp != 0) {
-            sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf,
-                                   m->dn, dt, &m->p);
-            sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
-            sk_mpi_updatesynapses(m->synapses, m->traces_pre,
-                                  m->traces_post, neuronoutputs,
-                                  m->dn, dt, &m->p);
-        }
+        sk_mpi_updatepretraces(m->traces_pre, m->dn->nodeinputbuf,
+                               m->dn, dt, &m->p);
+        sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+        sk_mpi_updatesynapses(m->synapses, m->traces_pre,
+                              m->traces_post, neuronoutputs,
+                              m->dn, dt, &m->p);
 
 
         /* ---------- update neuron traces ---------- */
@@ -588,6 +586,132 @@ void su_mpi_runstdpmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
         free(advancingbuffer_g);
         free(totaltime_g);
     }
+    free(neuroninputs);
+    free(neuronoutputs);
+    free(neuronevents); 
+    free(nextrand);
+    free(t_maxs);
+}
+
+/* Functions for running simulations without stdp*/
+void su_mpi_runmodel(su_mpi_model_l *m, su_mpi_trialparams tp,
+                            su_mpi_input *inputs, idx_t numinputs,
+                            spikerecord *sr, char *trialname,
+                            int commrank, int commsize, bool profiling)
+{
+
+    /* derived params -- trim later, maybe cruft */
+    idx_t n_l = m->dn->numnodes;
+    FLOAT_T dt = 1.0/m->p.fs;
+    IDX_T numsteps = tp.dur/dt;
+
+    /* local state for simulation */
+    FLOAT_T *neuroninputs, *neuronoutputs;
+    FLOAT_T *nextrand = malloc(sizeof(FLOAT_T)*n_l);
+    idx_t *neuronevents;
+    idx_t numevents = 0;
+    //FLOAT_T nextinputtime = 0.0;
+    //bool waiting = true;
+    neuroninputs = calloc(n_l, sizeof(FLOAT_T));
+    neuronoutputs = calloc(n_l, sizeof(FLOAT_T));
+    neuronevents = calloc(n_l, sizeof(idx_t));
+    unsigned long int numspikes = 0, numrandspikes = 0;
+    FLOAT_T t;
+
+    /* initiate input */
+    idx_t input_idx = 0;
+    idx_t inputlen = 0;
+    su_mpi_spike *input = 0;
+    double *input_weights = 0;
+    bool neednewinput = false;
+    FILE *inputtimesfile = 0;
+    char filename[MAX_NAME_LEN];
+    double t_max_l = 0.0;
+
+    if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM)
+        input_idx = getrandom(numinputs);
+    input = inputs[input_idx].spikes;
+    input_weights = inputs[input_idx].weights;
+    inputlen = inputs[input_idx].len;
+    sprintf(filename, "%s_instarttimes.txt", trialname);
+    for (int i=0; i<inputlen; i++)
+        if (input[i].t > t_max_l) t_max_l = input[i].t; // find last spike time on local rank
+
+    /* find maximum accross ranks for coordinating input times */
+    double *t_maxs = malloc(sizeof(double)*commsize);
+    MPI_Allgather(&t_max_l, 1, MPI_DOUBLE, t_maxs, 1, MPI_DOUBLE, MPI_COMM_WORLD);
+    double t_max = 0.0;
+    for (idx_t i=0; i<commsize; i++) 
+        if (t_maxs[i] > t_max) t_max = t_maxs[i];
+    
+    if (commrank == 0)
+        inputtimesfile = fopen(filename, "w");
+
+    /* initialize random input states */
+    for(size_t i=0; i<n_l; i++) nextrand[i] = sk_mpi_expsampl(tp.lambda);
+
+    /* main simulation loop */
+    t = 0;
+    for (size_t i=0; i<numsteps; i++) {
+        numevents = 0;
+
+        /* ---------- calculate time update ---------- */
+        if (i%1000 == 0 && commrank == 0)
+            printf("Time: %f\n", t);
+
+
+        /* ---------- inputs ---------- */
+
+        /* get inputs from delay net */
+        sk_mpi_getinputs(neuroninputs, m->dn, m->synapses);
+
+        /* put in forced input -- make this a function in kernels! */
+        neednewinput = sk_mpi_forcedinput(m, input, input_weights,
+                inputlen, input_idx, neuroninputs, t, dt, t_max,
+                &tp, commrank, commsize, inputtimesfile, nextrand ); 
+        if (neednewinput) {
+            if (commrank == 0) {
+                if (tp.multiinputmode == MULTI_INPUT_MODE_SEQUENTIAL) {
+                    input_idx = (input_idx + 1) % numinputs;
+                }
+                else if (tp.multiinputmode == MULTI_INPUT_MODE_RANDOM) {
+                    input_idx = getrandom(numinputs);
+                }
+                MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+            } else {
+                MPI_Bcast(&input_idx, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+            }
+
+            input = inputs[input_idx].spikes;
+            input_weights = inputs[input_idx].weights;
+            inputlen = inputs[input_idx].len;
+        }
+
+        /* ---------- put in random noise ---------- */
+        numrandspikes += sk_mpi_poisnoise(neuroninputs, nextrand, t, n_l, &tp);
+
+        /* ---------- update neuron state ---------- */
+        sk_mpi_updateneurons(m->neurons, neuroninputs, n_l, m->p.fs);
+
+        /* ---------- calculate neuron outputs ---------- */
+        numevents = sk_mpi_checkspiking(m->neurons, neuronoutputs,
+                                        neuronevents, n_l, t,
+                                        sr, m->dn->nodeoffsetglobal,
+                                        tp.recordstart, tp.recordstop);
+        numspikes += numevents;
+        sk_mpi_updateposttraces(m->traces_post, neuronoutputs, n_l, dt, &m->p);
+
+        /* ---------- push the neuron output into the buffer ---------- */
+        dnf_pushevents(m->dn, neuronevents, numevents, commrank, commsize);
+
+        /* ---------- advance the buffer ----------*/
+        dnf_advance(m->dn);
+        t += dt;
+    }
+
+    if (commrank == 0)
+        fclose(inputtimesfile);
+
     free(neuroninputs);
     free(neuronoutputs);
     free(neuronevents); 
