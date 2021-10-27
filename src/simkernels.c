@@ -276,8 +276,8 @@ void sk_mpi_updatesynapses(FLOAT_T *synapses, FLOAT_T *traces_pre, FLOAT_T *trac
         // only update excitatory synapses
         if (synapses[dn->nodebufferoffsets[k]+j] >= 0) {
             synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] +
-                    dt * (mp->a_pre * traces_pre[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
-                          mp->a_post * traces_post[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
+                    dt * (mp->a_post * traces_pre[dn->nodebufferoffsets[k]+j] * neuronoutputs[k] -
+                          mp->a_pre * traces_post[k] * synapseoutputs[dn->nodebufferoffsets[k]+j]);
             // clamp value  
             synapses[dn->nodebufferoffsets[k]+j] = synapses[dn->nodebufferoffsets[k]+j] < 0.0 ? 
                                         0.0 : synapses[dn->nodebufferoffsets[k]+j];
