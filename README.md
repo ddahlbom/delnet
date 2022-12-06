@@ -11,8 +11,7 @@ topologies.  It requires a series of binary configuration files to run.  These c
 
 ![column activity](/images/testanimation-2000-30-2.gif)
 
-This is under active development for research purposes.  Provided only for the curious, without a warranty
-of any kind.
+Provided to the curious for research purposes only. 
 
 
 ## References
